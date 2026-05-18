@@ -23,7 +23,7 @@ Workflow:
   9. Clear BTHPORT cache (CachedServices, DynamicCachedServices) for the MAC
  10. Stop service -> disable device -> copy -> register service -> write
      LowerFilters at the device-instance level (REG_MULTI_SZ) -> enable device
- 11. Post-install verify: MD5 + size + Authenticode + signer thumbprint
+ 11. Post-install verify: SHA256 + size + Authenticode + signer thumbprint
  12. Reboot instruction
 
 .EXAMPLE
@@ -371,17 +371,17 @@ function Invoke-DirectCopyInstall {
 function Test-PostInstall {
     Write-Section "Verifying post-install state..."
 
-    $postMd5  = (Get-FileHash $TargetDriver -Algorithm MD5).Hash.ToLower()
-    $srcMd5   = (Get-FileHash $DriverSrc    -Algorithm MD5).Hash.ToLower()
+    $postHash = (Get-FileHash $TargetDriver -Algorithm SHA256).Hash.ToLower()
+    $srcHash  = (Get-FileHash $DriverSrc    -Algorithm SHA256).Hash.ToLower()
     $postSize = (Get-Item $TargetDriver).Length
     $sig      = Get-AuthenticodeSignature $TargetDriver
 
-    $hashOk   = ($postMd5 -eq $srcMd5)
+    $hashOk   = ($postHash -eq $srcHash)
     $sizeOk   = ($postSize -eq $ExpectedSize)
     $sigOk    = ($sig.Status -eq 'Valid')
     $signerOk = ($sig.SignerCertificate -and $sig.SignerCertificate.Thumbprint -eq $CertThumbprint)
 
-    Write-Host ("  MD5      : {0} ({1})" -f $postMd5,  (@{$true='OK';$false='FAIL'}[$hashOk]))   -ForegroundColor Gray
+    Write-Host ("  SHA256   : {0} ({1})" -f $postHash, (@{$true='OK';$false='FAIL'}[$hashOk]))   -ForegroundColor Gray
     Write-Host ("  Size     : {0} ({1})" -f $postSize, (@{$true='OK';$false='FAIL'}[$sizeOk]))   -ForegroundColor Gray
     Write-Host ("  Auth Sig : {0} ({1})" -f $sig.Status, (@{$true='OK';$false='FAIL'}[$sigOk]))  -ForegroundColor Gray
     Write-Host ("  Signer   : {0}" -f ($sig.SignerCertificate.Thumbprint))                       -ForegroundColor Gray
