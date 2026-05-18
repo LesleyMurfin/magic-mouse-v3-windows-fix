@@ -12,6 +12,8 @@ Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after Bluetooth id
 - Apple Magic Mouse v3 (2024), Bluetooth PID 0x0323
 - Windows 10 build 14393 or later / Windows 11 any build
 
+> **Have a Magic Mouse v1 or v2?** This repo is v3-only. For v1/v2 scroll fix on Windows, see [`sbagirici/apple-magic-mouse-scroll-fix-windows`](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) — the project this work builds on.
+
 **Symptoms before patch:**
 - Scroll wheel works immediately after pairing
 - After ~15–30 min idle + Bluetooth disconnect, scroll stops responding
@@ -172,13 +174,15 @@ wevtutil epl "Microsoft-Windows-DeviceSetupManager/Admin" C:\dsm-admin.evtx
 
 ## Attribution
 
-This project started from [`sbagirici/apple-magic-mouse-scroll-fix-windows`](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows), which provided the initial patched `applewirelessmouse.sys` binary and established the LowerFilter installation approach for Windows.
+Big thanks to [`sbagirici`](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) for the original patched `applewirelessmouse.sys` binary and the LowerFilter installation approach that this project builds on. Without that starting point, the v3 investigation would have taken significantly longer.
 
-Our contributions on top of that baseline:
-- Full root cause analysis (H-011 DSM trigger, COL01/COL02 Mode A/B mechanism)
-- Test battery (Tests 1–6 + Phase 5) confirming the 3.1× improvement factor
+**v1 / v2 users:** sbagirici's repo is the right place for you — go give it a star.
+
+Our additions on top of that baseline (v3-specific):
+- Full root cause analysis of the H-011 / DSM trigger bug (COL01/COL02 Mode A/B collapse mechanism)
+- Test battery (Tests 1–6 + Phase 5) quantifying a 3.1× improvement factor
 - Rewritten PowerShell installer/uninstaller with correct LowerFilters path, REG_MULTI_SZ type, and two-level BTHENUM enumeration
-- SHA256 verification, DMCA notice, and release packaging
+- SHA256 verification, DMCA notice, HID descriptor research, and release packaging
 
 ## License
 
