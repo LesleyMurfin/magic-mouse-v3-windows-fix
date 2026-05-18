@@ -1,5 +1,18 @@
 # HID Descriptor Research: Apple Magic Mouse v3
 
+## Hardware Model Reference
+
+| Model | Year | Bluetooth PID | VID | MAC prefix | This fix? |
+|-------|------|---------------|-----|------------|-----------|
+| Magic Mouse v1 | 2009 | `0x030D` | `0x004C` | varies | No |
+| Magic Mouse v2 | 2015 | `0x0269` | `0x004C` | varies | No |
+| **Magic Mouse v3** | **2024** | **`0x0323`** | **`0x004C`** | `D0:C0:50:xx:xx:xx` | **Yes** |
+
+This document covers v3 (`0x0323`) only. v1/v2 use different HID descriptor structures and
+do not exhibit the H-011 / DSM COL02 collapse bug described here.
+
+---
+
 **Device:** Apple Magic Mouse v3 (2024), Bluetooth PID `0x0323`  
 **Vendor:** Apple Inc. (VID `0x004C`)  
 **MAC prefix:** `D0:C0:50:xx:xx:xx`

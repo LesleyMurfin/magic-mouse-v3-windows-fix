@@ -20,10 +20,20 @@ Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after Bluetooth id
 - Cursor movement continues normally
 - Issue does not self-recover; requires driver reinstall or device repair
 
-## Hardware Requirements
+## Supported Hardware
+
+| Model | Year | Bluetooth PID | Supported? |
+|-------|------|---------------|------------|
+| Magic Mouse v1 | 2009 | `0x030D` | ❌ Not supported — see [sbagirici's repo](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) |
+| Magic Mouse v2 | 2015 | `0x0269` | ❌ Not supported — see [sbagirici's repo](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) |
+| Magic Mouse v3 | 2024 | `0x0323` | ✅ This repo |
+
+**Verify your PID:** Device Manager → Human Interface Devices → Apple Magic Mouse → Properties → Details → Hardware Ids. Look for `PID&030D`, `PID&0269`, or `PID&0323`.
+
+## System Requirements
 
 - Windows 10 build 14393 or later, or Windows 11 any version
-- Apple Magic Mouse v3 (verify PID 0x0323 in Device Manager)
+- Apple Magic Mouse v3 (PID `0x0323`) paired over Bluetooth
 - Administrator account for installation
 - Reboot access
 
