@@ -229,7 +229,7 @@ wevtutil epl "Microsoft-Windows-DeviceSetupManager/Admin" C:\dsm-admin.evtx
 
 ### Pull Requests
 
-- All commits to feature branches (ai/* prefix for Claude Code)
+- All commits to feature branches
 - PR must include test evidence from your hardware
 - Link to related issue
 - All .ps1 scripts must pass PSScriptAnalyzer (via GitHub Actions)

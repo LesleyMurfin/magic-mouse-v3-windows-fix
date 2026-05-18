@@ -1,6 +1,6 @@
-# Diagram: DSM Trigger Flow (H-011 Bug)
+# Diagram: DSM Trigger Flow
 
-**Purpose:** Sequence diagram showing the H-011 / PSN-0001 bug trigger path and how the patch intercepts it  
+**Purpose:** Sequence diagram showing the DSM descriptor rewrite bug trigger path and how the patch intercepts it  
 **Audience:** Developers investigating the root cause  
 **Read Time:** 3 min
 
@@ -50,7 +50,7 @@ sequenceDiagram
 
 ```mermaid
 gantt
-    title H-011 Bug Timeline (Unpatched)
+    title DSM Bug Timeline (Unpatched)
     dateFormat HH:mm
     axisFormat %H:%M
 

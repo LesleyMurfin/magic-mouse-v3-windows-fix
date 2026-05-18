@@ -118,7 +118,7 @@ scroll events are dropped.
 
 ---
 
-## DSM Trigger: H-011 / PSN-0001
+## DSM Trigger Mechanism
 
 **Trigger:** DeviceSetupManager (DSM) property write to device container
 `{fbdb1973-7dac-4ffe-afe2-0a98e4579b11}` (Magic Mouse BT container GUID).
@@ -189,10 +189,8 @@ has survived one or more DSM property cycles without collapsing. This suggests t
 intercept is effective but the underlying BTHPORT rewrite path may still be executing —
 the collapse just isn't persisting to disk between reboots while the filter is loaded.
 
-Full raw descriptor bytes captured in `/mnt/c/mm-dev-queue/` forensics logs (Tests 1–6,
-Phase 5 reboot). SHA256 of the Mode A CachedServices binary:
+SHA256 of the Mode A CachedServices binary (representative; verify against your own capture with `FORENSICS.ps1`):
 `3a6e4b2f9d8c1a5e7f0b2d4c6e8a0c2e4f6a8b0d2f4e6c8a0b2d4f6e8a0c2e4`
-(representative; verify against your own capture with `FORENSICS.ps1`).
 
 ---
 

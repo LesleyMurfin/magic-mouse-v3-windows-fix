@@ -368,9 +368,9 @@ v2 will address these limitations with a from-scratch WDF driver implementation.
 
 ### Windows DDK Documentation
 
-- [WDM Filter Drivers](https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/wdm-filter-drivers)
-- [HID Class Driver](https://docs.microsoft.com/en-us/windows-hardware/drivers/hid/)
-- [PnP Device Registration](https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/plug-and-play)
+- [WDM Filter Drivers](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/wdm-filter-drivers)
+- [HID Class Driver](https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/)
+- [PnP Device Registration](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/plug-and-play)
 
 ### Bluetooth Specification
 

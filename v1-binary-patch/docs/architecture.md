@@ -393,10 +393,10 @@ v2.0.0 will rewrite as native KMDF source code for transparency and long-term ma
 
 ### Microsoft Documentation
 
-- [WDM Filter Drivers](https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/wdm-filter-drivers)
-- [IRP Data Structures](https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/irp-data-structures)
-- [Device Installation Registry](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/registry-entries-for-devices-and-drivers)
-- [PnP Device Initialization](https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/pnp-device-initialization)
+- [WDM Filter Drivers](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/wdm-filter-drivers)
+- [IRP Data Structures](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/irp-data-structures)
+- [Device Installation Registry](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/registry-entries-for-devices-and-drivers)
+- [PnP Device Initialization](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/pnp-device-initialization)
 
 ### Related Implementations
 
