@@ -69,7 +69,7 @@ wevtutil epl "System" C:\system.evtx
 
 2. **Clone the repository:**
    ```powershell
-   git clone https://github.com/ReviveBusiness/magic-mouse-v3-windows-fix.git
+   git clone https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix.git
    cd magic-mouse-v3-windows-fix
    ```
 

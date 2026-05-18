@@ -1,0 +1,7 @@
+# SHA256 checksums for Magic Mouse v3 Windows Fix v1.0.0
+# Verify with: certutil -hashfile <file> SHA256  (Windows)
+#              sha256sum <file>                   (Linux/macOS)
+
+370a5555aebf673c3156ea5b5fbabd8030f2ee7a3a6bd0fcb1b4b6c93fa56a03  applewirelessmouse.sys
+# MagicMouseFix.cer checksum — fill in after cert export
+# <sha256>  MagicMouseFix.cer

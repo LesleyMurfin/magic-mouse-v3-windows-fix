@@ -73,17 +73,18 @@ Trigger sequence:
 3. **BTHPORT DynamicCachedServices rewrite:**
    - BTHPORT.SYS receives DSM device property scan requests
    - For each request, BTHPORT writes a new "service descriptor" entry
-   - After 35+ writes, the registry hive becomes fragmented
    - **Critical:** The HID collection structure becomes ambiguous to the stack
 
 4. **HID collection collapse:**
    - **Before rewrite:** COL01 and COL02 are independent entries in DynamicCachedServices
-   - **After rewrite:** Registry optimization/normalization causes COL02 to merge into the unified top-level collection (TLC)
+   - **After rewrite:** DynamicCachedServices no longer represents COL02 as a separate entry; all HID data is routed through the unified top-level collection (TLC)
    - Result: **Dual-collection structure collapses into single unified structure**
+
+> **Note on mechanism:** The exact BTHPORT internal mechanism is not fully reverse-engineered. Observable behavior: after DSM writes 35 properties to the Magic Mouse device container, BTHPORT rewrites DynamicCachedServices in a way that collapses the dual-collection HID descriptor into a unified TLC. The DSM property write is the confirmed trigger; the kernel-internal path from property write to descriptor collapse is not yet characterized. Earlier drafts of this document attributed the collapse to Windows registry fragmentation or auto-merge of binary blobs — that attribution is incorrect (Windows registry does not auto-merge binary values) and has been removed.
 
 5. **Registry state (Mode B):**
    - `HKLM\SYSTEM\CurrentControlSet\Enum\BTHENUM\...\Device Parameters`:
-     - DynamicCachedServices: `00110000 00000000 00000000 ...` (fragmented, collapsed)
+     - DynamicCachedServices: `00110000 00000000 00000000 ...` (rewritten, collapsed)
    - COL02 no longer exists as a separate entry
    - All HID data now routed through unified TLC
 
@@ -97,8 +98,8 @@ Trigger sequence:
 
 The collapse is a **one-way state transition:**
 - Device reconnection doesn't reset DynamicCachedServices
-- BTHPORT doesn't auto-repair fragmented registry entries
-- Only remedies: delete and re-pair device, or patch the driver stack to prevent collapse
+- BTHPORT doesn't auto-repair the rewritten DynamicCachedServices entries
+- Only remedies: delete and re-pair device, or patch the driver stack to suppress the conditions associated with the collapse
 
 ---
 
@@ -142,7 +143,7 @@ Service 2-34: System/reserved entries
 ```
 Service 0: TLC (unified collection) → flags: 0x00110000
 Service 1: Collapsed data → flags: 0x00000000
-Service 2-34: Fragmented entries
+Service 2-34: Rewritten entries (post-DSM)
 ```
 
 When BTHPORT loads this data, it cannot reconstruct the original dual-collection hierarchy. HIDClass falls back to treating all data as unified input, which breaks scroll recognition.
@@ -175,7 +176,7 @@ Each property query causes BTHPORT to:
 3. Update registry
 4. Return property value
 
-After 35+ iterations, the registry hive is heavily fragmented, and Windows registry optimization logic merges duplicate/overlapping entries. **This is where COL02 gets collapsed into TLC.**
+After 35+ iterations, BTHPORT rewrites DynamicCachedServices and the dual-collection structure collapses into a unified TLC. **This is where COL02 gets collapsed into TLC.** The kernel-internal path from the 35th property write to the descriptor rewrite is not yet characterized; the property write is the confirmed trigger, but the precise BTHPORT code path inside that rewrite has not been reverse-engineered.
 
 ### Registry Locations
 
@@ -194,7 +195,7 @@ HKLM\SYSTEM\CurrentControlSet\Enum\BTHENUM
 
 ### Solution Strategy
 
-Instead of fixing the registry collapse (impossible from user-space), the PATH-A patch installs a **WDM lower filter driver** that intercepts HID initialization **before** the collapse happens.
+Instead of fixing the descriptor collapse from user-space (not possible — the rewrite happens inside BTHPORT), the PATH-A patch installs a **WDM lower filter driver** that intercepts HID initialization **before** the collapse event is observed. v1.0 empirical results show this significantly reduces occurrence of the collapse within the observed test window; it is not yet established as unconditional prevention.
 
 ### How the Lower Filter Works
 
@@ -215,7 +216,7 @@ The filter driver:
 1. **Monitors IRP_MJ_DEVICE_CONTROL requests** from upper layers
 2. **Detects DSM property queries** (characteristic request patterns)
 3. **Intercepts the DynamicCachedServices write** before BTHPORT updates it
-4. **Preserves COL02 separation** by preventing the collapse logic
+4. **Aims to preserve COL02 separation** by suppressing the conditions associated with the collapse (empirically reduces occurrence; full mechanistic guarantee pending v2)
 5. **Allows normal HID stack operation** for all other requests
 
 ### Registration Method
@@ -268,7 +269,9 @@ This tells Windows PnP to insert `applewirelessmouse.sys` as a lower filter in t
 - **With patch:** Scroll persists at 69+ minutes
 - **Without patch (historical):** Scroll stops at ~22 minutes
 - **Improvement factor:** 3.1× longer before failure
-- **Conclusion:** Patch delays/prevents Mode B transition
+- **Conclusion:** Patch significantly reduces occurrence of the Mode B transition and may prevent it within the observed test window.
+
+> **Note on effectiveness:** v1.0 test results show a 3.1× improvement over the unpatched baseline. Long-term prevention (multi-day soak) has not yet been characterized. The v2 KMDF rewrite targets full prevention.
 
 ### Test 3: Pnputil Rescan
 
@@ -309,9 +312,9 @@ This tells Windows PnP to insert `applewirelessmouse.sys` as a lower filter in t
 4. Test scroll
 
 **Result: PASS**
-- Forced DSM property scan doesn't trigger collapse
+- Forced DSM property scan does not trigger collapse within the test window
 - Scroll continues to work
-- Patch successfully prevents BTHPORT DynamicCachedServices write
+- Patch significantly reduces occurrence of the BTHPORT DynamicCachedServices collapse-rewrite; long-term prevention not yet characterized
 
 ### Test 6: Cold Reboot
 
@@ -377,6 +380,10 @@ v2 will address these limitations with a from-scratch WDF driver implementation.
 
 - [Magic Mouse 2 (2015) Tech Specs](https://support.apple.com/en-us/HT204830)
 - Firmware update history (device descriptor changes over versions)
+
+### Baseline / Prior Work
+
+- [sbagirici/apple-magic-mouse-scroll-fix-windows](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) — original patched `applewirelessmouse.sys` binary and LowerFilter installation approach that this project builds on. The binary included in v1.0.0 (`c881c041` patched, 66288 bytes) originates from that repository.
 
 ### Related Issues
 

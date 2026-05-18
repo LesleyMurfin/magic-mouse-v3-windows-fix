@@ -6,7 +6,7 @@ A Windows kernel driver patch that restores scroll functionality on Apple Magic 
 
 ## What This Fixes
 
-Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after Bluetooth idle disconnect followed by DeviceSetupManager property synchronization. This patch prevents that loss by protecting the HID collection structure during DSM initialization.
+Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after Bluetooth idle disconnect followed by DeviceSetupManager property synchronization. This patch significantly reduces occurrence of that loss (and may prevent it) by protecting the HID collection structure during DSM initialization. v1.0 empirical results show a 3.1× improvement over the unpatched baseline; long-term (multi-day) prevention is not yet characterized. The v2 KMDF rewrite targets full prevention.
 
 **Affected hardware:**
 - Apple Magic Mouse v3 (2024), Bluetooth PID 0x0323
@@ -107,7 +107,7 @@ Uninstall restores the original driver and removes all Windows registry entries 
 
 **The problem:** When DeviceSetupManager writes 35 property descriptors to the device container, BTHPORT rewrites the DynamicCachedServices registry hive. This causes the Bluetooth HID stack to collapse HID collection COL02 (battery/diagnostics) into the unified top-level collection (TLC), breaking scroll.
 
-**The solution:** The applewirelessmouse.sys filter driver intercepts this stack initialization, preserves COL02 separation by preventing the collapse event, and allows the input device to maintain its dual-collection structure.
+**The solution:** The applewirelessmouse.sys filter driver intercepts this stack initialization and aims to preserve COL02 separation by suppressing the conditions associated with the collapse event, allowing the input device to maintain its dual-collection structure. Empirically this significantly reduces occurrence within the observed test window (see Test 2 below); unconditional long-term prevention is a v2 goal.
 
 **Test evidence:**
 - Test 1 (power off/on): scroll persists — PASS
@@ -138,7 +138,7 @@ See `/v2-kmdf-driver/README.md` for v2 status.
 
 ### Reporting Issues
 
-File issues at [GitHub Issues](https://github.com/ReviveBusiness/magic-mouse-v3-windows-fix/issues).
+File issues at [GitHub Issues](https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/issues).
 
 **Required information:**
 - Windows version and build (run `winver`)
@@ -169,6 +169,16 @@ wevtutil epl "Microsoft-Windows-DeviceSetupManager/Admin" C:\dsm-admin.evtx
 - PR must include test evidence from your hardware
 - Link to related issue
 - All .ps1 scripts must pass PSScriptAnalyzer (via GitHub Actions)
+
+## Attribution
+
+This project started from [`sbagirici/apple-magic-mouse-scroll-fix-windows`](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows), which provided the initial patched `applewirelessmouse.sys` binary and established the LowerFilter installation approach for Windows.
+
+Our contributions on top of that baseline:
+- Full root cause analysis (H-011 DSM trigger, COL01/COL02 Mode A/B mechanism)
+- Test battery (Tests 1–6 + Phase 5) confirming the 3.1× improvement factor
+- Rewritten PowerShell installer/uninstaller with correct LowerFilters path, REG_MULTI_SZ type, and two-level BTHENUM enumeration
+- SHA256 verification, DMCA notice, and release packaging
 
 ## License
 
