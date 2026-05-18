@@ -1,0 +1,62 @@
+# Windows Driver Build Artifacts
+obj/
+bin/
+Debug/
+Release/
+*.lib
+*.obj
+*.res
+*.pdb
+*.wdf
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.sln.docstates
+*.vcxproj.user
+
+# Build Logs
+*.log
+*.etl
+*.cab
+
+# Test Results
+TestResults/
+*.trx
+
+# Temp Files
+*.tmp
+*.temp
+*.bak
+
+# System
+Thumbs.db
+.DS_Store
+
+# Git-ignore driver binaries EXCEPT in release/
+*.sys
+!v1-binary-patch/applewirelessmouse.sys
+!v1-binary-patch/installer/applewirelessmouse.sys
+
+# Certificates EXCEPT release/
+*.cer
+*.pfx
+*.p12
+!v1-binary-patch/MagicMouseFix.cer
+!v1-binary-patch/installer/MagicMouseFix.cer
+
+# Python (if used for scripts)
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

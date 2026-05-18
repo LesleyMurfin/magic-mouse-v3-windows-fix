@@ -1,0 +1,60 @@
+name: PowerShell Lint
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '**.ps1'
+      - '.github/workflows/ps-lint.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**.ps1'
+      - '.github/workflows/ps-lint.yml'
+
+jobs:
+  lint:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install PSScriptAnalyzer
+      run: |
+        Set-PSRepository PSGallery -InstallationPolicy Trusted
+        Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+      shell: pwsh
+
+    - name: Run PSScriptAnalyzer
+      run: |
+        $Scripts = Get-ChildItem -Path "." -Filter "*.ps1" -Recurse | Where-Object { $_.FullName -notmatch "\\\.git\\" }
+
+        Write-Host "Found $($Scripts.Count) PowerShell files to analyze" -ForegroundColor Cyan
+
+        $Results = @()
+        foreach ($Script in $Scripts) {
+          Write-Host "Analyzing: $($Script.FullName)" -ForegroundColor Gray
+          $AnalysisResults = Invoke-ScriptAnalyzer -Path $Script.FullName -Severity Warning, Error
+
+          if ($AnalysisResults) {
+            $Results += $AnalysisResults
+          }
+        }
+
+        if ($Results.Count -gt 0) {
+          Write-Host ""
+          Write-Host "PSScriptAnalyzer found issues:" -ForegroundColor Red
+          $Results | Format-Table -Property RuleName, Severity, Line, Message | Out-Host
+
+          Write-Host ""
+          Write-Host "Summary:" -ForegroundColor Red
+          Write-Host "  Errors: $($Results | Where-Object { $_.Severity -eq 'Error' } | Measure-Object | Select-Object -ExpandProperty Count)" -ForegroundColor Red
+          Write-Host "  Warnings: $($Results | Where-Object { $_.Severity -eq 'Warning' } | Measure-Object | Select-Object -ExpandProperty Count)" -ForegroundColor Yellow
+
+          exit 1
+        } else {
+          Write-Host ""
+          Write-Host "All PowerShell scripts passed analysis!" -ForegroundColor Green
+          exit 0
+        }
+      shell: pwsh

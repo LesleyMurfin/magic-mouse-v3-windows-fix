@@ -1,0 +1,183 @@
+# Magic Mouse v3 Windows Scroll Fix
+
+**STATUS: Production Ready v1.0.0**
+
+A Windows kernel driver patch that restores scroll functionality on Apple Magic Mouse v3 (2024) after Bluetooth reconnection.
+
+## What This Fixes
+
+Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after Bluetooth idle disconnect followed by DeviceSetupManager property synchronization. This patch prevents that loss by protecting the HID collection structure during DSM initialization.
+
+**Affected hardware:**
+- Apple Magic Mouse v3 (2024), Bluetooth PID 0x0323
+- Windows 10 build 14393 or later / Windows 11 any build
+
+**Symptoms before patch:**
+- Scroll wheel works immediately after pairing
+- After ~15–30 min idle + Bluetooth disconnect, scroll stops responding
+- Cursor movement continues normally
+- Issue does not self-recover; requires driver reinstall or device repair
+
+## Hardware Requirements
+
+- Windows 10 build 14393 or later, or Windows 11 any version
+- Apple Magic Mouse v3 (verify PID 0x0323 in Device Manager)
+- Administrator account for installation
+- Reboot access
+
+## Quick Install (3 Steps)
+
+### Step 1: Download & Verify
+
+```powershell
+# Download v1.0.0 release
+# Extract to C:\Program Files\MagicMousePatch\
+
+# Verify binary integrity (mandatory)
+$sys = "C:\Program Files\MagicMousePatch\v1-binary-patch\applewirelessmouse.sys"
+(Get-FileHash $sys -Algorithm SHA256).Hash
+# Expected: 370A5555AEBF673C3156EA5B5FBABD8030F2EE7A3A6BD0FCB1B4B6C93FA56A03
+```
+
+### Step 2: Run Installer
+
+```powershell
+# Open PowerShell as Administrator
+cd "C:\Program Files\MagicMousePatch\v1-binary-patch\installer"
+.\Install-MagicMousePatch.ps1
+
+# Accept certificate trust prompt when prompted
+```
+
+### Step 3: Reboot
+
+```powershell
+# Follow on-screen instructions, or manually:
+shutdown /r /t 60 /c "MagicMousePatch installer - rebooting"
+```
+
+## What Changes on Your System
+
+| Item | Change |
+|------|--------|
+| Certificate | MagicMouseFix cert imported to LocalMachine\TrustedPublisher and Root store |
+| Driver file | C:\Windows\System32\drivers\applewirelessmouse.sys (66 KB) |
+| Service | applewirelessmouse service created, demand-start (Type 1, Start 3) |
+| Registry | HKLM\SYSTEM\CurrentControlSet\Enum\BTHENUM\...\Device Parameters\LowerFilters |
+| Backup | Original driver backed up to C:\ProgramData\MagicMousePatch\backup\ |
+
+The patch acts as a WDM lower filter on the Bluetooth HID stack, intercepting device initialization before HID collection structures can collapse.
+
+## Verify It Worked
+
+After reboot:
+
+```powershell
+# Check driver is loaded
+Get-PnpDevice -Class Mouse | Where-Object {$_.Name -match "Apple"}
+
+# Check service is running
+sc query applewirelessmouse
+# Should show STATE        : 4 RUNNING
+
+# Event log confirmation (optional)
+Get-WinEvent -LogName "Microsoft-Windows-Kernel-PnP/Configuration" -MaxEvents 20 `
+  | Where-Object {$_.Message -match "applewirelessmouse"}
+```
+
+Test scroll functionality:
+1. Open any application with scrollable content
+2. Move mouse over content and scroll
+3. Disconnect Magic Mouse (turn off), wait 2 minutes, turn back on
+4. Verify scroll still works
+
+## Uninstall
+
+```powershell
+# Open PowerShell as Administrator
+cd "C:\Program Files\MagicMousePatch\v1-binary-patch\installer"
+.\Uninstall-MagicMousePatch.ps1
+
+# Follow prompts; reboot when complete
+```
+
+Uninstall restores the original driver and removes all Windows registry entries and certificates.
+
+## How It Works
+
+**The problem:** When DeviceSetupManager writes 35 property descriptors to the device container, BTHPORT rewrites the DynamicCachedServices registry hive. This causes the Bluetooth HID stack to collapse HID collection COL02 (battery/diagnostics) into the unified top-level collection (TLC), breaking scroll.
+
+**The solution:** The applewirelessmouse.sys filter driver intercepts this stack initialization, preserves COL02 separation by preventing the collapse event, and allows the input device to maintain its dual-collection structure.
+
+**Test evidence:**
+- Test 1 (power off/on): scroll persists — PASS
+- Test 2 (idle + DSM replay): held Mode A for 69 min vs historical 22 min before flip — PASS
+- Test 3 (pnputil rescan): scroll stable — PASS
+- Test 4 (sleep/wake): cache byte-identical, scroll works — PASS
+- Test 6 (UsoClient force-DSM): scroll preserved — PASS
+- Phase 5 (cold reboot): DSM ran twice post-boot, scroll still working — PASS
+
+## Roadmap
+
+**v1.0.0 (current):** Binary patch of Apple firmware via WDM lower filter.
+- Patched applewirelessmouse.sys (66 KB)
+- PowerShell installer + uninstaller
+- Registry-based LowerFilters registration
+- Requires certificate trust
+
+**v2.0.0 (in progress):** KMDF filter driver rewrite.
+- From-scratch WDF source code
+- No Apple binary dependency
+- Cleaner driver signing process
+- Better Windows Defender SmartScreen integration
+- Windows 11 22H2+ target
+
+See `/v2-kmdf-driver/README.md` for v2 status.
+
+## Contributing
+
+### Reporting Issues
+
+File issues at [GitHub Issues](https://github.com/ReviveBusiness/magic-mouse-v3-windows-fix/issues).
+
+**Required information:**
+- Windows version and build (run `winver`)
+- Magic Mouse hardware version and PID (Device Manager → Human Interface Devices → Apple Magic Mouse → Details → Hardware Ids)
+- Steps to reproduce
+- Output from Event Viewer:
+  - Microsoft-Windows-Kernel-PnP/Configuration (last 50 events)
+  - Microsoft-Windows-DeviceSetupManager/Admin (last 50 events)
+
+Export logs:
+
+```powershell
+wevtutil epl "Microsoft-Windows-Kernel-PnP/Configuration" C:\pnp-config.evtx
+wevtutil epl "Microsoft-Windows-DeviceSetupManager/Admin" C:\dsm-admin.evtx
+# Attach .evtx files to issue
+```
+
+### Testing Patches
+
+1. Clone this repository
+2. Install the patched version per Quick Install
+3. Run idle + reconnect test (69+ min)
+4. Document results in a test comment with exact Windows version and hardware revision
+
+### Pull Requests
+
+- All commits to feature branches (ai/* prefix for Claude Code)
+- PR must include test evidence from your hardware
+- Link to related issue
+- All .ps1 scripts must pass PSScriptAnalyzer (via GitHub Actions)
+
+## License
+
+MIT License — Copyright 2026 Revive Business Solutions.
+
+See `LICENSE` file for full text.
+
+## Support
+
+Questions? Contact: riley@revivebusiness.ca
+
+For security issues, see `SECURITY.md`.
