@@ -117,9 +117,61 @@ Uninstall restores the original driver and removes all Windows registry entries 
 
 ## How It Works
 
-**The problem:** When DeviceSetupManager writes 35 property descriptors to the device container, BTHPORT rewrites the DynamicCachedServices registry hive. This causes the Bluetooth HID stack to collapse HID collection COL02 (battery/diagnostics) into the unified top-level collection (TLC), breaking scroll.
+### The Problem: Mode A → Mode B Collapse
 
-**The solution:** The applewirelessmouse.sys filter driver intercepts this stack initialization and aims to preserve COL02 separation by suppressing the conditions associated with the collapse event, allowing the input device to maintain its dual-collection structure. Empirically this significantly reduces occurrence within the observed test window (see Test 2 below); unconditional long-term prevention is a v2 goal.
+After ~15–30 min idle, Windows DeviceSetupManager writes 35 property descriptors to the
+Magic Mouse device container. BTHPORT rewrites its internal service cache, collapsing the
+dual HID collection structure:
+
+```
+MODE A (working)                      MODE B (broken — after DSM trigger)
+────────────────────────────────      ────────────────────────────────────
+  Magic Mouse v3 (BT paired)            Magic Mouse v3 (BT paired)
+    |                                     |
+    +-- COL01  <-- scroll + cursor        +-- TLC (unified)  <-- scroll LOST
+    |   (HID\VID_004C&PID_0323&COL01)         cursor still works
+    |
+    +-- COL02  <-- battery / diag
+        (HID\VID_004C&PID_0323&COL02)
+
+  DynamicCachedServices:                DynamicCachedServices:
+    Entry 0: COL01  0x00110000            Entry 0: TLC    0x00110000
+    Entry 1: COL02  0x00020000            Entry 1: empty  0x00000000
+                                          (COL02 gone)
+```
+
+Mode B is **permanent** — device reconnect, sleep/wake, and restart do not recover it.
+Only fix without this patch: unpair and repair the device.
+
+### The Fix: WDM Lower Filter Driver
+
+`applewirelessmouse.sys` is inserted as a lower filter in the Bluetooth HID stack,
+intercepting initialization before the collapse can take hold:
+
+```
+  Application (scroll events)
+       |
+  Windows Input Manager
+       |
+  hidclass.sys          (HID Class Driver)
+       |
+  HidBth.sys            (Bluetooth HID miniport)
+       |
+  applewirelessmouse.sys  <-- LOWER FILTER (this patch)
+       |                     intercepts DSM descriptor rewrite
+  BTHENUM PDO           (Magic Mouse device node)
+       |
+  BTHPORT.SYS           (Bluetooth port driver)
+       |
+  Magic Mouse v3 hardware
+```
+
+Registered via:
+```
+HKLM\SYSTEM\CurrentControlSet\Enum\BTHENUM\
+  {00001124-...}_VID&0001004C_PID&0323\...\
+    LowerFilters  REG_MULTI_SZ  "applewirelessmouse"
+```
 
 **Test evidence:**
 - Test 1 (power off/on): scroll persists — PASS
