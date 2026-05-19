@@ -56,7 +56,6 @@ $ServiceName  = "applewirelessmouse"
 
 # Expected facts (empirically established)
 $ExpectedSha256       = "370A5555AEBF673C3156EA5B5FBABD8030F2EE7A3A6BD0FCB1B4B6C93FA56A03"
-$ExpectedMd5          = "c881c04113033420cda9d3efe55f9461"
 $ExpectedSize         = 66288
 $CertThumbprint       = "16940C0F937D569363560D5FEC5CD8FA6D6D9BCE"
 $MagicMouseDeviceRe   = 'BTHENUM.*00001124.*PID&0323'

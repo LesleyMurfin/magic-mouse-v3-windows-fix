@@ -187,13 +187,13 @@ function Remove-MagicMouseCert {
     try {
         $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("TrustedPublisher", "LocalMachine")
         $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-        $matches = @($store.Certificates | Where-Object { $_.Thumbprint -eq $CertThumbprint })
-        foreach ($c in $matches) {
+        $certMatches = @($store.Certificates | Where-Object { $_.Thumbprint -eq $CertThumbprint })
+        foreach ($c in $certMatches) {
             $store.Remove($c)
             Write-Status "Removed cert $($c.Thumbprint)" "OK"
         }
         $store.Close()
-        if ($matches.Count -eq 0) {
+        if ($certMatches.Count -eq 0) {
             Write-Status "No matching cert in TrustedPublisher" "OK"
         }
     } catch {
