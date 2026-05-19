@@ -17,7 +17,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install PSScriptAnalyzer
       run: |
@@ -34,7 +34,7 @@ jobs:
         $Results = @()
         foreach ($Script in $Scripts) {
           Write-Host "Analyzing: $($Script.FullName)" -ForegroundColor Gray
-          $AnalysisResults = Invoke-ScriptAnalyzer -Path $Script.FullName -Severity Warning, Error
+          $AnalysisResults = Invoke-ScriptAnalyzer -Path $Script.FullName -Settings "$env:GITHUB_WORKSPACE\PSScriptAnalyzerSettings.psd1" -Severity Warning, Error
 
           if ($AnalysisResults) {
             $Results += $AnalysisResults

@@ -269,8 +269,8 @@ When v2 becomes available, you can optionally upgrade by:
 
 ### Windows Driver Development
 
-- [Microsoft Windows Driver Kit](https://docs.microsoft.com/en-us/windows-hardware/drivers/)
-- [KMDF Documentation](https://docs.microsoft.com/en-us/windows-hardware/drivers/wdf/kmdf-version-history)
+- [Microsoft Windows Driver Kit](https://learn.microsoft.com/en-us/windows-hardware/drivers/)
+- [KMDF Documentation](https://learn.microsoft.com/en-us/windows-hardware/drivers/wdf/kmdf-version-history)
 - [Windows Driver Samples](https://github.com/microsoft/Windows-driver-samples)
 
 ### Related Projects

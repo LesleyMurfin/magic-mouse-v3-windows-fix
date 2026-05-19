@@ -6,11 +6,13 @@ A Windows kernel driver patch that restores scroll functionality on Apple Magic 
 
 ## What This Fixes
 
-Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after Bluetooth idle disconnect followed by DeviceSetupManager property synchronization. This patch prevents that loss by protecting the HID collection structure during DSM initialization.
+Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after Bluetooth idle disconnect followed by DeviceSetupManager property synchronization. This patch significantly reduces occurrence of that loss (and may prevent it) by protecting the HID collection structure during DSM initialization. v1.0 empirical results show a 3.1× improvement over the unpatched baseline; long-term (multi-day) prevention is not yet characterized. The v2 KMDF rewrite targets full prevention.
 
 **Affected hardware:**
 - Apple Magic Mouse v3 (2024), Bluetooth PID 0x0323
 - Windows 10 build 14393 or later / Windows 11 any build
+
+> **Have a Magic Mouse v1 or v2?** This repo is v3-only. For v1/v2 scroll fix on Windows, see [`sbagirici/apple-magic-mouse-scroll-fix-windows`](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) — the project this work builds on.
 
 **Symptoms before patch:**
 - Scroll wheel works immediately after pairing
@@ -18,10 +20,20 @@ Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after Bluetooth id
 - Cursor movement continues normally
 - Issue does not self-recover; requires driver reinstall or device repair
 
-## Hardware Requirements
+## Supported Hardware
+
+| Model | Year | Bluetooth PID | Supported? |
+|-------|------|---------------|------------|
+| Magic Mouse v1 | 2009 | `0x030D` | ❌ Not supported — see [sbagirici's repo](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) |
+| Magic Mouse v2 | 2015 | `0x0269` | ❌ Not supported — see [sbagirici's repo](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) |
+| Magic Mouse v3 | 2024 | `0x0323` | ✅ This repo |
+
+**Verify your PID:** Device Manager → Human Interface Devices → Apple Magic Mouse → Properties → Details → Hardware Ids. Look for `PID&030D`, `PID&0269`, or `PID&0323`.
+
+## System Requirements
 
 - Windows 10 build 14393 or later, or Windows 11 any version
-- Apple Magic Mouse v3 (verify PID 0x0323 in Device Manager)
+- Apple Magic Mouse v3 (PID `0x0323`) paired over Bluetooth
 - Administrator account for installation
 - Reboot access
 
@@ -105,9 +117,61 @@ Uninstall restores the original driver and removes all Windows registry entries 
 
 ## How It Works
 
-**The problem:** When DeviceSetupManager writes 35 property descriptors to the device container, BTHPORT rewrites the DynamicCachedServices registry hive. This causes the Bluetooth HID stack to collapse HID collection COL02 (battery/diagnostics) into the unified top-level collection (TLC), breaking scroll.
+### The Problem: Mode A → Mode B Collapse
 
-**The solution:** The applewirelessmouse.sys filter driver intercepts this stack initialization, preserves COL02 separation by preventing the collapse event, and allows the input device to maintain its dual-collection structure.
+After ~15–30 min idle, Windows DeviceSetupManager writes 35 property descriptors to the
+Magic Mouse device container. BTHPORT rewrites its internal service cache, collapsing the
+dual HID collection structure:
+
+```
+MODE A (working)                      MODE B (broken — after DSM trigger)
+────────────────────────────────      ────────────────────────────────────
+  Magic Mouse v3 (BT paired)            Magic Mouse v3 (BT paired)
+    |                                     |
+    +-- COL01  <-- scroll + cursor        +-- TLC (unified)  <-- scroll LOST
+    |   (HID\VID_004C&PID_0323&COL01)         cursor still works
+    |
+    +-- COL02  <-- battery / diag
+        (HID\VID_004C&PID_0323&COL02)
+
+  DynamicCachedServices:                DynamicCachedServices:
+    Entry 0: COL01  0x00110000            Entry 0: TLC    0x00110000
+    Entry 1: COL02  0x00020000            Entry 1: empty  0x00000000
+                                          (COL02 gone)
+```
+
+Mode B is **permanent** — device reconnect, sleep/wake, and restart do not recover it.
+Only fix without this patch: unpair and repair the device.
+
+### The Fix: WDM Lower Filter Driver
+
+`applewirelessmouse.sys` is inserted as a lower filter in the Bluetooth HID stack,
+intercepting initialization before the collapse can take hold:
+
+```
+  Application (scroll events)
+       |
+  Windows Input Manager
+       |
+  hidclass.sys          (HID Class Driver)
+       |
+  HidBth.sys            (Bluetooth HID miniport)
+       |
+  applewirelessmouse.sys  <-- LOWER FILTER (this patch)
+       |                     intercepts DSM descriptor rewrite
+  BTHENUM PDO           (Magic Mouse device node)
+       |
+  BTHPORT.SYS           (Bluetooth port driver)
+       |
+  Magic Mouse v3 hardware
+```
+
+Registered via:
+```
+HKLM\SYSTEM\CurrentControlSet\Enum\BTHENUM\
+  {00001124-...}_VID&0001004C_PID&0323\...\
+    LowerFilters  REG_MULTI_SZ  "applewirelessmouse"
+```
 
 **Test evidence:**
 - Test 1 (power off/on): scroll persists — PASS
@@ -138,7 +202,7 @@ See `/v2-kmdf-driver/README.md` for v2 status.
 
 ### Reporting Issues
 
-File issues at [GitHub Issues](https://github.com/ReviveBusiness/magic-mouse-v3-windows-fix/issues).
+File issues at [GitHub Issues](https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/issues).
 
 **Required information:**
 - Windows version and build (run `winver`)
@@ -165,10 +229,22 @@ wevtutil epl "Microsoft-Windows-DeviceSetupManager/Admin" C:\dsm-admin.evtx
 
 ### Pull Requests
 
-- All commits to feature branches (ai/* prefix for Claude Code)
+- All commits to feature branches
 - PR must include test evidence from your hardware
 - Link to related issue
 - All .ps1 scripts must pass PSScriptAnalyzer (via GitHub Actions)
+
+## Attribution
+
+Big thanks to [`sbagirici`](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) for the original patched `applewirelessmouse.sys` binary and the LowerFilter installation approach that this project builds on. Without that starting point, the v3 investigation would have taken significantly longer.
+
+**v1 / v2 users:** sbagirici's repo is the right place for you — go give it a star.
+
+Our additions on top of that baseline (v3-specific):
+- Full root cause analysis of the H-011 / DSM trigger bug (COL01/COL02 Mode A/B collapse mechanism)
+- Test battery (Tests 1–6 + Phase 5) quantifying a 3.1× improvement factor
+- Rewritten PowerShell installer/uninstaller with correct LowerFilters path, REG_MULTI_SZ type, and two-level BTHENUM enumeration
+- SHA256 verification, DMCA notice, HID descriptor research, and release packaging
 
 ## License
 

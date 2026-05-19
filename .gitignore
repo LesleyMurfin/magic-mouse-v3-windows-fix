@@ -60,3 +60,6 @@ env/
 *.swp
 *.swo
 *~
+
+# Local research — private, never pushed
+docs/research/
