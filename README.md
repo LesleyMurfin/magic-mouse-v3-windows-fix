@@ -1,8 +1,15 @@
 # Magic Mouse v3 Windows Scroll Fix
 
-**STATUS: Production Ready v1.0.0**
+**0323 product: KMDF `MagicMouseDriver` in `v2-kmdf-driver/`.**  
+Double-click `v2-kmdf-driver/Install-KMDF.cmd`. First run: one Administrator prompt (registers a SYSTEM task). Later runs: no UAC. Result: `C:\ProgramData\MagicMouseDriver\RESULT.txt`.
 
-A Windows kernel driver patch that restores scroll functionality on Apple Magic Mouse v3 (2024) after Bluetooth reconnection.
+`magic-tray` should install **this** KMDF for PID 0323 (do not vendor the tree into the tray repo).
+
+The v1 `applewirelessmouse.sys` binary patch is a **ship-blocker** (BSOD 0xD1). Do not install it for 0323. Do not dual-filter it with MagicMouseDriver.
+
+---
+
+A Windows KMDF lower filter that presents a standard mouse to hidclass and translates Magic Mouse 2 USB-C (PID 0x0323) RID 0x12 reports so the pointer moves. Also addresses the v3 scroll-stop / DSM collection collapse the v1 patch was aimed at.
 
 ## What This Fixes
 
@@ -37,9 +44,19 @@ Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after Bluetooth id
 - Administrator account for installation
 - Reboot access
 
-## Quick Install (3 Steps)
+## Quick Install (one click)
 
-### Step 1: Download & Verify
+1. Clone this repository on Windows.
+2. Double-click `v2-kmdf-driver\Install-KMDF.cmd`.
+3. Accept Administrator **once**. After that the SYSTEM task `MM-Kmdf-Install` runs unattended (sign, install, bind 0323 only, Bluetooth bounce, reboot if needed, post-boot test).
+
+Details and HVCI / test-signing notes: [`v2-kmdf-driver/README.md`](v2-kmdf-driver/README.md).
+
+## Legacy v1 binary patch (do not ship)
+
+The steps below install the old patched `applewirelessmouse.sys`. **Do not use this for 0323.** It is kept only as history.
+
+### Step 1: Download & Verify (v1 only — ship-blocker)
 
 ```powershell
 # Download v1.0.0 release
@@ -189,14 +206,7 @@ HKLM\SYSTEM\CurrentControlSet\Enum\BTHENUM\
 - Registry-based LowerFilters registration
 - Requires certificate trust
 
-**v2.0.0 (in progress):** KMDF filter driver rewrite.
-- From-scratch WDF source code
-- No Apple binary dependency
-- Cleaner driver signing process
-- Better Windows Defender SmartScreen integration
-- Windows 11 22H2+ target
-
-See `/v2-kmdf-driver/README.md` for v2 status.
+**v2.0.3 (this tree):** KMDF `MagicMouseDriver` for 0323 only — INF, vcxproj, source, and one-click SYSTEM-task installer. See `/v2-kmdf-driver/README.md`.
 
 ## Contributing
 

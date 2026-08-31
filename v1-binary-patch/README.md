@@ -1,6 +1,12 @@
 # v1.0.0 — Binary Patch Installer
 
-**STATUS: Production Ready**
+**SHIP-BLOCKER for PID 0323.** The patched `applewirelessmouse.sys` has caused BSOD 0xD1 (`DRIVER_IRQL_NOT_LESS_OR_EQUAL`). It is **not** the 0323 product.
+
+Use **`../v2-kmdf-driver/Install-KMDF.cmd`** (KMDF `MagicMouseDriver`, sole LowerFilters, 0323 only). Do not dual-filter this binary with MagicMouseDriver.
+
+---
+
+**STATUS: Historical only — do not ship**
 
 This directory contains the PATH-A binary patch approach: a pre-built, patched applewirelessmouse.sys kernel driver and PowerShell installer/uninstaller.
 

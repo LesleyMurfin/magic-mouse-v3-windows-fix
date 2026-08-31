@@ -1,0 +1,77 @@
+; MagicMouseDriver.inf
+; SPDX-License-Identifier: MIT
+;
+; KMDF lower filter for Apple Magic Mouse PID 0x0323 only
+; (2024 / Magic Mouse 2 USB-C over Bluetooth).
+;
+; Stack: HidBth → MagicMouseDriver → BthEnum
+;
+; Sole filter. Do NOT install alongside applewirelessmouse
+; (that binary is a BSOD 0xD1 ship-blocker on this PID).
+; This INF does not bind 0x030D / 0x0269 / 0x0310.
+;
+; Install: double-click Install-KMDF.cmd (registers a SYSTEM task).
+; Manual:  pnputil /add-driver MagicMouseDriver.inf /install
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = HIDClass
+ClassGUID   = {745A17A0-74D3-11D0-B6FE-00A0C90F57DA}
+Provider    = %ManufacturerName%
+DriverPackageDisplayName = %DeviceDesc%
+DriverPackageType = PlugAndPlay
+DriverVer   = 08/31/2026,2.0.3.0
+CatalogFile = MagicMouseDriver.cat
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 12
+
+[Manufacturer]
+%ManufacturerName% = MagicMouseDriver, NTamd64
+
+[MagicMouseDriver.NTamd64]
+; PID 0x0323 only — VID 0x004C (Apple Bluetooth)
+%DeviceDesc% = MagicMouseDriver_Install, BTHENUM\{00001124-0000-1000-8000-00805F9B34FB}_VID&0001004C_PID&0323
+
+[MagicMouseDriver_Install.NT]
+Include   = hidbth.inf
+Needs     = HIDBTH_Inst.NT
+CopyFiles = MagicMouseDriver_Copy
+
+[MagicMouseDriver_Copy]
+MagicMouseDriver.sys
+
+[MagicMouseDriver_Install.NT.HW]
+AddReg  = MagicMouseDriver_AddReg
+Include = input.inf
+Needs   = HID_Inst.NT.HW
+
+[MagicMouseDriver_AddReg]
+; 0x00010000 = FLG_ADDREG_TYPE_MULTI_SZ — replaces any previous LowerFilters.
+HKR,,"LowerFilters",0x00010000,"MagicMouseDriver"
+HKLM,"SYSTEM\CurrentControlSet\Services\MagicMouseDriver\Parameters","EnableInjection",0x00010001,1
+
+[MagicMouseDriver_Install.NT.Services]
+Include    = hidbth.inf
+Needs      = HIDBTH_Inst.NT.Services
+AddService = MagicMouseDriver, , MagicMouseDriver_Service_Inst
+
+[MagicMouseDriver_Service_Inst]
+DisplayName   = %ServiceDesc%
+ServiceType   = 1
+StartType     = 3
+ErrorControl  = 1
+ServiceBinary = %12%\MagicMouseDriver.sys
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+MagicMouseDriver.sys = 1,,
+
+[Strings]
+ManufacturerName = "Magic Mouse Driver"
+DeviceDesc       = "Apple Magic Mouse (PID 0323) KMDF filter"
+ServiceDesc      = "MagicMouseDriver (0323 KMDF lower filter)"
+DiskName         = "Magic Mouse Driver Installation Disk"

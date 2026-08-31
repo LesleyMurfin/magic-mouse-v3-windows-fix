@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.3] - 2026-08-31
+
+### Added
+
+- KMDF `MagicMouseDriver` source package in `v2-kmdf-driver/` (PID **0x0323 only**)
+- One-click `Install-KMDF.cmd`: first run registers SYSTEM tasks `MM-Kmdf-Install` and `MM-Kmdf-PostBoot`; later runs start the task with no UAC
+- Unattended SYSTEM path: test-signing, self-sign cert + catalog, `pnputil` install, sole `LowerFilters=MagicMouseDriver`, Bluetooth disable/enable bounce, reboot if required, post-boot verify
+- RID 0x12 / 0x27 → 6-byte RID 0x02 translation (optical X/Y + buttons + **vertical and horizontal surface scroll**) on ACL completions and IRP_MJ_READ
+- Installer refuses May 20 WDKTestCert SHA256 `559B136A…`; reuses `CN=MagicMouseFix` when present; Bluetooth bounce only if HID did not start
+- `MAGIC-TRAY.md`: tray PR #74 should pull this KMDF for 0323 and must not vendor it
+
+### Fixed
+
+- Live 2.0.2.0: HID started, pointer did not move — descriptor injection without matching X/Y reports
+
+### Removed / rejected
+
+- No `mm-dev.ps1 -Phase Full`
+- No dual-filter `MagicMouseDriver,applewirelessmouse`
+- No 030D / 0310 INF hardware IDs
+- v1 patched `applewirelessmouse.sys` marked ship-blocker (BSOD 0xD1)
+
 ## [1.0.0] - 2026-05-18
 
 ### Added
