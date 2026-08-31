@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.4.1] - 2026-08-31
+
+### Changed
+
+- Unique INF / catalog / dest `.sys` so Windows creates a **new** DriverStore folder beside Apr 30 oem16 (`f7bf31c7`). Does not reuse the failed oem26 identity (`MagicMouseDriver.inf` + `MagicMouseDriver.cat` + `08/30/2026,2.0.4.0` / `magicmousedriver.inf_amd64_79beb68f1da25da4`).
+  - INF: `MagicMouseDriver-kmdf-204-scroll.inf`
+  - CatalogFile: `MagicMouseDriver-kmdf-204-scroll.cat`
+  - DriverVer: `09/01/2026,2.0.4.1`
+  - ServiceBinary / CopyFiles: `MagicMouseDriver-kmdf-204-scroll.sys` (not `MagicMouseDriver.sys`)
+- Canonical artifact: `MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys` after the freeze-hash gate. Never ship a second live-named `MagicMouseDriver.sys`.
+- Install story is **signed `pnputil /add-driver` only**. Removed SYSTEM auto-sign / unsigned-activate path (`Invoke-KmdfInstall.ps1`, `pr3-activate` style Copy-Item onto System32 / DriverStore). Uninstall deletes only the unique package (leaves oem16).
+- Human signs with cert thumb `16940C0F` (private key on the PC). No PFX in git.
+- ACL rewrite will not grow a 6-byte 0x12 report past proven buffer capacity (Event 41 hunch; pointer-safe passthrough if it cannot grow).
+- HID contract documented: keep X/Y `0x0030`/`0x0031` on 0x12; add Wheel `0x0038` as extra; battery stays Input `0x90` COL02; no Feature `0x47`. PATH-A still ship-blocker.
+- Refuse SHA `845435CE…` (failed 2.0.4), May 20 `559B136A…`, and Apr 30 `AD5D244B…` as *this* package.
+
 ## [2.0.4] - 2026-08-31
 
 ### Changed

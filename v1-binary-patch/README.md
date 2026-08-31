@@ -2,7 +2,7 @@
 
 **SHIP-BLOCKER for PID 0323.** The package file is **`applewirelessmouse-patched-pathA-SHIPBLOCKER.sys`**. It has caused BSOD 0xD1 (`DRIVER_IRQL_NOT_LESS_OR_EQUAL`). It is **not** the 0323 product. Never name it `MagicMouseDriver.sys`. Windows would still copy it to `applewirelessmouse.sys` if someone ran this historical installer.
 
-Use **`../v2-kmdf-driver/Install-KMDF.cmd`** (KMDF artifact `MagicMouseDriver-kmdf-2.0.4-scroll.sys`, INF dest `MagicMouseDriver.sys`, sole LowerFilters, 0323 only). Do not dual-filter this binary with MagicMouseDriver.
+Use the unique KMDF package **`../v2-kmdf-driver/MagicMouseDriver-kmdf-204-scroll.inf`** (artifact `MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys`, dest `MagicMouseDriver-kmdf-204-scroll.sys`, signed `pnputil /add-driver` only). Do not dual-filter this PATH-A binary with MagicMouseDriver. Do not Copy-Item onto System32.
 
 ---
 
@@ -265,7 +265,7 @@ v1-binary-patch/
 
 ## For v2 Users (Future)
 
-v1.0.0 (this PATH-A binary) is **not** the 0323 product. The 0323 product is KMDF `MagicMouseDriver-kmdf-2.0.4-scroll.sys` (FileVersion 2.0.4.0; INF dest `MagicMouseDriver.sys`).
+v1.0.0 (this PATH-A binary) is **not** the 0323 product. The 0323 product is unique KMDF `MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys` (FileVersion 2.0.4.1; INF dest `MagicMouseDriver-kmdf-204-scroll.sys`).
 
 See `/v2-kmdf-driver/README.md` for v2 status and roadmap.
 

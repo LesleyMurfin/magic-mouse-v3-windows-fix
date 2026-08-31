@@ -9,9 +9,11 @@
 //   Feature 0x47 fails on COL01 and COL02. Product battery is RID 0x90.
 //
 // HidBth delivers RID 0x12 to hidclass. Descriptor C (RID 0x02 + Feat 0x47)
-// is not what the live stack bound. This blob stays on 0x12 / 0x90 and ADDS
-// Wheel (GD 0x38) and AC Pan (Consumer 0x0238) to the 0x12 collection so
-// mouhid can see scroll on the same reports HidBth already forwards.
+// is not what the live stack bound. This blob stays on 0x12 / 0x90.
+// KEEP Apr 30 pointer usages X (0x0030) and Y (0x0031) on report 0x12.
+// ADD Wheel (GD 0x0038) and AC Pan (Consumer 0x0238) as extras — not a
+// replacement of X/Y. mouhid then sees scroll on the same reports HidBth
+// already forwards.
 //
 // 0x12 report after injection (8 bytes):
 //   [0] RID 0x12

@@ -47,8 +47,8 @@ DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING RegistryPath)
 {
     WDF_DRIVER_CONFIG config;
     WDF_DRIVER_CONFIG_INIT(&config, EvtDeviceAdd);
-    DbgPrint("MM: DriverEntry %s artifact %s (INF installs as MagicMouseDriver.sys)\n",
-             MM_FILE_VERSION_STR, MM_ARTIFACT_SYS_NAME);
+    DbgPrint("MM: DriverEntry %s dest %s artifact %s\n",
+             MM_FILE_VERSION_STR, MM_INF_SYS_NAME, MM_ARTIFACT_SYS_PATTERN);
     return WdfDriverCreate(DriverObject, RegistryPath, WDF_NO_OBJECT_ATTRIBUTES,
                            &config, WDF_NO_HANDLE);
 }
@@ -307,15 +307,27 @@ OnAclTransferComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
                 payload = (PUCHAR)MmGetSystemAddressForMdlSafe(mdl, NormalPagePriority);
             }
 
+            ULONG capacity = bufSize;
+            if (mdl != NULL)
+            {
+                ULONG mdlBytes = MmGetMdlByteCount(mdl);
+                if (mdlBytes > 0)
+                {
+                    capacity = mdlBytes;
+                }
+            }
+
             if (payload != NULL && bufSize >= 1)
             {
                 ULONG newLen = bufSize;
                 __try
                 {
-                    // May grow 6-byte X/Y-only 0x12 to 8 (Wheel/AC Pan).
-                    // ACL allocations are larger than the received length.
-                    if (TranslateAclHidReport(payload, bufSize, &newLen, ctx) &&
-                        newLen > 0 && newLen <= 256)
+                    // May grow 6-byte X/Y-only 0x12 to 8 (Wheel/AC Pan)
+                    // only when capacity is proven (MDL byte count, or
+                    // BufferSize if that is already >= 8). Never write
+                    // past the ACL buffer — that is an Event 41 candidate.
+                    if (TranslateAclHidReport(payload, bufSize, capacity, &newLen, ctx) &&
+                        newLen > 0 && newLen <= 256 && newLen <= capacity)
                     {
                         RtlCopyMemory(brb + MM_ACL_BUFSIZE_OFFSET, &newLen, sizeof(ULONG));
                         WdfSpinLockAcquire(ctx->Lock);

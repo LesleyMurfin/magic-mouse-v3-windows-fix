@@ -1,0 +1,105 @@
+; MagicMouseDriver-kmdf-204-scroll.inf
+; SPDX-License-Identifier: MIT
+;
+; UNIQUE 2.0.4 scroll package for Apple Magic Mouse PID 0x0323 only
+; (2024 / Magic Mouse 2 USB-C over Bluetooth).
+;
+; Stack: HidBth → MagicMouseDriver → BthEnum
+;
+; Package identity (must stay distinct from every live DriverStore folder):
+;   INF          = MagicMouseDriver-kmdf-204-scroll.inf
+;   CatalogFile  = MagicMouseDriver-kmdf-204-scroll.cat
+;   DriverVer    = 09/01/2026,2.0.4.1
+;   CopyFiles    = MagicMouseDriver-kmdf-204-scroll.sys
+;   ServiceBinary= %12%\MagicMouseDriver-kmdf-204-scroll.sys
+;
+; Windows will create a NEW DriverStore folder
+;   magicmousedriver-kmdf-204-scroll.inf_amd64_<newhash>
+; beside the Apr 30 package. Do not reuse the failed oem26 identity.
+;
+; DO NOT REUSE (SHIP-BLOCK / restore collision):
+;   CatalogFile = MagicMouseDriver.cat
+;   DriverVer   = 08/30/2026,2.0.4.0     ; failed oem26
+;                                       ; magicmousedriver.inf_amd64_79beb68f1da25da4
+;   DriverVer   = 08/31/2026,2.0.4.0     ; PR #3 INF (same dest sys name)
+;   CopyFiles   MagicMouseDriver.sys     ; hardlinks over Apr 30 / oem16 f7bf31c7
+;   SHA256      845435CEF0DABAF2FD0638717E44F6A774556CECE47F00C8B12328B5B2B3FDE3
+;
+; Apr 30 known-good (leave installed; do not delete-driver):
+;   oem16 / f7bf31c7
+;   MagicMouseDriver.sys
+;   SHA256 AD5D244B176D650961594EDED153C46F9A52004C424DABFD86E50844E447546B
+;
+; HID contract (see HID-CONTRACT.md):
+;   COL01 Input 0x12 keeps Apr 30 X/Y usages 0x0030 / 0x0031.
+;   Wheel 0x0038 is EXTRA, not a replacement.
+;   COL02 Input 0x90 battery. No Feature 0x47.
+;
+; Install: signed pnputil /add-driver only (see SIGN-AND-INSTALL.md).
+; Human signs with cert thumb 16940C0F (private key on the PC, not in git).
+; Never Copy-Item onto System32\drivers or DriverStore.
+; Never run pr3-activate / unsigned activate.
+; PATH-A applewirelessmouse.sys is a SHIPBLOCKER BSOD. Do not bind 0x030D.
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = HIDClass
+ClassGUID   = {745A17A0-74D3-11D0-B6FE-00A0C90F57DA}
+Provider    = %ManufacturerName%
+DriverPackageDisplayName = %DeviceDesc%
+DriverPackageType = PlugAndPlay
+DriverVer   = 09/01/2026,2.0.4.1
+CatalogFile = MagicMouseDriver-kmdf-204-scroll.cat
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 12
+
+[Manufacturer]
+%ManufacturerName% = MagicMouseDriver204Scroll, NTamd64
+
+[MagicMouseDriver204Scroll.NTamd64]
+; PID 0x0323 only — VID 0x004C (Apple Bluetooth)
+%DeviceDesc% = MagicMouseDriver204_Install, BTHENUM\{00001124-0000-1000-8000-00805F9B34FB}_VID&0001004C_PID&0323
+
+[MagicMouseDriver204_Install.NT]
+Include   = hidbth.inf
+Needs     = HIDBTH_Inst.NT
+CopyFiles = MagicMouseDriver204_Copy
+
+[MagicMouseDriver204_Copy]
+MagicMouseDriver-kmdf-204-scroll.sys
+
+[MagicMouseDriver204_Install.NT.HW]
+AddReg  = MagicMouseDriver204_AddReg
+Include = input.inf
+Needs   = HID_Inst.NT.HW
+
+[MagicMouseDriver204_AddReg]
+; 0x00010000 = FLG_ADDREG_TYPE_MULTI_SZ — replaces any previous LowerFilters.
+HKR,,"LowerFilters",0x00010000,"MagicMouseDriver"
+HKLM,"SYSTEM\CurrentControlSet\Services\MagicMouseDriver\Parameters","EnableInjection",0x00010001,1
+
+[MagicMouseDriver204_Install.NT.Services]
+Include    = hidbth.inf
+Needs      = HIDBTH_Inst.NT.Services
+AddService = MagicMouseDriver, , MagicMouseDriver204_Service_Inst
+
+[MagicMouseDriver204_Service_Inst]
+DisplayName   = %ServiceDesc%
+ServiceType   = 1
+StartType     = 3
+ErrorControl  = 1
+ServiceBinary = %12%\MagicMouseDriver-kmdf-204-scroll.sys
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+MagicMouseDriver-kmdf-204-scroll.sys = 1,,
+
+[Strings]
+ManufacturerName = "Magic Mouse Driver KMDF 204 scroll"
+DeviceDesc       = "Apple Magic Mouse (PID 0323) KMDF 2.0.4 scroll"
+ServiceDesc      = "MagicMouseDriver (0323 KMDF 2.0.4 scroll filter)"
+DiskName         = "Magic Mouse Driver KMDF 2.0.4 scroll disk"

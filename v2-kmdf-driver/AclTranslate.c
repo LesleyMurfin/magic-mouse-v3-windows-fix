@@ -10,8 +10,12 @@
 //   HID DATA:   A1 12 <MOUSE2...>
 //
 // Live HID 2026-08-30 21:23 MDT: COL01 Input 0x12 is X/Y only (no 0x0038).
-// Stay on 0x12 and fill Wheel / AC Pan. Do not convert to RID 0x02.
-// RID 0x90 (COL02 battery Input) is passed through.
+// Stay on 0x12. Keep usages 0x0030/0x0031. Fill Wheel / AC Pan as extras.
+// Do not convert to RID 0x02. RID 0x90 (COL02 battery Input) is passed through.
+//
+// Do not write past capacity. Growing a 6-byte report to 8 without a proven
+// allocation is an Event 41 / bugcheck candidate. If we cannot grow, leave
+// the native 6-byte X/Y intact (pointer-safe, wheel omitted).
 
 #include "AclTranslate.h"
 #include "GestureEngine.h"
@@ -20,46 +24,69 @@
 #define HID_MSG_DATA_INPUT 0xA1
 #endif
 
+#define MM_ACL_MAX_PARSE (14 + 8 * MM_TOUCH_SLOTS)
+
 BOOLEAN
 TranslateAclHidReport(
-    _Inout_updates_bytes_(len) PUCHAR buf,
-    _In_ ULONG len,
+    _Inout_updates_bytes_(capacity) PUCHAR buf,
+    _In_ ULONG receivedLen,
+    _In_ ULONG capacity,
     _Out_ PULONG newLen,
     _Inout_ PDEVICE_CONTEXT ctx)
 {
-    *newLen = len;
+    *newLen = receivedLen;
 
-    if (buf == NULL || ctx == NULL || len < 1)
+    if (buf == NULL || ctx == NULL || receivedLen < 1 || capacity < 1)
     {
         return FALSE;
+    }
+
+    ULONG parseLen = receivedLen;
+    if (parseLen > capacity)
+    {
+        parseLen = capacity;
     }
 
     // Battery: live HidD_GetInputReport(0x90) on COL02. Do not rewrite.
     if (buf[0] == MM_REPORT_ID_BATTERY ||
-        (buf[0] == HID_MSG_DATA_INPUT && len >= 2 && buf[1] == MM_REPORT_ID_BATTERY))
+        (buf[0] == HID_MSG_DATA_INPUT && parseLen >= 2 && buf[1] == MM_REPORT_ID_BATTERY))
     {
         return FALSE;
     }
 
-    if (len < 6)
+    if (parseLen < 6)
     {
         return FALSE;
     }
 
     PUCHAR report = buf;
-    ULONG  reportLen = len;
+    ULONG  reportLen = parseLen;
     BOOLEAN hidHdr = FALSE;
 
-    if (buf[0] == HID_MSG_DATA_INPUT && len >= 7 &&
+    if (buf[0] == HID_MSG_DATA_INPUT && parseLen >= 7 &&
         (buf[1] == MM_REPORT_ID_MOUSE || buf[1] == 0x27))
     {
         hidHdr = TRUE;
         report = buf + 1;
-        reportLen = len - 1;
+        reportLen = parseLen - 1;
     }
     else if (buf[0] != MM_REPORT_ID_MOUSE && buf[0] != 0x27)
     {
         return FALSE;
+    }
+
+    ULONG need = hidHdr ? (1u + MM_MOUSE_REPORT_LEN) : MM_MOUSE_REPORT_LEN;
+    if (capacity < need)
+    {
+        // Cannot grow in-place. Native 6-byte X/Y stays (pointer-safe).
+        return FALSE;
+    }
+
+    // A huge BufferSize is an allocation, not a HID report. Walk only the
+    // optical header so touch parsing cannot run off a pool.
+    if (reportLen > MM_ACL_MAX_PARSE)
+    {
+        reportLen = 6;
     }
 
     UCHAR translated[MM_MOUSE_REPORT_LEN];
@@ -70,8 +97,6 @@ TranslateAclHidReport(
         return FALSE;
     }
 
-    // May grow a 6-byte native X/Y-only 0x12 to 8 bytes (Wheel/AC Pan).
-    // ACL buffers are far larger than 8; BufferSize is the received length.
     if (hidHdr)
     {
         buf[0] = HID_MSG_DATA_INPUT;

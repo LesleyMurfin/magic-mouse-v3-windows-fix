@@ -34,7 +34,7 @@ If you discover a security vulnerability in this driver patch, please report it 
 This security policy covers only this driver patch repository and its distributed binaries/scripts.
 
 **In scope:**
-- PATH-A `applewirelessmouse-patched-pathA-SHIPBLOCKER.sys` (installs as `applewirelessmouse.sys`) and KMDF `MagicMouseDriver-kmdf-2.0.4-scroll.sys` (installs as `MagicMouseDriver.sys`)
+- PATH-A `applewirelessmouse-patched-pathA-SHIPBLOCKER.sys` (installs as `applewirelessmouse.sys`) and KMDF `MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys` (INF dest `MagicMouseDriver-kmdf-204-scroll.sys`)
 - PowerShell installer and uninstaller scripts
 - Registry modifications made by installer/uninstaller
 - Certificate installation process

@@ -1,19 +1,21 @@
 // SPDX-License-Identifier: MIT
 //
-// FileVersion 2.0.4.0 — KMDF scroll candidate only.
-// Package / artifact name: MagicMouseDriver-kmdf-2.0.4-scroll.sys
-// Windows / INF install name stays MagicMouseDriver.sys (do not change).
+// FileVersion 2.0.4.1 — unique 2.0.4 scroll package (not the failed 2.0.4.0 oem26).
+// Canonical artifact: MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys
+// INF dest / ServiceBinary: MagicMouseDriver-kmdf-204-scroll.sys
+// Never ship a second MagicMouseDriver.sys (that name is the Apr 30 restore file).
 //
 // Distinct from:
-//   MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys   pointer-only (not 2.0.4.0)
+//   MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys      pointer-only (oem16)
 //   MagicMouseDriver-kmdf-may20-pointerdead-559B136A.sys  FileVersion 2.0.2.0, refuse
-//   applewirelessmouse-patched-pathA-SHIPBLOCKER.sys   PATH-A, never this product
+//   SHA256 845435CE…                                      failed 2.0.4 oem26, refuse
+//   applewirelessmouse-patched-pathA-SHIPBLOCKER.sys      PATH-A, never this product
 
 #include <windows.h>
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION    2,0,4,0
- PRODUCTVERSION 2,0,4,0
+ FILEVERSION    2,0,4,1
+ PRODUCTVERSION 2,0,4,1
  FILEFLAGSMASK  0x3fL
 #ifdef _DEBUG
  FILEFLAGS      0x1L
@@ -28,14 +30,14 @@ BEGIN
     BEGIN
         BLOCK "040904B0"
         BEGIN
-            VALUE "CompanyName",      "Magic Mouse Driver"
-            VALUE "FileDescription",  "KMDF 2.0.4 scroll candidate (PID 0323). Installs as MagicMouseDriver.sys."
-            VALUE "FileVersion",      "2.0.4.0"
-            VALUE "InternalName",     "MagicMouseDriver-kmdf-2.0.4-scroll"
+            VALUE "CompanyName",      "Magic Mouse Driver KMDF 204 scroll"
+            VALUE "FileDescription",  "KMDF 2.0.4.1 scroll (PID 0323). Dest MagicMouseDriver-kmdf-204-scroll.sys."
+            VALUE "FileVersion",      "2.0.4.1"
+            VALUE "InternalName",     "MagicMouseDriver-kmdf-204-scroll"
             VALUE "LegalCopyright",   "MIT"
-            VALUE "OriginalFilename", "MagicMouseDriver-kmdf-2.0.4-scroll.sys"
+            VALUE "OriginalFilename", "MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys"
             VALUE "ProductName",      "MagicMouseDriver KMDF 2.0.4 scroll"
-            VALUE "ProductVersion",   "2.0.4.0"
+            VALUE "ProductVersion",   "2.0.4.1"
         END
     END
     BLOCK "VarFileInfo"

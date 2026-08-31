@@ -1,21 +1,22 @@
 <#
 .SYNOPSIS
-One click for a non-technical user: register a SYSTEM task and install MagicMouseDriver for PID 0323.
+Add the unique signed 2.0.4 scroll package with pnputil /add-driver only.
 
 .DESCRIPTION
-Double-click Install-KMDF.cmd. The first run asks for Administrator once so it can
-register MM-Kmdf-Install and MM-Kmdf-PostBoot as SYSTEM. After that, this script
-only starts the task — no UAC.
+Requires a already-signed unique package in this folder:
 
-The SYSTEM task builds if needed, self-signs, installs, binds 0323 only
-(LowerFilters=MagicMouseDriver, no applewirelessmouse, no 030D), bounces
-Bluetooth, reboots if test signing just changed, then post-boot verifies.
+  MagicMouseDriver-kmdf-204-scroll.inf
+  MagicMouseDriver-kmdf-204-scroll.sys   (byte-identical to the sha8 artifact)
+  MagicMouseDriver-kmdf-204-scroll.cat   (signed with thumb 16940C0F)
 
-Results: C:\ProgramData\MagicMouseDriver\RESULT.txt
-Logs:    C:\ProgramData\MagicMouseDriver\install.log
+Does not Copy-Item onto System32\drivers or DriverStore.
+Does not delete Apr 30 oem16 / MagicMouseDriver.inf.
+Does not create certificates. Does not run unsigned activate.
+PATH-A is refused.
 
 .PARAMETER Uninstall
-Remove the SYSTEM tasks, unbind 0323, delete the KMDF package.
+Remove only this unique package (match MagicMouseDriver-kmdf-204-scroll.inf).
+Never /delete-driver the Apr 30 MagicMouseDriver.inf package.
 
 .PARAMETER NoElevate
 Internal. Set when relaunched via UAC so we do not loop.
@@ -32,130 +33,104 @@ $ProgressPreference    = 'SilentlyContinue'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $Here 'scripts\Kmdf-Common.ps1')
 
-function Start-KmdfInstallTask {
-    Write-Host ""
-    Write-Host "Starting SYSTEM task '$script:KmdfTaskInstall' (no approval prompt)..." -ForegroundColor Cyan
-    & schtasks.exe /run /tn $script:KmdfTaskInstall
-    if ($LASTEXITCODE -ne 0) { return $false }
-    Write-Host "The installer is running in the background as SYSTEM." -ForegroundColor Green
-    Write-Host "Watch:  $script:KmdfResult" -ForegroundColor Yellow
-    Write-Host "Log:    $script:KmdfLog" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "The PC may reboot by itself if test signing was just turned on." -ForegroundColor Yellow
-    Write-Host "After reboot, RESULT.txt is the pass/fail." -ForegroundColor Yellow
-    return $true
-}
-
-function Copy-KmdfPackageToProgramFiles {
-    Initialize-KmdfDataDir
-    if (-not (Test-Path -LiteralPath $script:KmdfInstallDir)) {
-        New-Item -ItemType Directory -Path $script:KmdfInstallDir -Force | Out-Null
-    }
-    Write-Host "Copying KMDF package to $script:KmdfInstallDir" -ForegroundColor Gray
-    Copy-Item -Path (Join-Path $Here '*') -Destination $script:KmdfInstallDir -Recurse -Force
-    icacls.exe "$script:KmdfInstallDir" /inheritance:r /grant 'SYSTEM:(OI)(CI)F' /grant 'Administrators:(OI)(CI)F' /grant 'Users:(OI)(CI)RX' | Out-Null
-}
-
-function Register-KmdfSystemTasks {
-    $installPs1  = Join-Path $script:KmdfInstallDir 'scripts\Invoke-KmdfInstall.ps1'
-    $postBootPs1 = Join-Path $script:KmdfInstallDir 'scripts\Invoke-KmdfPostBoot.ps1'
-    if (-not (Test-Path -LiteralPath $installPs1))  { throw "Missing $installPs1" }
-    if (-not (Test-Path -LiteralPath $postBootPs1)) { throw "Missing $postBootPs1" }
-
-    $installAction = New-ScheduledTaskAction -Execute 'powershell.exe' `
-        -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$installPs1`" -PackageRoot `"$script:KmdfInstallDir`""
-    $postAction = New-ScheduledTaskAction -Execute 'powershell.exe' `
-        -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$postBootPs1`""
-
-    $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
-
-    $installSettings = New-ScheduledTaskSettingsSet `
-        -AllowStartIfOnBatteries `
-        -DontStopIfGoingOnBatteries `
-        -StartWhenAvailable `
-        -ExecutionTimeLimit (New-TimeSpan -Minutes 30) `
-        -MultipleInstances IgnoreNew `
-        -Hidden
-
-    $postSettings = New-ScheduledTaskSettingsSet `
-        -AllowStartIfOnBatteries `
-        -DontStopIfGoingOnBatteries `
-        -StartWhenAvailable `
-        -ExecutionTimeLimit (New-TimeSpan -Minutes 15) `
-        -MultipleInstances IgnoreNew `
-        -Hidden
-
-    $startup = New-ScheduledTaskTrigger -AtStartup
-    $startup.Delay = 'PT45S'
-
-    Register-ScheduledTask -TaskName $script:KmdfTaskInstall `
-        -Action $installAction `
-        -Principal $principal `
-        -Settings $installSettings `
-        -Description 'MagicMouseDriver KMDF one-click install (PID 0323 only). Trigger with schtasks /run — no UAC after first register.' `
-        -Force | Out-Null
-
-    Register-ScheduledTask -TaskName $script:KmdfTaskPostBoot `
-        -Action $postAction `
-        -Principal $principal `
-        -Settings $postSettings `
-        -Trigger $startup `
-        -Description 'MagicMouseDriver KMDF post-boot verify (PID 0323 stack + service).' `
-        -Force | Out-Null
-
-    Write-Host "Registered SYSTEM tasks: $script:KmdfTaskInstall , $script:KmdfTaskPostBoot" -ForegroundColor Green
-}
-
-function Unregister-KmdfSystemTasks {
-    foreach ($n in @($script:KmdfTaskInstall, $script:KmdfTaskPostBoot)) {
-        Unregister-ScheduledTask -TaskName $n -Confirm:$false -ErrorAction SilentlyContinue
-        Write-Host "Removed task $n" -ForegroundColor Gray
-    }
-}
-
-function Uninstall-KmdfPackage {
-    Write-Host "Unbinding PID 0323 and removing MagicMouseDriver..." -ForegroundColor Yellow
-    $mice = @(Get-Kmdf0323Device)
-    foreach ($m in $mice) {
-        $rp = "HKLM:\SYSTEM\CurrentControlSet\Enum\$($m.InstanceId)"
-        try {
-            $lf = @((Get-ItemProperty -LiteralPath $rp -ErrorAction Stop).LowerFilters)
-            $new = @($lf | Where-Object { $_ -ne 'MagicMouseDriver' })
-            if ($new.Count -gt 0) {
-                Set-ItemProperty -LiteralPath $rp -Name LowerFilters -Value $new -Type MultiString
-            } else {
-                Remove-ItemProperty -LiteralPath $rp -Name LowerFilters -ErrorAction SilentlyContinue
-            }
-            & pnputil.exe /restart-device $m.InstanceId 2>&1 | Out-Null
-        } catch {
-            Write-Host "  $($m.InstanceId): $_" -ForegroundColor Yellow
+function Get-KmdfUniqueOemNames {
+    $pnpRaw = & pnputil.exe /enum-drivers 2>$null | Out-String
+    $blocks = $pnpRaw -split '(?=Published Name:)'
+    $found = @()
+    foreach ($block in $blocks) {
+        if ($block -notmatch 'MagicMouseDriver-kmdf-204-scroll\.inf') { continue }
+        if ($block -match 'Original Name:\s+MagicMouseDriver\.inf') { continue }
+        if ($block -match 'Published Name:\s+(oem\d+\.inf)') {
+            $found += $Matches[1]
         }
     }
-
-    $pnpRaw = & pnputil.exe /enum-drivers 2>$null | Out-String
-    $oems = ($pnpRaw -split '(?=Published Name:)') |
-        Where-Object { $_ -match 'MagicMouseDriver\.inf' } |
-        ForEach-Object { if ($_ -match 'Published Name:\s+(oem\d+\.inf)') { $Matches[1] } }
-    foreach ($oem in $oems) {
-        & pnputil.exe /delete-driver $oem /uninstall /force 2>&1 | Out-Null
-    }
-
-    & sc.exe stop MagicMouseDriver 2>&1 | Out-Null
-    & sc.exe delete MagicMouseDriver 2>&1 | Out-Null
-    Write-Host "Uninstall finished. Reboot if the mouse stack looks stuck." -ForegroundColor Green
+    return $found
 }
 
-# --- later clicks: task already there → no UAC ---
-if (-not $Uninstall) {
-    $existing = Get-ScheduledTask -TaskName $script:KmdfTaskInstall -ErrorAction SilentlyContinue
-    if ($existing) {
-        if (Start-KmdfInstallTask) { exit 0 }
-        Write-Host "Could not start the existing task (exit $LASTEXITCODE). Will elevate and repair registration." -ForegroundColor Yellow
+function Uninstall-KmdfUniquePackage {
+    Write-KmdfLog -Message "Removing unique 2.0.4 scroll package only. Apr 30 oem16 / MagicMouseDriver.inf is left alone." -Level 'HEAD'
+    $oems = @(Get-KmdfUniqueOemNames)
+    if ($oems.Count -eq 0) {
+        Write-KmdfLog -Message "No published MagicMouseDriver-kmdf-204-scroll.inf package found." -Level 'WARN'
+        return
     }
+    foreach ($oem in $oems) {
+        Write-KmdfLog -Message "pnputil /delete-driver $oem (unique package only)" -Level 'INFO'
+        & pnputil.exe /delete-driver $oem /uninstall 2>&1 | ForEach-Object { Write-KmdfLog -Message "$_" -Level 'INFO' }
+    }
+}
+
+function Install-KmdfUniquePackage {
+    $inf = Join-Path $Here $script:KmdfUniqueInf
+    $sys = Join-Path $Here $script:KmdfUniqueSys
+    $cat = Join-Path $Here $script:KmdfUniqueCat
+    $retired = Join-Path $Here $script:KmdfRetiredInf
+    $liveNamed = Join-Path $Here $script:KmdfLiveSysName
+
+    if (Test-Path -LiteralPath $retired) {
+        throw "Retired $($script:KmdfRetiredInf) is in the package folder. That identity created oem26 and hardlinked over Apr 30. Use $($script:KmdfUniqueInf) only."
+    }
+    if (Test-Path -LiteralPath $liveNamed) {
+        throw "Package folder has $($script:KmdfLiveSysName). Remove it. That name collides with Apr 30 restore."
+    }
+    if (-not (Test-Path -LiteralPath $inf)) { throw "Missing $inf" }
+    if (-not (Test-Path -LiteralPath $sys)) { throw "Missing $sys — WDK build, then Freeze-KmdfArtifact.ps1." }
+    if (-not (Test-Path -LiteralPath $cat)) { throw "Missing $cat — human must inf2cat + sign with thumb 16940C0F. No unsigned activate." }
+
+    $infText = Get-Content -LiteralPath $inf -Raw
+    if ($infText -notmatch 'CatalogFile\s*=\s*MagicMouseDriver-kmdf-204-scroll\.cat') {
+        throw "INF CatalogFile is not $($script:KmdfUniqueCat)."
+    }
+    if ($infText -match '08/30/2026,2\.0\.4\.0' -or $infText -match '08/31/2026,2\.0\.4\.0') {
+        throw "INF DriverVer collides with the failed 2.0.4 oem26 / PR #3 identity."
+    }
+    if ($infText -notmatch '09/01/2026,2\.0\.4\.1') {
+        throw "INF DriverVer must be 09/01/2026,2.0.4.1 (unique vs oem26)."
+    }
+    if ($infText -match 'ServiceBinary\s*=\s*%12%\\MagicMouseDriver\.sys') {
+        throw "INF ServiceBinary must not be MagicMouseDriver.sys (Apr 30 restore file)."
+    }
+
+    if (Test-KmdfForbiddenSys -Path $sys) {
+        throw "Refusing banned .sys."
+    }
+
+    $sha = Get-KmdfFileSha256 -Path $sys
+    $sums = Join-Path $Here 'SHA256SUMS.txt'
+    if (Test-Path -LiteralPath $sums) {
+        $sumText = Get-Content -LiteralPath $sums -Raw
+        if ($sumText -notmatch [regex]::Escape($sha)) {
+            throw "Freeze-hash gate: $sys SHA256 $sha is not in SHA256SUMS.txt."
+        }
+        Write-KmdfLog -Message "Freeze-hash gate matched $sha" -Level 'OK'
+    }
+    else {
+        Write-KmdfLog -Message "SHA256SUMS.txt missing — hash this build as MagicMouseDriver-kmdf-2.0.4-scroll-$($sha.Substring(0,8)).sys before treating it as frozen." -Level 'WARN'
+    }
+
+    if (-not (Test-KmdfSignedByThumb -Path $sys -Thumb $script:KmdfSignThumb)) {
+        throw "Unsigned or wrong-thumb .sys. Sign with 16940C0F. Do not run pr3-activate / copy-over."
+    }
+    if (-not (Test-KmdfSignedByThumb -Path $cat -Thumb $script:KmdfSignThumb)) {
+        throw "Unsigned or wrong-thumb .cat. Sign with 16940C0F."
+    }
+
+    Write-KmdfLog -Message "pnputil /add-driver $inf /install (no System32 copy-over, no oem16 delete)" -Level 'HEAD'
+    & pnputil.exe /add-driver $inf /install 2>&1 | ForEach-Object { Write-KmdfLog -Message "$_" -Level 'INFO' }
+    $rc = $LASTEXITCODE
+    if ($rc -eq 0) {
+        Write-KmdfResult -Status 'PASS' -Detail "pnputil added unique package. SHA256=$sha dest=$($script:KmdfUniqueSys). Apr 30 MagicMouseDriver.sys / oem16 left in place."
+        return
+    }
+    if ($rc -eq 3010) {
+        Write-KmdfResult -Status 'PENDING' -Detail "pnputil 3010 reboot required. Unique package staged. Apr 30 oem16 not deleted."
+        return
+    }
+    throw "pnputil /add-driver exited $rc"
 }
 
 if (-not (Test-KmdfIsAdmin) -and -not $NoElevate) {
-    Write-Host "First run needs Administrator once to register the SYSTEM task." -ForegroundColor Yellow
+    Write-Host "Administrator is required for pnputil /add-driver." -ForegroundColor Yellow
     $relaunch = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-NoElevate')
     if ($Uninstall) { $relaunch += '-Uninstall' }
     $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList $relaunch -Verb RunAs -Wait -PassThru
@@ -167,17 +142,16 @@ if (-not (Test-KmdfIsAdmin)) {
     exit 2
 }
 
-if ($Uninstall) {
-    Unregister-KmdfSystemTasks
-    Uninstall-KmdfPackage
-    Write-KmdfResult -Status 'FAIL' -Detail 'Uninstalled by user.'
+try {
+    if ($Uninstall) {
+        Uninstall-KmdfUniquePackage
+        Write-KmdfResult -Status 'FAIL' -Detail 'Unique 2.0.4 scroll package removed. Apr 30 oem16 / MagicMouseDriver.sys was not deleted.'
+        exit 0
+    }
+    Install-KmdfUniquePackage
     exit 0
-}
-
-Copy-KmdfPackageToProgramFiles
-Register-KmdfSystemTasks
-if (-not (Start-KmdfInstallTask)) {
-    Write-Host "schtasks /run failed after registration." -ForegroundColor Red
+} catch {
+    Write-KmdfLog -Message "$_" -Level 'ERROR'
+    Write-KmdfResult -Status 'FAIL' -Detail "$_"
     exit 1
 }
-exit 0

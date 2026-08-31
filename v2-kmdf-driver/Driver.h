@@ -6,12 +6,13 @@
 //   hidclass.sys → HidBth.sys → [this filter] → BthEnum PDO
 //
 // Two jobs:
-//   1. SDP: rewrite HIDDescriptorList (0x0206) so COL01 RID 0x12 exposes
-//      Wheel (GD 0x38) and AC Pan (Consumer 0x0238). Live HID 2026-08-30
-//      21:23 MDT (Apr 30 MagicMouseFix AD5D244B): COL01 Input 0x12 is X/Y
-//      only — that is why the pointer moves and scroll does not. HidBth
-//      delivers 0x12. Descriptor C (RID 0x02 + Feat 0x47) is not what
-//      hidclass bound. Same IOCTL Apple uses
+//   1. SDP: rewrite HIDDescriptorList (0x0206) so COL01 RID 0x12 KEEPS
+//      Apr 30 pointer usages X/Y (GD 0x0030 / 0x0031) and ADDS Wheel
+//      (GD 0x0038) + AC Pan (Consumer 0x0238) as extras. Live HID
+//      2026-08-30 21:23 MDT (Apr 30 MagicMouseFix AD5D244B): COL01 Input
+//      0x12 is X/Y only — that is why the pointer moves and scroll does
+//      not. HidBth delivers 0x12. Descriptor C (RID 0x02 + Feat 0x47)
+//      is not what hidclass bound. Same IOCTL Apple uses
 //      (IOCTL_BTH_SDP_SERVICE_SEARCH_ATTRIBUTE = 0x410210).
 //   2. Reports: stay on RID 0x12. Fill Wheel/AC Pan from the 14+8*N touch
 //      block (Linux hid-magicmouse MOUSE2). Do not convert to 0x02.
@@ -31,9 +32,11 @@
 
 #define MM_POOL_TAG 'DMgm'
 
-// FileVersion / package label for this source. INF still copies MagicMouseDriver.sys.
-#define MM_FILE_VERSION_STR     "2.0.4.0"
-#define MM_ARTIFACT_SYS_NAME    "MagicMouseDriver-kmdf-2.0.4-scroll.sys"
+// FileVersion / package label. INF dest is unique so Apr 30 MagicMouseDriver.sys
+// (oem16 / AD5D244B) is not replaced or hardlinked.
+#define MM_FILE_VERSION_STR     "2.0.4.1"
+#define MM_ARTIFACT_SYS_PATTERN "MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys"
+#define MM_INF_SYS_NAME         "MagicMouseDriver-kmdf-204-scroll.sys"
 
 // Magic Mouse 2024 / Magic Mouse 2 USB-C — the only PID this package binds.
 #define MM_PID_V3  0x0323u
