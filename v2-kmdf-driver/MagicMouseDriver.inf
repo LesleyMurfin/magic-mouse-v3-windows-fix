@@ -6,6 +6,11 @@
 ;
 ; Stack: HidBth → MagicMouseDriver → BthEnum
 ;
+; Live HID 2026-08-30 21:23 MDT (Apr 30 MagicMouseFix AD5D244B):
+;   COL01 Input 0x12 = X/Y only (no Wheel 0x0038) — pointer OK, scroll dead.
+;   COL02 Input 0x90 = battery (HidD_GetInputReport; percent at byte[2]).
+;   Feature 0x47 fails on COL01/COL02. Product is 0x12+wheel / 0x90, not 0x02/0x47.
+;
 ; Sole filter. Do NOT install alongside applewirelessmouse
 ; (that binary is a BSOD 0xD1 ship-blocker on this PID).
 ; This INF does not bind 0x030D / 0x0269 / 0x0310.
@@ -20,7 +25,7 @@ ClassGUID   = {745A17A0-74D3-11D0-B6FE-00A0C90F57DA}
 Provider    = %ManufacturerName%
 DriverPackageDisplayName = %DeviceDesc%
 DriverPackageType = PlugAndPlay
-DriverVer   = 08/31/2026,2.0.3.0
+DriverVer   = 08/31/2026,2.0.4.0
 CatalogFile = MagicMouseDriver.cat
 PnpLockdown = 1
 

@@ -6,15 +6,20 @@
 //   hidclass.sys → HidBth.sys → [this filter] → BthEnum PDO
 //
 // Two jobs:
-//   1. SDP: rewrite HIDDescriptorList (0x0206) to Descriptor C (RID 0x02 mouse)
-//      so hidclass/mouhid bind a standard mouse. Same IOCTL Apple uses
+//   1. SDP: rewrite HIDDescriptorList (0x0206) so COL01 RID 0x12 exposes
+//      Wheel (GD 0x38) and AC Pan (Consumer 0x0238). Live HID 2026-08-30
+//      21:23 MDT (Apr 30 MagicMouseFix AD5D244B): COL01 Input 0x12 is X/Y
+//      only — that is why the pointer moves and scroll does not. HidBth
+//      delivers 0x12. Descriptor C (RID 0x02 + Feat 0x47) is not what
+//      hidclass bound. Same IOCTL Apple uses
 //      (IOCTL_BTH_SDP_SERVICE_SEARCH_ATTRIBUTE = 0x410210).
-//   2. Reports: Magic Mouse 2/USB-C (0323) sends MOUSE2_REPORT_ID 0x12, not
-//      RID 0x02. Live 2.0.2.0 injected the descriptor then left 0x12 untouched,
-//      so HID started and the pointer did not move. Translate 0x12 → 6-byte
-//      RID 0x02 (buttons, X, Y, AC Pan, Wheel) on:
-//        - IRP_MJ_READ completions (backup; hidclass reads usually stop at HidBth)
+//   2. Reports: stay on RID 0x12. Fill Wheel/AC Pan from the 14+8*N touch
+//      block (Linux hid-magicmouse MOUSE2). Do not convert to 0x02.
+//      Battery is RID 0x90 Input on COL02 (HidD_GetInputReport; percent
+//      at byte[2]). Feat 0x47 fails on COL01 and COL02.
+//      Paths:
 //        - BRB_L2CA_ACL_TRANSFER completions (the path HidBth actually uses)
+//        - IRP_MJ_READ completions (backup; hidclass reads usually stop at HidBth)
 //
 // Sole filter. Do not stack with applewirelessmouse (v1 binary is a 0xD1
 // ship-blocker). This package does not bind PID 0x030D / 0x0269.
@@ -49,8 +54,9 @@
 #define ACL_TRANSFER_DIRECTION_IN 0x00000001UL
 #endif
 
-// Injected RID 0x02 report: [RID][buttons][X][Y][AC Pan][Wheel] = 6 bytes.
-#define MM_MOUSE_REPORT_LEN 6
+// Injected RID 0x12 report:
+//   [RID 0x12][buttons][X i16][Y i16][AC Pan][Wheel] = 8 bytes.
+#define MM_MOUSE_REPORT_LEN 8
 
 #define MM_TOUCH_SLOTS 16
 

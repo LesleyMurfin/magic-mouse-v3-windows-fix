@@ -3,9 +3,11 @@
 **0323 product: KMDF `MagicMouseDriver` in `v2-kmdf-driver/`.**  
 Double-click `v2-kmdf-driver/Install-KMDF.cmd`. First run: one Administrator prompt (registers a SYSTEM task). Later runs: no UAC. Result: `C:\ProgramData\MagicMouseDriver\RESULT.txt`.
 
+**Do not install on the live Apr 30 PC yet** (MagicMouseFix `AD5D244B` stays). Linux cannot produce a `.sys`. **Do not merge until hardware proves scroll.**
+
 `magic-tray` should install **this** KMDF for PID 0323 (do not vendor the tree into the tray repo).
 
-The v1 `applewirelessmouse.sys` binary patch is a **ship-blocker** (BSOD 0xD1). Do not install it for 0323. Do not dual-filter it with MagicMouseDriver.
+The v1 `applewirelessmouse.sys` binary patch is a **ship-blocker** (BSOD 0xD1). Do not install it for 0323. Do not dual-filter it with MagicMouseDriver. No PATH-A.
 
 ---
 

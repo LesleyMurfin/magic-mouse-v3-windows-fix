@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.4] - 2026-08-31
+
+### Changed
+
+- Live HID 2026-08-30 21:23 MDT on Apr 30 MagicMouseFix (`AD5D244B`): **stay on the path HidBth delivers**
+  - COL01 Input **0x12** is X/Y only (no Wheel usage 0x0038) — that is why pointer moves and scroll does not
+  - COL02 `HidD_GetInputReport(0x90)` works: `bytes=[90 04 2F ...]` → 47% at `buf[2]`
+  - Feature **0x47 fails** on COL01 and COL02. Product battery is RID **0x90 Input**, not 0x47
+- SDP inject now adds Wheel (GD 0x38) and AC Pan (Consumer 0x0238) on **RID 0x12**, plus RID **0x90** battery Input
+- Gesture/ACL rewrite stays on 8-byte RID **0x12** (`[12][buttons][X i16][Y i16][AC Pan][Wheel]`). Does **not** convert to RID 0x02
+- Do not install this build on the live Apr 30 PC until a Windows WDK `.sys` exists. Do not merge until hardware proves scroll
+
 ## [2.0.3] - 2026-08-31
 
 ### Added
@@ -12,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - KMDF `MagicMouseDriver` source package in `v2-kmdf-driver/` (PID **0x0323 only**)
 - One-click `Install-KMDF.cmd`: first run registers SYSTEM tasks `MM-Kmdf-Install` and `MM-Kmdf-PostBoot`; later runs start the task with no UAC
 - Unattended SYSTEM path: test-signing, self-sign cert + catalog, `pnputil` install, sole `LowerFilters=MagicMouseDriver`, Bluetooth disable/enable bounce, reboot if required, post-boot verify
-- RID 0x12 / 0x27 → 6-byte RID 0x02 translation (optical X/Y + buttons + **vertical and horizontal surface scroll**) on ACL completions and IRP_MJ_READ
+- RID 0x12 / 0x27 → 6-byte RID 0x02 translation (optical X/Y + buttons + **vertical and horizontal surface scroll**) on ACL completions and IRP_MJ_READ — **superseded in 2.0.4** (live hidclass bound 0x12, not 0x02)
 - Installer refuses May 20 WDKTestCert SHA256 `559B136A…`; reuses `CN=MagicMouseFix` when present; Bluetooth bounce only if HID did not start
 - `MAGIC-TRAY.md`: tray PR #74 should pull this KMDF for 0323 and must not vendor it
 

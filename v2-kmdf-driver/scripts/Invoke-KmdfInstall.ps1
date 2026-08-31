@@ -288,12 +288,12 @@ try {
 
     $sys = Invoke-KmdfBuildIfNeeded
     if (Test-KmdfForbiddenSys -Path $sys) {
-        throw "Chosen .sys is the May 20 pointer-dead WDKTestCert. Build 2.0.3 from this tree instead."
+        throw "Chosen .sys is the May 20 pointer-dead WDKTestCert. Build 2.0.4 from this tree instead."
     }
     $sha = Get-KmdfFileSha256 -Path $sys
     Write-KmdfLog -Message "Installing $sys SHA256=$sha" -Level 'INFO'
     if ($sha -eq $script:KmdfShaPointerOk) {
-        Write-KmdfLog -Message "This is the Apr 30 MagicMouseFix binary (pointer OK, scroll dead). Prefer a 2.0.3 build from this source for surface scroll. Installing only because no other .sys is available." -Level 'WARN'
+        Write-KmdfLog -Message "This is the Apr 30 MagicMouseFix binary (pointer OK, scroll dead). Prefer a 2.0.4 build from this source for surface scroll. Installing only because no other .sys is available." -Level 'WARN'
     }
 
     $cert = Get-KmdfSigningCert

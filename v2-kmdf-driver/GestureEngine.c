@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-// GestureEngine.c — MOUSE2_REPORT_ID (0x12) → Descriptor C RID 0x02.
+// GestureEngine.c — stay on MOUSE2_REPORT_ID 0x12; add Wheel / AC Pan.
 //
 // Optical X/Y and buttons come from the 0x12 header (Linux hid-magicmouse.c
 // magicmouse_raw_event, MOUSE2 case). Surface scroll is a simplified port of
-// magicmouse_emit_touch() TOUCH_STATE_DRAG handling.
+// magicmouse_emit_touch() TOUCH_STATE_DRAG handling for 0323 / Mouse 2.
 #include "GestureEngine.h"
 
 #define MM2_BTN_MASK      0x03
@@ -25,6 +25,16 @@ ReadI16Le(_In_reads_(2) const UCHAR* p)
 {
     USHORT raw = (USHORT)p[0] | (USHORT)((USHORT)p[1] << 8);
     return (INT16)raw;
+}
+
+static VOID
+WriteI16Le(
+    _Out_writes_bytes_(2) PUCHAR p,
+    _In_ INT16 value
+    )
+{
+    p[0] = (UCHAR)((USHORT)value & 0xFF);
+    p[1] = (UCHAR)(((USHORT)value >> 8) & 0xFF);
 }
 
 // Linux: x = (tdata[1] << 28 | tdata[0] << 20) >> 20  (signed 12-bit)
@@ -116,7 +126,7 @@ TranslateMouse2ToHid(
     {
         return STATUS_INVALID_PARAMETER;
     }
-    if (inLen < 6 || (in[0] != 0x12 && in[0] != 0x27))
+    if (inLen < 6 || (in[0] != MM_REPORT_ID_MOUSE && in[0] != 0x27))
     {
         return STATUS_NO_MORE_ENTRIES;
     }
@@ -142,13 +152,19 @@ TranslateMouse2ToHid(
     {
         AccumulateSurfaceScroll(in, inLen, ctx, &wheel, &hwheel);
     }
+    else if (inLen >= 8)
+    {
+        // Compact 0x12: preserve any wheel bytes already present.
+        hwheel = (CHAR)in[6];
+        wheel  = (CHAR)in[7];
+    }
 
-    out[0] = 0x02;
+    out[0] = MM_REPORT_ID_MOUSE;
     out[1] = buttons;
-    out[2] = (UCHAR)ClampI8((INT)x16);
-    out[3] = (UCHAR)ClampI8((INT)y16);
-    out[4] = (UCHAR)ClampI8(hwheel);
-    out[5] = (UCHAR)ClampI8(wheel);
+    WriteI16Le(out + 2, x16);
+    WriteI16Le(out + 4, y16);
+    out[6] = (UCHAR)ClampI8(hwheel);
+    out[7] = (UCHAR)ClampI8(wheel);
 
     *outLen = MM_MOUSE_REPORT_LEN;
     return STATUS_SUCCESS;

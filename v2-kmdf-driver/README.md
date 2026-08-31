@@ -2,7 +2,9 @@
 
 **This is the 0323 product.** Double-click `Install-KMDF.cmd`. Success is **pointer and vertical/horizontal surface scroll**.
 
-Do not install the v1 `applewirelessmouse.sys` binary patch (BSOD 0xD1). Do not install the May 20 WDKTestCert 2.0.2.0 (pointer-dead). Do not stack filters. Do not ask anyone to hand-replace a working Apr 30 `.sys` — the SYSTEM task installs from this tree.
+**Do not install this tree on the live Apr 30 PC yet.** Linux cannot produce a `.sys`. Do not merge until hardware proves scroll. Do not replace the live Apr 30 `MagicMouseDriver.sys` (`AD5D244B`) by hand.
+
+Do not install the v1 `applewirelessmouse.sys` binary patch (BSOD 0xD1). Do not install the May 20 WDKTestCert 2.0.2.0 (pointer-dead). Do not stack filters. No PATH-A. No dual-filter.
 
 `magic-tray` PR #74 should **pull and install this package** for 0323. Do not vendor the KMDF tree into `magic-tray`.
 
@@ -31,7 +33,8 @@ Uninstall: double-click `Uninstall-KMDF.cmd`.
 | **No `.sys` on GitHub** | This environment cannot compile a kernel driver. The repo ships **source + INF + vcxproj + the one-click scripts**. On a Windows machine with WDK or Enterprise WDK, the SYSTEM task builds; or drop a built `MagicMouseDriver.sys` next to the INF and click again. |
 | **Test signing** | A self-signed `.sys` will not load until `bcdedit /set testsigning on` and a reboot. A "Test Mode" watermark on the desktop is expected. |
 | **HVCI / Memory Integrity** | Windows 11 Core isolation **blocks** self-signed kernel drivers. The task **fails** with a clear RESULT if HVCI is on. Turn Memory integrity **off**, reboot, click again. There is no Microsoft-signed binary in this repo yet. |
-| **Apr 30 live KMDF** | `MagicMouseDriver.sys` 24536 bytes, SHA256 `AD5D244B…`, `CN=MagicMouseFix` thumb `B902C286…`. Lesley confirmed **pointer moves**, **scroll does not**. That binary stays the pointer baseline. This tree adds 0323 surface → Wheel / AC Pan. |
+| **Apr 30 live KMDF** | `MagicMouseDriver.sys` 24536 bytes, SHA256 `AD5D244B…`, `CN=MagicMouseFix` thumb `B902C286…`. **Pointer moves, scroll does not.** Keep installed. Do not replace until a 2.0.4 `.sys` from this source is built on Windows WDK. |
+| **Live HID 2026-08-30 21:23 MDT** | On that Apr 30 binary: `HidD_GetInputReport(0x90)` on **COL02** works (`[90 04 2F …]` → 47% at `buf[2]`). **Feat 0x47 fails** on COL01 and COL02. **COL01 Input 0x12 is X/Y only** — no Wheel usage `0x0038`. All other InRpt/Feat fail. Product battery = RID **0x90**, not 0x47. Product scroll = Wheel/AC Pan on the **0x12** path HidBth delivers, not a convert-to-0x02. |
 | **May 20 WDKTestCert** | 29184 bytes, SHA256 `559B136A…`, version 2.0.2.0. HID started, **pointer dead**. The one-click task **refuses** to install it. |
 | **v1 applewirelessmouse.sys** | PATH-A patch. **SHIP-BLOCKER** (BSOD 0xD1). Not the 0323 product. |
 

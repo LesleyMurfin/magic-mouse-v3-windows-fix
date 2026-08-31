@@ -3,7 +3,8 @@
 // SdpRewrite — SDP attribute 0x0206 (HIDDescriptorList) descriptor injection.
 //
 // Called from OnSdpQueryComplete after IOCTL_BTH_SDP_SERVICE_SEARCH_ATTRIBUTE
-// (0x410210) completes. Replaces the HID report descriptor with Descriptor C.
+// (0x410210) completes. Replaces the HID report descriptor with the
+// live-aligned blob (COL01 RID 0x12 + Wheel/AC Pan, COL02 RID 0x90 Input).
 //
 // SDP DataElement (Bluetooth Core Spec Vol 3 Part B §3.3):
 //   09 02 06    UINT16 attribute ID = 0x0206

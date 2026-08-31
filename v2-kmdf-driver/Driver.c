@@ -305,13 +305,15 @@ OnAclTransferComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
                 payload = (PUCHAR)MmGetSystemAddressForMdlSafe(mdl, NormalPagePriority);
             }
 
-            if (payload != NULL && bufSize >= 6)
+            if (payload != NULL && bufSize >= 1)
             {
                 ULONG newLen = bufSize;
                 __try
                 {
+                    // May grow 6-byte X/Y-only 0x12 to 8 (Wheel/AC Pan).
+                    // ACL allocations are larger than the received length.
                     if (TranslateAclHidReport(payload, bufSize, &newLen, ctx) &&
-                        newLen > 0 && newLen <= bufSize)
+                        newLen > 0 && newLen <= 256)
                     {
                         RtlCopyMemory(brb + MM_ACL_BUFSIZE_OFFSET, &newLen, sizeof(ULONG));
                         WdfSpinLockAcquire(ctx->Lock);
@@ -365,6 +367,7 @@ OnReadComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
 
     __try
     {
+        // 0x90 battery Input is passed through. 0x12 stays 0x12 (8 bytes).
         if (bytesRead >= 6 && (buf[0] == 0x12 || buf[0] == 0x27) &&
             (ctx->ProductId == 0 || ctx->ProductId == MM_PID_V3))
         {

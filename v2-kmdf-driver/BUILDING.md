@@ -2,6 +2,8 @@
 
 Linux cannot produce a `.sys`. Build on Windows 10/11 x64 with Visual Studio + WDK, or a mounted Enterprise WDK.
 
+Do **not** install a build on the live Apr 30 PC (`AD5D244B`, pointer OK / scroll dead) until you are ready to prove 2.0.4 scroll. Do not merge until hardware proves pointer **and** scroll.
+
 ## WDK / Visual Studio
 
 ```bat

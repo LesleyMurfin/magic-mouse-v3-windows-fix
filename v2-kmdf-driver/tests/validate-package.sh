@@ -45,8 +45,22 @@ else
 fi
 test -f "$ROOT/Driver.c" && ok "Driver.c present" || bad "Driver.c present"
 test -f "$ROOT/AclTranslate.c" && ok "AclTranslate.c present" || bad "AclTranslate.c present"
-grep -q 'out\[0\] = 0x02' "$ROOT/GestureEngine.c" && ok "GestureEngine emits RID 0x02" || bad "GestureEngine emits RID 0x02"
-grep -q 'ReadI16Le' "$ROOT/GestureEngine.c" && ok "optical X/Y copied" || bad "optical X/Y copied"
+grep -q '0x85, 0x12' "$ROOT/HidDescriptor.c" && ok "descriptor COL01 RID 0x12" || bad "descriptor COL01 RID 0x12"
+grep -q '0x85, 0x90' "$ROOT/HidDescriptor.c" && ok "descriptor COL02 RID 0x90" || bad "descriptor COL02 RID 0x90"
+grep -q '0x09, 0x38' "$ROOT/HidDescriptor.c" && ok "descriptor Wheel usage 0x38" || bad "descriptor Wheel usage 0x38"
+if grep -q '0x85, 0x47' "$ROOT/HidDescriptor.c"; then
+  bad "descriptor must not inject Feature 0x47"
+else
+  ok "descriptor has no Feature 0x47"
+fi
+if grep -q 'out\[0\] = 0x02' "$ROOT/GestureEngine.c"; then
+  bad "GestureEngine must not convert to RID 0x02"
+else
+  ok "GestureEngine does not emit RID 0x02"
+fi
+grep -q 'out\[0\] = MM_REPORT_ID_MOUSE' "$ROOT/GestureEngine.c" && ok "GestureEngine stays on RID 0x12" || bad "GestureEngine stays on RID 0x12"
+grep -q '#define MM_MOUSE_REPORT_LEN 8' "$ROOT/Driver.h" && ok "0x12 report is 8 bytes" || bad "0x12 report is 8 bytes"
+grep -q 'ReadI16Le' "$ROOT/GestureEngine.c" && ok "optical X/Y copied as INT16" || bad "optical X/Y copied as INT16"
 grep -q "UserId 'SYSTEM'" "$ROOT/Install-KMDF.ps1" && ok "SYSTEM principal" || bad "SYSTEM principal"
 grep -q 'MM-Kmdf-Install' "$ROOT/scripts/Kmdf-Common.ps1" && ok "task name MM-Kmdf-Install" || bad "task name MM-Kmdf-Install"
 grep -qi 'magic-tray' "$ROOT/MAGIC-TRAY.md" && ok "magic-tray pull note" || bad "magic-tray pull note"
