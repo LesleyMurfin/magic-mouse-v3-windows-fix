@@ -1,8 +1,14 @@
 # v1.0.0 — Binary Patch Installer
 
-**STATUS: Production Ready**
+**SHIP-BLOCKER for PID 0323.** The package file is **`applewirelessmouse-patched-pathA-SHIPBLOCKER.sys`**. It has caused BSOD 0xD1 (`DRIVER_IRQL_NOT_LESS_OR_EQUAL`). It is **not** the 0323 product. Never name it `MagicMouseDriver.sys`. Windows would still copy it to `applewirelessmouse.sys` if someone ran this historical installer.
 
-This directory contains the PATH-A binary patch approach: a pre-built, patched applewirelessmouse.sys kernel driver and PowerShell installer/uninstaller.
+Use **`../v2-kmdf-driver/Install-KMDF.cmd`** (KMDF artifact `MagicMouseDriver-kmdf-2.0.4-scroll.sys`, INF dest `MagicMouseDriver.sys`, sole LowerFilters, 0323 only). Do not dual-filter this binary with MagicMouseDriver.
+
+---
+
+**STATUS: Historical only — do not ship**
+
+This directory contains the PATH-A binary patch approach: a pre-built, patched kernel driver packaged as `applewirelessmouse-patched-pathA-SHIPBLOCKER.sys` and PowerShell installer/uninstaller. The Windows service name remains `applewirelessmouse.sys`.
 
 ## Quick Start
 
@@ -33,7 +39,7 @@ Open Device Manager and locate your Magic Mouse:
    cd "C:\Program Files\MagicMousePatch\v1-binary-patch"
    
    # Check the SHA256 hash
-   (Get-FileHash "applewirelessmouse.sys" -Algorithm SHA256).Hash
+   (Get-FileHash "applewirelessmouse-patched-pathA-SHIPBLOCKER.sys" -Algorithm SHA256).Hash
    ```
    
    **Expected output:**
@@ -45,7 +51,7 @@ Open Device Manager and locate your Magic Mouse:
 
 3. **Verify certificate thumbprint** (optional but recommended):
    ```powershell
-   $cert = Get-AuthenticodeSignature "applewirelessmouse.sys"
+   $cert = Get-AuthenticodeSignature "applewirelessmouse-patched-pathA-SHIPBLOCKER.sys"
    $cert.SignerCertificate.Thumbprint
    ```
    
@@ -176,7 +182,7 @@ After reboot, your system will be back to its original state before the patch wa
 **Fix:**
 ```powershell
 # Try installing certificate manually
-$cert = Get-AuthenticodeSignature "applewirelessmouse.sys"
+$cert = Get-AuthenticodeSignature "applewirelessmouse-patched-pathA-SHIPBLOCKER.sys"
 # If this shows no signer, the binary is corrupted
 
 # Try importing certificate directly
@@ -246,12 +252,12 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
 ```
 v1-binary-patch/
 ├── README.md (this file)
-├── applewirelessmouse.sys (patched driver binary, 66 KB)
+├── applewirelessmouse-patched-pathA-SHIPBLOCKER.sys (PATH-A package, 66 KB; never MagicMouseDriver.sys)
 ├── MagicMouseFix.cer (code-signing certificate)
 ├── installer/
 │   ├── Install-MagicMousePatch.ps1 (main installer)
 │   ├── Uninstall-MagicMousePatch.ps1 (uninstaller)
-│   └── applewirelessmouse.sys (copy for installer reference)
+│   └── applewirelessmouse-patched-pathA-SHIPBLOCKER.sys (optional copy; Windows dest remains applewirelessmouse.sys)
 ├── docs/
 │   ├── bug-analysis.md (detailed problem explanation)
 │   └── architecture.md (how the filter driver works)
@@ -259,7 +265,7 @@ v1-binary-patch/
 
 ## For v2 Users (Future)
 
-v2.0.0 will be a from-scratch KMDF driver rewrite. Until then, v1.0.0 (this binary patch) is the current production release.
+v1.0.0 (this PATH-A binary) is **not** the 0323 product. The 0323 product is KMDF `MagicMouseDriver-kmdf-2.0.4-scroll.sys` (FileVersion 2.0.4.0; INF dest `MagicMouseDriver.sys`).
 
 See `/v2-kmdf-driver/README.md` for v2 status and roadmap.
 
