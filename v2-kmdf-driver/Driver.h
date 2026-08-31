@@ -31,6 +31,10 @@
 
 #define MM_POOL_TAG 'DMgm'
 
+// FileVersion / package label for this source. INF still copies MagicMouseDriver.sys.
+#define MM_FILE_VERSION_STR     "2.0.4.0"
+#define MM_ARTIFACT_SYS_NAME    "MagicMouseDriver-kmdf-2.0.4-scroll.sys"
+
 // Magic Mouse 2024 / Magic Mouse 2 USB-C — the only PID this package binds.
 #define MM_PID_V3  0x0323u
 

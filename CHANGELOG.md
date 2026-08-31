@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Artifact / backup / FileVersion labels so KMDF and PATH-A cannot be mixed up. Windows still installs KMDF as `MagicMouseDriver.sys` and PATH-A as `applewirelessmouse.sys`.
+  - Pointer-only: `MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys` (FileVersion not 2.0.4.0)
+  - Pointer-dead: `MagicMouseDriver-kmdf-may20-pointerdead-559B136A.sys` (FileVersion 2.0.2.0; installer refuses)
+  - Scroll candidate: `MagicMouseDriver-kmdf-2.0.4-scroll.sys` (FileVersion / DriverVer **2.0.4.0**)
+  - PATH-A ship-blocker: `applewirelessmouse-patched-pathA-SHIPBLOCKER.sys` (v1-binary-patch only)
 - Live HID 2026-08-30 21:23 MDT on Apr 30 MagicMouseFix (`AD5D244B`): **stay on the path HidBth delivers**
   - COL01 Input **0x12** is X/Y only (no Wheel usage 0x0038) — that is why pointer moves and scroll does not
   - COL02 `HidD_GetInputReport(0x90)` works: `bytes=[90 04 2F ...]` → 47% at `buf[2]`

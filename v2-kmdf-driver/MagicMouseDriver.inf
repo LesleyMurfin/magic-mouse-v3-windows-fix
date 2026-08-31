@@ -17,6 +17,13 @@
 ;
 ; Install: double-click Install-KMDF.cmd (registers a SYSTEM task).
 ; Manual:  pnputil /add-driver MagicMouseDriver.inf /install
+;
+; Windows / INF / service file name is MagicMouseDriver.sys (do not change).
+; Package artifact for this DriverVer is MagicMouseDriver-kmdf-2.0.4-scroll.sys
+; (FileVersion 2.0.4.0). Do not confuse with:
+;   MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys     pointer-only
+;   MagicMouseDriver-kmdf-may20-pointerdead-559B136A.sys pointer-dead
+;   applewirelessmouse-patched-pathA-SHIPBLOCKER.sys     PATH-A, not this product
 
 [Version]
 Signature   = "$WINDOWS NT$"

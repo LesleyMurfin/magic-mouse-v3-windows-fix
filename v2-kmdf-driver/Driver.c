@@ -47,6 +47,8 @@ DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING RegistryPath)
 {
     WDF_DRIVER_CONFIG config;
     WDF_DRIVER_CONFIG_INIT(&config, EvtDeviceAdd);
+    DbgPrint("MM: DriverEntry %s artifact %s (INF installs as MagicMouseDriver.sys)\n",
+             MM_FILE_VERSION_STR, MM_ARTIFACT_SYS_NAME);
     return WdfDriverCreate(DriverObject, RegistryPath, WDF_NO_OBJECT_ATTRIBUTES,
                            &config, WDF_NO_HANDLE);
 }

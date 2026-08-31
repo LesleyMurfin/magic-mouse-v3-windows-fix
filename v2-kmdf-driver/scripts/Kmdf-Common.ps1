@@ -18,6 +18,13 @@ $script:KmdfShaPointerOk = 'AD5D244B176D650961594EDED153C46F9A52004C424DABFD86E5
 $script:KmdfShaPointerDead = '559B136AEB869D1B85EE21583BB7BFD72782A31EE476A2622014D87CE6762F30'
 $script:KmdfPidPattern   = 'BTHENUM\\\{00001124.*PID&0323'
 $script:KmdfServiceName  = 'MagicMouseDriver'
+# Windows / INF / service name — do not change. Package artifacts use the labels below.
+$script:KmdfInstallSysName = 'MagicMouseDriver.sys'
+$script:KmdfArtifactScroll = 'MagicMouseDriver-kmdf-2.0.4-scroll.sys'
+$script:KmdfArtifactApr30  = 'MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys'
+$script:KmdfArtifactMay20  = 'MagicMouseDriver-kmdf-may20-pointerdead-559B136A.sys'
+$script:KmdfPathAShipBlocker = 'applewirelessmouse-patched-pathA-SHIPBLOCKER.sys'
+$script:KmdfBackupDir    = Join-Path $script:KmdfDataDir 'backup'
 
 function Initialize-KmdfDataDir {
     if (-not (Test-Path -LiteralPath $script:KmdfDataDir)) {

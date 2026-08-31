@@ -42,28 +42,91 @@ function Get-KmdfFileSha256 {
 
 function Test-KmdfForbiddenSys {
     param([Parameter(Mandatory)][string]$Path)
+    $name = [System.IO.Path]::GetFileName($Path)
+    if ($name -like '*may20-pointerdead*' -or $name -eq $script:KmdfArtifactMay20) {
+        Write-KmdfLog -Message "Refusing labeled May 20 pointer-dead artifact $name — installer never installs this SHA." -Level 'ERROR'
+        return $true
+    }
+    if ($name -like 'applewirelessmouse*') {
+        Write-KmdfLog -Message "Refusing PATH-A package $name — never install as MagicMouseDriver.sys / 0323 product." -Level 'ERROR'
+        return $true
+    }
     $sha = Get-KmdfFileSha256 -Path $Path
     if ($sha -eq $script:KmdfShaPointerDead) {
-        Write-KmdfLog -Message "Refusing May 20 WDKTestCert MagicMouseDriver.sys ($sha) — pointer-dead. Will not install it." -Level 'ERROR'
+        Write-KmdfLog -Message "Refusing May 20 WDKTestCert ($script:KmdfArtifactMay20 / $sha) — pointer-dead. Will not install it." -Level 'ERROR'
         return $true
     }
     return $false
 }
 
+function Get-KmdfArtifactLabel {
+    param([Parameter(Mandatory)][string]$Path)
+    $sha = Get-KmdfFileSha256 -Path $Path
+    $name = [System.IO.Path]::GetFileName($Path)
+    if ($sha -eq $script:KmdfShaPointerDead -or $name -eq $script:KmdfArtifactMay20) {
+        return $script:KmdfArtifactMay20
+    }
+    if ($sha -eq $script:KmdfShaPointerOk -or $name -eq $script:KmdfArtifactApr30) {
+        return $script:KmdfArtifactApr30
+    }
+    if ($name -eq $script:KmdfArtifactScroll -or $name -like 'MagicMouseDriver-kmdf-2.0.4-scroll*') {
+        return $script:KmdfArtifactScroll
+    }
+    return $script:KmdfArtifactScroll
+}
+
 function Find-KmdfSys {
     $hints = @(
-        (Join-Path $PackageRoot 'MagicMouseDriver.sys'),
-        (Join-Path $PackageRoot 'x64\Release\MagicMouseDriver.sys'),
-        (Join-Path $PackageRoot 'x64\Release\MagicMouseDriver\MagicMouseDriver.sys'),
-        (Join-Path $PackageRoot 'x64\Debug\MagicMouseDriver.sys')
+        (Join-Path $PackageRoot $script:KmdfArtifactScroll),
+        (Join-Path $PackageRoot "x64\Release\$($script:KmdfArtifactScroll)"),
+        (Join-Path $PackageRoot $script:KmdfInstallSysName),
+        (Join-Path $PackageRoot "x64\Release\$($script:KmdfInstallSysName)"),
+        (Join-Path $PackageRoot "x64\Release\MagicMouseDriver\$($script:KmdfInstallSysName)"),
+        (Join-Path $PackageRoot "x64\Debug\$($script:KmdfInstallSysName)"),
+        (Join-Path $PackageRoot $script:KmdfArtifactApr30)
     )
+    $apr30 = $null
     foreach ($h in $hints) {
         if (-not (Test-Path -LiteralPath $h)) { continue }
         $full = (Resolve-Path -LiteralPath $h).Path
         if (Test-KmdfForbiddenSys -Path $full) { continue }
+        $sha = Get-KmdfFileSha256 -Path $full
+        if ($sha -eq $script:KmdfShaPointerOk) {
+            if (-not $apr30) { $apr30 = $full }
+            continue
+        }
         return $full
     }
+    if ($apr30) {
+        Write-KmdfLog -Message "Only $($script:KmdfArtifactApr30) is available (pointer OK, scroll dead). Prefer $($script:KmdfArtifactScroll) FileVersion 2.0.4.0." -Level 'WARN'
+        return $apr30
+    }
     return $null
+}
+
+function Backup-KmdfLiveSys {
+    $live = Join-Path $env:SystemRoot "System32\drivers\$($script:KmdfInstallSysName)"
+    if (-not (Test-Path -LiteralPath $live)) { return }
+    if (-not (Test-Path -LiteralPath $script:KmdfBackupDir)) {
+        New-Item -ItemType Directory -Path $script:KmdfBackupDir -Force | Out-Null
+    }
+    $label = Get-KmdfArtifactLabel -Path $live
+    $dst = Join-Path $script:KmdfBackupDir $label
+    Copy-Item -LiteralPath $live -Destination $dst -Force
+    Write-KmdfLog -Message "Backed up live $live as $dst (package name; Windows file stays $($script:KmdfInstallSysName))" -Level 'OK'
+}
+
+function Publish-KmdfScrollArtifact {
+    param([Parameter(Mandatory)][string]$SysPath)
+    $sha = Get-KmdfFileSha256 -Path $SysPath
+    if ($sha -eq $script:KmdfShaPointerOk -or $sha -eq $script:KmdfShaPointerDead) {
+        return
+    }
+    $labeled = Join-Path $PackageRoot $script:KmdfArtifactScroll
+    if ((Resolve-Path -LiteralPath $SysPath).Path -ne (Join-Path $PackageRoot $script:KmdfArtifactScroll)) {
+        Copy-Item -LiteralPath $SysPath -Destination $labeled -Force
+        Write-KmdfLog -Message "Labeled scroll artifact $labeled (FileVersion 2.0.4.0). INF still installs as $($script:KmdfInstallSysName)." -Level 'OK'
+    }
 }
 
 function Invoke-KmdfBuildIfNeeded {
@@ -80,7 +143,7 @@ function Invoke-KmdfBuildIfNeeded {
 
     $msbuild = Find-KmdfMsBuild
     if (-not $msbuild) {
-        throw "MagicMouseDriver.sys is not in the package and no WDK/EWDK MSBuild was found. Build on Windows with the WDK, copy MagicMouseDriver.sys next to the INF, then run Install-KMDF.cmd again."
+        throw "$($script:KmdfArtifactScroll) is not in the package and no WDK/EWDK MSBuild was found. Build on Windows with the WDK (FileVersion 2.0.4.0), copy $($script:KmdfArtifactScroll) next to the INF (INF still installs as $($script:KmdfInstallSysName)), then run Install-KMDF.cmd again."
     }
 
     Write-KmdfLog -Message "Building $proj ($msbuild)" -Level 'INFO'
@@ -99,8 +162,11 @@ function Invoke-KmdfBuildIfNeeded {
     }
 
     $sys = Find-KmdfSys
-    if (-not $sys) { throw "Build finished but MagicMouseDriver.sys was not produced." }
-    Write-KmdfLog -Message "Built $sys" -Level 'OK'
+    if (-not $sys) { throw "Build finished but $($script:KmdfInstallSysName) was not produced." }
+    Publish-KmdfScrollArtifact -SysPath $sys
+    $labeled = Find-KmdfSys
+    if ($labeled) { $sys = $labeled }
+    Write-KmdfLog -Message "Built $sys (artifact $($script:KmdfArtifactScroll), installs as $($script:KmdfInstallSysName))" -Level 'OK'
     return $sys
 }
 
@@ -288,13 +354,17 @@ try {
 
     $sys = Invoke-KmdfBuildIfNeeded
     if (Test-KmdfForbiddenSys -Path $sys) {
-        throw "Chosen .sys is the May 20 pointer-dead WDKTestCert. Build 2.0.4 from this tree instead."
+        throw "Chosen .sys is $($script:KmdfArtifactMay20) (May 20 pointer-dead WDKTestCert). Build $($script:KmdfArtifactScroll) FileVersion 2.0.4.0 from this tree instead."
     }
     $sha = Get-KmdfFileSha256 -Path $sys
-    Write-KmdfLog -Message "Installing $sys SHA256=$sha" -Level 'INFO'
+    $label = Get-KmdfArtifactLabel -Path $sys
+    Write-KmdfLog -Message "Installing $sys as $($script:KmdfInstallSysName) (package label $label) SHA256=$sha" -Level 'INFO'
     if ($sha -eq $script:KmdfShaPointerOk) {
-        Write-KmdfLog -Message "This is the Apr 30 MagicMouseFix binary (pointer OK, scroll dead). Prefer a 2.0.4 build from this source for surface scroll. Installing only because no other .sys is available." -Level 'WARN'
+        Write-KmdfLog -Message "This is $($script:KmdfArtifactApr30) (pointer OK, scroll dead). Prefer $($script:KmdfArtifactScroll) FileVersion 2.0.4.0. Installing only because no other .sys is available." -Level 'WARN'
+    } else {
+        Publish-KmdfScrollArtifact -SysPath $sys
     }
+    Backup-KmdfLiveSys
 
     $cert = Get-KmdfSigningCert
     Install-KmdfTrust -Cert $cert

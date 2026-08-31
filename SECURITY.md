@@ -34,7 +34,7 @@ If you discover a security vulnerability in this driver patch, please report it 
 This security policy covers only this driver patch repository and its distributed binaries/scripts.
 
 **In scope:**
-- applewirelessmouse.sys kernel driver
+- PATH-A `applewirelessmouse-patched-pathA-SHIPBLOCKER.sys` (installs as `applewirelessmouse.sys`) and KMDF `MagicMouseDriver-kmdf-2.0.4-scroll.sys` (installs as `MagicMouseDriver.sys`)
 - PowerShell installer and uninstaller scripts
 - Registry modifications made by installer/uninstaller
 - Certificate installation process
@@ -52,7 +52,7 @@ This security policy covers only this driver patch repository and its distribute
 
 1. **Verify binary integrity:** Always run the SHA256 hash check before installation
    ```powershell
-   (Get-FileHash "applewirelessmouse.sys" -Algorithm SHA256).Hash
+   (Get-FileHash "applewirelessmouse-patched-pathA-SHIPBLOCKER.sys" -Algorithm SHA256).Hash
    # Expected: 370A5555AEBF673C3156EA5B5FBABD8030F2EE7A3A6BD0FCB1B4B6C93FA56A03
    ```
 

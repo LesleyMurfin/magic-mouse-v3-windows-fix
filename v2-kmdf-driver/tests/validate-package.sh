@@ -66,5 +66,36 @@ grep -q 'MM-Kmdf-Install' "$ROOT/scripts/Kmdf-Common.ps1" && ok "task name MM-Km
 grep -qi 'magic-tray' "$ROOT/MAGIC-TRAY.md" && ok "magic-tray pull note" || bad "magic-tray pull note"
 grep -q '559B136A' "$ROOT/scripts/Kmdf-Common.ps1" && ok "May 20 pointer-dead SHA banned" || bad "May 20 pointer-dead SHA banned"
 grep -q 'CN=MagicMouseFix' "$ROOT/scripts/Kmdf-Common.ps1" && ok "signs as MagicMouseFix" || bad "signs as MagicMouseFix"
+if grep -q 'ServiceBinary = %12%\\MagicMouseDriver.sys' "$ROOT/MagicMouseDriver.inf" && \
+   grep -q 'MagicMouseDriver.sys = 1' "$ROOT/MagicMouseDriver.inf"; then
+  ok "INF still installs MagicMouseDriver.sys"
+else
+  bad "INF still installs MagicMouseDriver.sys"
+fi
+grep -q 'MagicMouseDriver-kmdf-2.0.4-scroll.sys' "$ROOT/scripts/Kmdf-Common.ps1" && ok "scroll artifact name" || bad "scroll artifact name"
+grep -q 'MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys' "$ROOT/scripts/Kmdf-Common.ps1" && ok "Apr 30 pointer artifact name" || bad "Apr 30 pointer artifact name"
+grep -q 'MagicMouseDriver-kmdf-may20-pointerdead-559B136A.sys' "$ROOT/scripts/Kmdf-Common.ps1" && ok "May 20 pointer-dead artifact name" || bad "May 20 pointer-dead artifact name"
+grep -q 'applewirelessmouse-patched-pathA-SHIPBLOCKER.sys' "$ROOT/scripts/Kmdf-Common.ps1" && ok "PATH-A ship-blocker name" || bad "PATH-A ship-blocker name"
+grep -q 'FILEVERSION    2,0,4,0' "$ROOT/MagicMouseDriver.rc" && ok "FileVersion 2.0.4.0 in VERSIONINFO" || bad "FileVersion 2.0.4.0 in VERSIONINFO"
+grep -q 'OriginalFilename", "MagicMouseDriver-kmdf-2.0.4-scroll.sys' "$ROOT/MagicMouseDriver.rc" && ok "OriginalFilename is scroll artifact" || bad "OriginalFilename is scroll artifact"
+if grep -q '<TargetName>MagicMouseDriver</TargetName>' "$ROOT/MagicMouseDriver.vcxproj"; then
+  ok "vcxproj TargetName still MagicMouseDriver"
+else
+  bad "vcxproj TargetName still MagicMouseDriver"
+fi
+REPO="$(cd "$ROOT/.." && pwd)"
+if grep -q 'MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys' "$REPO/README.md" && \
+   grep -q 'MagicMouseDriver-kmdf-2.0.4-scroll.sys' "$REPO/README.md" && \
+   grep -q 'applewirelessmouse-patched-pathA-SHIPBLOCKER.sys' "$REPO/README.md"; then
+  ok "root README names pointer-only vs scroll vs SHIP-BLOCKER"
+else
+  bad "root README names pointer-only vs scroll vs SHIP-BLOCKER"
+fi
+if grep -q 'applewirelessmouse-patched-pathA-SHIPBLOCKER.sys' "$REPO/v1-binary-patch/installer/Install-MagicMousePatch.ps1" && \
+   grep -q 'System32\\drivers\\applewirelessmouse.sys' "$REPO/v1-binary-patch/installer/Install-MagicMousePatch.ps1"; then
+  ok "PATH-A package name vs Windows install name"
+else
+  bad "PATH-A package name vs Windows install name"
+fi
 
 exit "$fail"

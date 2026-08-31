@@ -7,7 +7,9 @@
 
   Or double-click Install-KMDF.cmd — it builds if a .sys is missing and EWDK/WDK exists.
 
-  Linux cannot produce MagicMouseDriver.sys. Ship the source package; sign+install on Windows.
+  Linux cannot produce a .sys. WDK output is MagicMouseDriver.sys (INF/service name).
+  Copy the artifact to MagicMouseDriver-kmdf-2.0.4-scroll.sys (FileVersion 2.0.4.0).
+  Never name a KMDF build applewirelessmouse*.sys.
 -->
 <Project DefaultTargets="Build" ToolsVersion="15.0"
          xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
@@ -85,6 +87,7 @@
 
   <ItemGroup>
     <Inf Include="MagicMouseDriver.inf" />
+    <ResourceCompile Include="MagicMouseDriver.rc" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
