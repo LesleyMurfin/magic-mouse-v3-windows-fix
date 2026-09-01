@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 // GestureEngine.c — stay on MOUSE2_REPORT_ID 0x12; add Wheel / AC Pan.
 //
-// Optical X/Y and buttons come from the 0x12 header (Linux hid-magicmouse.c
+// Optical X/Y come from the 0x12 header (Linux hid-magicmouse.c
 // magicmouse_raw_event, MOUSE2 case). Surface scroll is a simplified port of
 // magicmouse_emit_touch() TOUCH_STATE_DRAG handling for 0323 / Mouse 2.
+// Mechanical bit0 is remapped by START/DRAG count: 2 → right, 3+ → middle.
 #include "GestureEngine.h"
 
 #define MM2_BTN_MASK      0x03
@@ -112,6 +113,99 @@ AccumulateSurfaceScroll(
     WdfSpinLockRelease(ctx->Lock);
 }
 
+static ULONG
+CountActiveTouches(
+    _In_reads_bytes_(inLen) PUCHAR in,
+    _In_ SIZE_T inLen)
+{
+    ULONG n = 0;
+
+    if (inLen < MM2_HEADER_LEN) { return 0; }
+
+    ULONG nTouches = (ULONG)((inLen - MM2_HEADER_LEN) / MM2_TOUCH_BYTES);
+    for (ULONG i = 0; i < nTouches; i++)
+    {
+        ULONG off = MM2_HEADER_LEN + i * MM2_TOUCH_BYTES;
+        if (off + MM2_TOUCH_BYTES > inLen) { break; }
+
+        UCHAR state = (UCHAR)((in + off)[7] & TOUCH_STATE_MASK);
+        if (state == TOUCH_STATE_START || state == TOUCH_STATE_DRAG)
+        {
+            n++;
+        }
+    }
+    return n;
+}
+
+static UCHAR
+MapContactCountToButtons(_In_ ULONG contacts)
+{
+    if (contacts >= 3) { return MM_BTN_MIDDLE; }
+    if (contacts == 2) { return MM_BTN_RIGHT; }
+    if (contacts == 1) { return MM_BTN_LEFT; }
+    return 0;
+}
+
+static UCHAR
+RemapMechanicalClick(
+    _In_ UCHAR hwButtons,
+    _In_ ULONG contacts,
+    _In_ BOOLEAN haveTouchBlock,
+    _In_ BOOLEAN scrolled,
+    _Inout_ PDEVICE_CONTEXT ctx)
+{
+    UCHAR out;
+    BOOLEAN mechDown = (BOOLEAN)((hwButtons & MM_BTN_LEFT) != 0);
+
+    WdfSpinLockAcquire(ctx->Lock);
+
+    if (!haveTouchBlock)
+    {
+        if (ctx->ClickHeld && mechDown)
+        {
+            out = ctx->ClickLatched;
+        }
+        else
+        {
+            ctx->ClickHeld = FALSE;
+            ctx->ClickLatched = 0;
+            out = (UCHAR)(hwButtons & MM2_BTN_MASK);
+        }
+        WdfSpinLockRelease(ctx->Lock);
+        return out;
+    }
+
+    if (!mechDown)
+    {
+        ctx->ClickHeld = FALSE;
+        ctx->ClickLatched = 0;
+        WdfSpinLockRelease(ctx->Lock);
+        return 0;
+    }
+
+    if (!ctx->ClickHeld)
+    {
+        ctx->ClickHeld = TRUE;
+        if (scrolled)
+        {
+            ctx->ClickLatched = 0;
+        }
+        else if (contacts == 0)
+        {
+            ctx->ClickLatched = (UCHAR)(hwButtons & MM2_BTN_MASK);
+        }
+        else
+        {
+            ctx->ClickLatched = MapContactCountToButtons(contacts);
+        }
+    }
+
+    out = ctx->ClickLatched;
+    WdfSpinLockRelease(ctx->Lock);
+    return out;
+}
+
+
 NTSTATUS
 TranslateMouse2ToHid(
     _In_reads_bytes_(inLen)     PUCHAR in,
@@ -142,7 +236,6 @@ TranslateMouse2ToHid(
         return STATUS_NO_MORE_ENTRIES;
     }
 
-    UCHAR buttons = (UCHAR)(in[1] & MM2_BTN_MASK);
     INT16 x16 = (inLen >= 4) ? ReadI16Le(in + 2) : 0;
     INT16 y16 = (inLen >= 6) ? ReadI16Le(in + 4) : 0;
 
@@ -158,6 +251,16 @@ TranslateMouse2ToHid(
         hwheel = (CHAR)in[6];
         wheel  = (CHAR)in[7];
     }
+
+    BOOLEAN haveTouch = (BOOLEAN)(inLen >= MM2_HEADER_LEN);
+    ULONG contacts = haveTouch ? CountActiveTouches(in, inLen) : 0;
+    BOOLEAN scrolled = (BOOLEAN)(wheel != 0 || hwheel != 0);
+    UCHAR buttons = RemapMechanicalClick(
+        (UCHAR)(in[1] & MM2_BTN_MASK),
+        contacts,
+        haveTouch,
+        scrolled,
+        ctx);
 
     out[0] = MM_REPORT_ID_MOUSE;
     out[1] = buttons;

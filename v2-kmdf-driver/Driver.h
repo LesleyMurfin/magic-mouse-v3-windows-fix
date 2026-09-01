@@ -88,6 +88,10 @@ typedef struct _DEVICE_CONTEXT
     INT16   TouchAnchorX[MM_TOUCH_SLOTS];
     BOOLEAN TouchAnchorValid[MM_TOUCH_SLOTS];
 
+    // Mechanical click latch (2-finger right / 3-finger middle). Not a tap.
+    BOOLEAN ClickHeld;
+    UCHAR   ClickLatched;
+
     WDFTIMER    DiagTimer;
     WDFWORKITEM DiagWorkItem;
 

@@ -14,11 +14,14 @@
 //
 // Output (8 bytes) matches the injected COL01 0x12 descriptor:
 //   [0] RID 0x12
-//   [1] buttons (bit0 left, bit1 right)
+//   [1] buttons (bit0 left, bit1 right, bit2 middle)
 //   [2..3] X INT16 LE  — native / Linux MOUSE2 optical (keep pointer)
 //   [4..5] Y INT16 LE
 //   [6] AC Pan INT8    — horizontal surface scroll
 //   [7] Wheel INT8     — vertical surface scroll (usage 0x0038)
+//
+// Mechanical click (data[1] bit 0) is remapped from 0323 START/DRAG count:
+//   1 → left, 2 → right, 3+ → middle. Touch DRAG never synthesizes a click.
 #pragma once
 #include "Driver.h"
 
@@ -35,11 +38,16 @@
 // Linux uses (64 - scroll_speed) * scroll_accel with defaults ~224.
 #define MM_SCROLL_STEP 64
 
+#define MM_BTN_LEFT    0x01
+#define MM_BTN_RIGHT   0x02
+#define MM_BTN_MIDDLE  0x04
+
 // TranslateMouse2ToHid
 //
 // Accepts RID 0x12 (MOUSE2) or RID 0x27. Always produces an 8-byte RID 0x12
 // with Wheel / AC Pan filled from the 14+8*N touch block when present.
 // Optical X/Y stay INT16 so the Apr 30 pointer path is not clamped to INT8.
+// Buttons: hardware bit0 remapped by contact count when a touch block exists.
 NTSTATUS TranslateMouse2ToHid(
     _In_reads_bytes_(inLen)     PUCHAR in,
     _In_                        SIZE_T inLen,
