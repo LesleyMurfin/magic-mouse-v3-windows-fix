@@ -1,8 +1,8 @@
 # Magic Mouse v3 Windows Scroll Fix
 
-**STATUS: Production Ready v1.0.0**
+**STATUS: Pre-release (public packaging in progress).**
 
-A Windows kernel driver patch that restores scroll functionality on Apple Magic Mouse v3 (2024) after Bluetooth reconnection.
+Two drivers are available for the Apple Magic Mouse v3 (2024) on Windows. The **v2 KMDF driver** (recommended) restores scroll **and** gestures **and** battery readout, and has been in daily use on developer hardware for months. The **v1 binary patch** is the older fallback (scroll only). No tagged GitHub Release exists yet — install assets are being finalized. See **[Choose Your Driver](#choose-your-driver)** below.
 
 ## What This Fixes
 
@@ -19,6 +19,46 @@ Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after Bluetooth id
 - After ~15–30 min idle + Bluetooth disconnect, scroll stops responding
 - Cursor movement continues normally
 - Issue does not self-recover; requires driver reinstall or device repair
+
+## Choose Your Driver
+
+This repo ships **two** independent drivers. Pick one — you do not install both.
+
+| | **v2 — KMDF driver** ★ recommended | **v1 — binary patch** |
+|---|---|---|
+| **Scroll** | ✅ | ✅ |
+| **Gestures** | ✅ | ❌ |
+| **Battery %** | ✅ native (shows in Windows Settings) | ⚠️ workaround only — *mutually exclusive with scroll* (see below) |
+| **Source** | Full source, auditable | Opaque patched Apple binary |
+| **Apple dependency** | None (written from scratch) | Patches Apple's `applewirelessmouse.sys` |
+| **Maturity** | In daily use on dev hardware for months | Older approach (sbagirici lineage) |
+| **Trade-off** | Adds a KMDF filter to the Bluetooth stack | Redistributes a patched Apple binary (see [DMCA-NOTICE](DMCA-NOTICE.md)) |
+| **Both require** | Test-signing enabled + trust the self-signed cert (shows a "Test Mode" desktop watermark) | same |
+
+### The battery difference (important)
+
+- **v2 KMDF** exposes battery natively (HID Feature report, `RID 0x47`). Scroll, gestures, and battery
+  all work **at the same time**, with no manual steps — battery percentage appears in Windows Settings.
+- **v1 binary patch** cannot do scroll and battery at once. With v1, the two are **mutually exclusive**:
+  one device state gives you scroll (battery unavailable), the other gives you a battery read (scroll
+  broken). Getting a battery reading means manually flipping the device state and flipping back. This is
+  a clunky legacy workaround — it is the main reason the v2 KMDF driver was built.
+
+```
+   v1 — BINARY PATCH                       v2 — KMDF DRIVER  (★ recommended)
+   Scroll  ─┐  MUTUALLY                    Scroll + Gestures + Battery %
+   Battery ─┘  EXCLUSIVE                   ALL AT ONCE, natively
+        │   flip device state to               │   one install, done
+        │   swap scroll ⇄ battery              │
+        ▼                                      ▼
+   ✓ Scroll OR ✓ Battery (never both)      ✓ Scroll  ✓ Gestures  ✓ Battery
+```
+
+**Recommendation:** choose **v2 KMDF** unless you specifically cannot run a kernel filter driver. It is
+the only option that gives scroll + gestures + battery together, and it does not redistribute Apple code.
+
+> **Install:** v1 binary-patch steps are in [Quick Install](#quick-install-3-steps) below. The v2 KMDF
+> installer (`mm-dev.ps1`) and signed binaries ship with the upcoming tagged release.
 
 ## Supported Hardware
 
@@ -39,33 +79,35 @@ Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after Bluetooth id
 
 ## Quick Install (3 Steps)
 
+> **Not yet available — ships with the first tagged release.** The signed v1
+> binary, its `SHA256SUMS` checksum file, and the install script are published as
+> assets on the GitHub release (see [Releases](../../releases)). The steps below
+> describe the flow; the exact filenames and the verified checksum will be filled
+> in from the release assets when the tag is cut. **Do not trust any hash that is
+> not published in the release's `SHA256SUMS`.**
+
 ### Step 1: Download & Verify
 
 ```powershell
-# Download v1.0.0 release
-# Extract to C:\Program Files\MagicMousePatch\
-
-# Verify binary integrity (mandatory)
-$sys = "C:\Program Files\MagicMousePatch\v1-binary-patch\applewirelessmouse.sys"
-(Get-FileHash $sys -Algorithm SHA256).Hash
-# Expected: 370A5555AEBF673C3156EA5B5FBABD8030F2EE7A3A6BD0FCB1B4B6C93FA56A03
+# Download the v1 binary + SHA256SUMS from the tagged GitHub release, then:
+Get-FileHash .\applewirelessmouse.sys -Algorithm SHA256
+# Compare the output against the value in the release's SHA256SUMS file.
 ```
 
 ### Step 2: Run Installer
 
 ```powershell
-# Open PowerShell as Administrator
-cd "C:\Program Files\MagicMousePatch\v1-binary-patch\installer"
-.\Install-MagicMousePatch.ps1
-
-# Accept certificate trust prompt when prompted
+# Open PowerShell as Administrator, in the extracted release folder.
+# The release bundles the signing certificate and an install script; trust the
+# cert (Root + TrustedPublisher) and install the signed package:
+.\install-driver.ps1 -InfPath .\MagicMouseDriver.inf
+# Accept the certificate-trust prompt when prompted.
 ```
 
 ### Step 3: Reboot
 
 ```powershell
-# Follow on-screen instructions, or manually:
-shutdown /r /t 60 /c "MagicMousePatch installer - rebooting"
+shutdown /r /t 60 /c "Magic Mouse driver install - rebooting"
 ```
 
 ## What Changes on Your System
@@ -181,22 +223,15 @@ HKLM\SYSTEM\CurrentControlSet\Enum\BTHENUM\
 - Test 6 (UsoClient force-DSM): scroll preserved — PASS
 - Phase 5 (cold reboot): DSM ran twice post-boot, scroll still working — PASS
 
-## Roadmap
+## Versions
 
-**v1.0.0 (current):** Binary patch of Apple firmware via WDM lower filter.
-- Patched applewirelessmouse.sys (66 KB)
-- PowerShell installer + uninstaller
-- Registry-based LowerFilters registration
-- Requires certificate trust
+Two drivers ship from this repo. Pick one with the [Choose Your Driver](#choose-your-driver) table above.
 
-**v2.0.0 (in progress):** KMDF filter driver rewrite.
-- From-scratch WDF source code
-- No Apple binary dependency
-- Cleaner driver signing process
-- Better Windows Defender SmartScreen integration
-- Windows 11 22H2+ target
+**v2 — KMDF filter driver (recommended, in production):** From-scratch Windows Driver Framework lower filter on the Bluetooth HID stack. Restores scroll + gestures **and** exposes battery percentage natively, all at once. No Apple binary dependency. This is the driver in daily use; signed binaries ship as assets on the tagged release.
 
-See `/v2-kmdf-driver/README.md` for v2 status.
+**v1 — binary patch (legacy fallback):** Patched Apple `applewirelessmouse.sys` as a WDM lower filter. Restores scroll only; battery readout requires a manual, mutually-exclusive registry flip (see the battery note above). Kept for users who cannot run the KMDF driver.
+
+See `v2-kmdf-driver/README.md` for v2 technical detail.
 
 ## Contributing
 
