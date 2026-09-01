@@ -5,7 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.4.1] - 2026-08-31
+## [2.0.4.1] - 2026-09-01
+
+### Hardware
+
+- **Two-finger surface scroll + pointer + battery proven** on PID 0x0323. User: it's working. 1-finger glass does not scroll. Detent 8 (224 failed). F1 SetFeature after bind. Checkpoint: `v2-kmdf-driver/CHECKPOINT-2026-09-01-SCROLL.md`.
+- Unique dest `MagicMouseDriver-kmdf-204-scroll.sys` / SCM `MagicMouseDriver204Scroll`. oem16 `AD5D244B` not overwritten.
+- Gestures = HID Wheel + AC Pan only (not Precision Touchpad / macOS). PTP would be a later virtual device.
+
 
 ### Changed
 

@@ -24,7 +24,7 @@
 #define HID_MSG_DATA_INPUT 0xA1
 #endif
 
-#define MM_ACL_MAX_PARSE (14 + 8 * MM_TOUCH_SLOTS)
+
 
 BOOLEAN
 TranslateAclHidReport(
@@ -82,11 +82,9 @@ TranslateAclHidReport(
         return FALSE;
     }
 
-    // A huge BufferSize is an allocation, not a HID report. Walk only the
-    // optical header so touch parsing cannot run off a pool.
     if (reportLen > MM_ACL_MAX_PARSE)
     {
-        reportLen = 6;
+        reportLen = MM_ACL_MAX_PARSE;
     }
 
     UCHAR translated[MM_MOUSE_REPORT_LEN];

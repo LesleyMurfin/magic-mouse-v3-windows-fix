@@ -10,10 +10,11 @@ $Stage = 'C:\mm-dev-queue\kmdf-204-sign'
 $Sys = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.sys'
 $Inf = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.inf'
 $Cat = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.cat'
-$Want = '30F91397BF04E9AD61EFA768A13A7E9505351E093C4398F9AC93B9FA1A52C201'
+$Want = 'E73EC0A83BB01393C6ECD4359AAC6F52FAEE53C242B87ED2E49630F967375A55'
 $Forbid = @(
     '845435CE','13BF983A','D3876B0A','A1289489','AD5D244B','559B136A',
-    '370A5555','6DF8575B','9EF6C117','D22EB163','F02ECCED','B4582C50'
+    '370A5555','6DF8575B','9EF6C117','D22EB163','F02ECCED','B4582C50',
+    'EA1F80B4','30F91397','614DFA90','E0BC5661','1405473F','A9450168'
 )
 $SignTool = 'C:\mm-dev-queue\wdk-packages\Microsoft.Windows.SDK.CPP.10.0.26100.6584\c\bin\10.0.26100.0\x64\signtool.exe'
 $Inf2Cat = 'C:\mm-dev-queue\wdk-packages\Microsoft.Windows.WDK.x64.10.0.26100.6584\c\bin\10.0.26100.0\x86\Inf2Cat.exe'

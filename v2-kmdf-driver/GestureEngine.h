@@ -31,9 +31,13 @@
 #define MM_REPORT_ID_MOUSE    0x12
 #define MM_REPORT_ID_BATTERY  0x90
 
-// Surface drag distance (touch units) per Wheel detent. Conservative start;
-// Linux uses (64 - scroll_speed) * scroll_accel with defaults ~224.
-#define MM_SCROLL_STEP 64
+// Surface drag distance (touch units) per Wheel detent.
+// Hardware 2026-09-01: 224 (Linux default) produced zero wheel on live 0323.
+// Proven working detent is 8. Do not ship 224 without a new glass proof.
+#define MM_SCROLL_STEP 8
+
+#define SCROLL_HR_THRESHOLD 90
+
 
 // TranslateMouse2ToHid
 //

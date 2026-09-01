@@ -52,4 +52,9 @@ Kernel-Power Event 41 after the 2.0.4 install
 
 This tree keeps the 0x12 X/Y usages, adds Wheel as extra, and **refuses to write past the ACL buffer**. If capacity is only 6 bytes, native X/Y is left intact (pointer-safe).
 
-Do not treat the hunch as proven. Hardware must confirm pointer **and** scroll after a signed unique-package `pnputil /add-driver`.
+## Hardware-proven 2026-09-01
+
+See `CHECKPOINT-2026-09-01-SCROLL.md`. User: **it's working.** 2-finger Wheel/AC Pan; 1-finger does not scroll (`TWO_FINGER` / `down < 2`). Detent `MM_SCROLL_STEP` **8** (224 zeroed wheel on this glass). Battery `0x90`. Overlay 135-byte memcpy. HidBth IN capacity 9; scratch then 8-byte `0x12` back. After bind, `HidD_SetFeature(F1)` so HidBth sends 4-byte `0x53`. Not a Precision Touchpad. Do not grow this overlay for PTP.
+
+
+

@@ -40,6 +40,7 @@
 
 // Magic Mouse 2024 / Magic Mouse 2 USB-C — the only PID this package binds.
 #define MM_PID_V3  0x0323u
+#define MM_HID_CONTROL_PSM  ((USHORT)0x0011)
 
 // IOCTL_BTH_SDP_SERVICE_SEARCH_ATTRIBUTE
 // CTL_CODE(FILE_DEVICE_BLUETOOTH=0x41, Function=0x84, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -58,7 +59,11 @@
 //   [RID 0x12][buttons][X i16][Y i16][AC Pan][Wheel] = 8 bytes.
 #define MM_MOUSE_REPORT_LEN 8
 
+// Linux MOUSE2: 14-byte header + 8 bytes per finger. HidBth sizes ACL
+// reads to hidclass InputReportByteLength (6 or 8) and drops the touch
+// tail — that is why overlay binds Wheel but scroll stays zero.
 #define MM_TOUCH_SLOTS 16
+#define MM_ACL_MAX_PARSE (14 + 8 * MM_TOUCH_SLOTS)
 
 typedef struct _DEVICE_CONTEXT
 {
@@ -78,7 +83,23 @@ typedef struct _DEVICE_CONTEXT
     ULONG   Rid12Count;
     ULONG   AclInterceptCount;
     ULONG   AclTranslateCount;
-
+    ULONG   LastAclReceived;
+    ULONG   LastAclCapacity;
+    UCHAR   LastAclBytes[16];
+    ULONG   LastInBrbLength;
+    ULONG   LastInFlags;
+    ULONG   AclOutCount;
+    ULONG   LastOutBufferSize;
+    ULONG   LastOutFlags;
+    ULONG   LastOutHdr;
+    ULONG   MtEnableStatus;
+    ULONG   MtEnableTries;
+    ULONG   MtControlOutSeen;
+    BOOLEAN MtEnableSent;
+    PVOID   MtChannelHandle;
+    PVOID   MtControlHandle;
+    UCHAR   MtBtAddress[8];
+    UCHAR   MtPkt[9];
     // Surface-scroll anchors (Linux hid-magicmouse emit_touch style).
     INT16   TouchAnchorY[MM_TOUCH_SLOTS];
     INT16   TouchAnchorX[MM_TOUCH_SLOTS];
@@ -91,13 +112,16 @@ typedef struct _DEVICE_CONTEXT
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_CONTEXT, GetDeviceContext)
 
-// Per-request stash so BRB completion uses the same PBRB HidBth submitted
-// (do not re-read the IRP stack in the completion routine).
 typedef struct _MM_REQUEST_CONTEXT
 {
-    PVOID Brb;   // PBRB, typed as PVOID so Driver.h does not include bthddi.h
+    PVOID Brb;
+    PVOID OrigBuffer;
+    PMDL  OrigMdl;
+    ULONG OrigBufferSize;
+    ULONG OrigFlags;
+    BOOLEAN UsedScratch;
+    UCHAR Scratch[MM_ACL_MAX_PARSE];
 } MM_REQUEST_CONTEXT, *PMM_REQUEST_CONTEXT;
-
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(MM_REQUEST_CONTEXT, GetRequestContext)
 
 DRIVER_INITIALIZE DriverEntry;
@@ -109,5 +133,7 @@ EVT_WDF_IO_QUEUE_IO_READ                EvtIoRead;
 EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnSdpQueryComplete;
 EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnReadComplete;
 EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnAclTransferComplete;
+EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnOpenChannelComplete;
+EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnAclOutComplete;
 EVT_WDF_TIMER                           MmDiagTimerFunc;
 EVT_WDF_WORKITEM                        MmDiagWorkItemFunc;

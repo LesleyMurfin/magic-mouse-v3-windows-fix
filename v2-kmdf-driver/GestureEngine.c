@@ -61,6 +61,18 @@ AccumulateSurfaceScroll(
     ULONG nTouches = (ULONG)((inLen - MM2_HEADER_LEN) / MM2_TOUCH_BYTES);
     if (nTouches == 0) { return; }
 
+    ULONG down = 0;
+    for (ULONG i = 0; i < nTouches; i++)
+    {
+        ULONG off = MM2_HEADER_LEN + i * MM2_TOUCH_BYTES;
+        if (off + MM2_TOUCH_BYTES > inLen) { break; }
+        UCHAR st = (UCHAR)((in + off)[7] & TOUCH_STATE_MASK);
+        if (st == TOUCH_STATE_START || st == TOUCH_STATE_DRAG)
+        {
+            down++;
+        }
+    }
+
     WdfSpinLockAcquire(ctx->Lock);
 
     for (ULONG i = 0; i < nTouches; i++)
@@ -91,6 +103,12 @@ AccumulateSurfaceScroll(
         if (state != TOUCH_STATE_DRAG || !ctx->TouchAnchorValid[id])
         {
             if (state == 0x00) { ctx->TouchAnchorValid[id] = FALSE; }
+            continue;
+        }
+
+        // TWO_FINGER + SCROLL_STEP_8: 1-finger START/DRAG must not emit Wheel.
+        if (down < 2)
+        {
             continue;
         }
 
@@ -151,12 +169,6 @@ TranslateMouse2ToHid(
     if (inLen >= MM2_HEADER_LEN)
     {
         AccumulateSurfaceScroll(in, inLen, ctx, &wheel, &hwheel);
-    }
-    else if (inLen >= 8)
-    {
-        // Compact 0x12: preserve any wheel bytes already present.
-        hwheel = (CHAR)in[6];
-        wheel  = (CHAR)in[7];
     }
 
     out[0] = MM_REPORT_ID_MOUSE;

@@ -191,21 +191,115 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
         PBRB pBrb = (PBRB)sl->Parameters.Others.Argument1;
 
         if (pBrb != NULL &&
+            pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL &&
+            pBrb->BrbHeader.Length >= sizeof(struct _BRB_L2CA_OPEN_CHANNEL) &&
+            pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM)
+        {
+            PMM_REQUEST_CONTEXT reqCtx = GetRequestContext(Request);
+            reqCtx->Brb = pBrb;
+            reqCtx->UsedScratch = FALSE;
+            WdfRequestFormatRequestUsingCurrentType(Request);
+            WdfRequestSetCompletionRoutine(Request, OnOpenChannelComplete, ctx);
+            if (!WdfRequestSend(Request, target, WDF_NO_SEND_OPTIONS))
+            {
+                WdfRequestComplete(Request, WdfRequestGetStatus(Request));
+            }
+            return;
+        }
+        if (pBrb != NULL &&
+            pBrb->BrbHeader.Type == BRB_L2CA_ACL_TRANSFER &&
+            pBrb->BrbHeader.Length >= sizeof(BRB_L2CA_ACL_TRANSFER) &&
+            (pBrb->BrbL2caAclTransfer.TransferFlags & ACL_TRANSFER_DIRECTION_IN) == 0)
+        {
+            ULONG n = pBrb->BrbL2caAclTransfer.BufferSize;
+            ULONG outFlags = pBrb->BrbL2caAclTransfer.TransferFlags;
+            PUCHAR origBuf = (PUCHAR)pBrb->BrbL2caAclTransfer.Buffer;
+            UCHAR origHdr = 0;
+
+            if (origBuf == NULL && pBrb->BrbL2caAclTransfer.BufferMDL != NULL)
+            {
+                origBuf = (PUCHAR)MmGetSystemAddressForMdlSafe(
+                    pBrb->BrbL2caAclTransfer.BufferMDL, NormalPagePriority);
+            }
+            if (origBuf != NULL && n >= 1)
+            {
+                origHdr = origBuf[0];
+            }
+
+            WdfSpinLockAcquire(ctx->Lock);
+            ctx->AclOutCount++;
+            ctx->LastOutBufferSize = n;
+            ctx->LastOutFlags = outFlags;
+            ctx->LastOutHdr = (ULONG)origHdr;
+            WdfSpinLockRelease(ctx->Lock);
+
+            ForwardPassthrough(Request, target);
+            return;
+        }
+
+        if (pBrb != NULL &&
             pBrb->BrbHeader.Type == BRB_L2CA_ACL_TRANSFER &&
             pBrb->BrbHeader.Length >= sizeof(BRB_L2CA_ACL_TRANSFER) &&
             (pBrb->BrbL2caAclTransfer.TransferFlags & ACL_TRANSFER_DIRECTION_IN) != 0)
         {
+            PVOID ctlHandle;
+            WdfSpinLockAcquire(ctx->Lock);
+            ctlHandle = ctx->MtControlHandle;
+            WdfSpinLockRelease(ctx->Lock);
+            if (ctlHandle != NULL &&
+                pBrb->BrbL2caAclTransfer.ChannelHandle == ctlHandle)
+            {
+                ForwardPassthrough(Request, target);
+                return;
+            }
+
             PMM_REQUEST_CONTEXT reqCtx = GetRequestContext(Request);
             reqCtx->Brb = pBrb;
+            reqCtx->UsedScratch = FALSE;
+            reqCtx->OrigBuffer = NULL;
+            reqCtx->OrigMdl = NULL;
+            reqCtx->OrigBufferSize = 0;
+            reqCtx->OrigFlags = 0;
 
+            BOOLEAN sdpOk = FALSE;
             WdfSpinLockAcquire(ctx->Lock);
             ctx->AclInterceptCount++;
+            sdpOk = (ctx->SdpPatchSuccess != 0);
+            ctx->MtChannelHandle = pBrb->BrbL2caAclTransfer.ChannelHandle;
+            RtlCopyMemory(ctx->MtBtAddress,
+                          &pBrb->BrbL2caAclTransfer.BtAddress,
+                          sizeof(ctx->MtBtAddress));
+            ctx->LastInBrbLength = pBrb->BrbHeader.Length;
+            ctx->LastInFlags = pBrb->BrbL2caAclTransfer.TransferFlags;
             WdfSpinLockRelease(ctx->Lock);
+
+            if (sdpOk &&
+                pBrb->BrbL2caAclTransfer.BufferSize > 0 &&
+                pBrb->BrbL2caAclTransfer.BufferSize < MM_ACL_MAX_PARSE)
+            {
+                reqCtx->OrigBuffer = pBrb->BrbL2caAclTransfer.Buffer;
+                reqCtx->OrigMdl = pBrb->BrbL2caAclTransfer.BufferMDL;
+                reqCtx->OrigBufferSize = pBrb->BrbL2caAclTransfer.BufferSize;
+                reqCtx->OrigFlags = pBrb->BrbL2caAclTransfer.TransferFlags;
+                reqCtx->UsedScratch = TRUE;
+                pBrb->BrbL2caAclTransfer.Buffer = reqCtx->Scratch;
+                pBrb->BrbL2caAclTransfer.BufferMDL = NULL;
+                pBrb->BrbL2caAclTransfer.BufferSize = MM_ACL_MAX_PARSE;
+                pBrb->BrbL2caAclTransfer.TransferFlags |= ACL_SHORT_TRANSFER_OK;
+            }
 
             WdfRequestFormatRequestUsingCurrentType(Request);
             WdfRequestSetCompletionRoutine(Request, OnAclTransferComplete, ctx);
             if (!WdfRequestSend(Request, target, WDF_NO_SEND_OPTIONS))
             {
+                if (reqCtx->UsedScratch)
+                {
+                    pBrb->BrbL2caAclTransfer.Buffer = reqCtx->OrigBuffer;
+                    pBrb->BrbL2caAclTransfer.BufferMDL = reqCtx->OrigMdl;
+                    pBrb->BrbL2caAclTransfer.BufferSize = reqCtx->OrigBufferSize;
+                    pBrb->BrbL2caAclTransfer.TransferFlags = reqCtx->OrigFlags;
+                    reqCtx->UsedScratch = FALSE;
+                }
                 WdfRequestComplete(Request, WdfRequestGetStatus(Request));
             }
             return;
@@ -271,38 +365,125 @@ OnAclTransferComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
     PMM_REQUEST_CONTEXT reqCtx = GetRequestContext(Request);
     PBRB pBrb = (reqCtx != NULL) ? (PBRB)reqCtx->Brb : NULL;
 
-    if (NT_SUCCESS(status) && ctx != NULL && pBrb != NULL &&
-        pBrb->BrbHeader.Type == BRB_L2CA_ACL_TRANSFER &&
-        pBrb->BrbHeader.Length >= sizeof(BRB_L2CA_ACL_TRANSFER))
+    if (pBrb != NULL && reqCtx != NULL && reqCtx->UsedScratch)
+    {
+        ULONG received = pBrb->BrbL2caAclTransfer.BufferSize;
+        PUCHAR scratch = reqCtx->Scratch;
+
+        pBrb->BrbL2caAclTransfer.Buffer = reqCtx->OrigBuffer;
+        pBrb->BrbL2caAclTransfer.BufferMDL = reqCtx->OrigMdl;
+        pBrb->BrbL2caAclTransfer.TransferFlags = reqCtx->OrigFlags;
+        pBrb->BrbL2caAclTransfer.BufferSize = reqCtx->OrigBufferSize;
+        reqCtx->UsedScratch = FALSE;
+
+        ULONG origCap = reqCtx->OrigBufferSize;
+        PUCHAR orig = (PUCHAR)reqCtx->OrigBuffer;
+        if (orig == NULL && reqCtx->OrigMdl != NULL)
+        {
+            orig = (PUCHAR)MmGetSystemAddressForMdlSafe(reqCtx->OrigMdl, NormalPagePriority);
+            origCap = MmGetMdlByteCount(reqCtx->OrigMdl);
+        }
+
+        if (ctx != NULL)
+        {
+            ULONG snap = received;
+            if (snap > 16) { snap = 16; }
+            WdfSpinLockAcquire(ctx->Lock);
+            ctx->LastAclReceived = received;
+            ctx->LastAclCapacity = origCap;
+            RtlZeroMemory(ctx->LastAclBytes, sizeof(ctx->LastAclBytes));
+            if (scratch != NULL && snap > 0)
+            {
+                RtlCopyMemory(ctx->LastAclBytes, scratch, snap);
+            }
+            WdfSpinLockRelease(ctx->Lock);
+        }
+
+        BOOLEAN sdpOk = FALSE;
+        if (ctx != NULL)
+        {
+            WdfSpinLockAcquire(ctx->Lock);
+            sdpOk = (ctx->SdpPatchSuccess != 0);
+            WdfSpinLockRelease(ctx->Lock);
+        }
+
+        if (NT_SUCCESS(status) && orig != NULL && origCap >= 1 && received >= 1)
+        {
+            ULONG newLen = 0;
+            BOOLEAN wrote = FALSE;
+            if (sdpOk && origCap >= MM_MOUSE_REPORT_LEN)
+            {
+                __try
+                {
+                    if (TranslateAclHidReport(scratch, received, MM_ACL_MAX_PARSE,
+                                              &newLen, ctx) &&
+                        newLen > 0 && newLen <= origCap)
+                    {
+                        RtlCopyMemory(orig, scratch, newLen);
+                        pBrb->BrbL2caAclTransfer.BufferSize = newLen;
+                        wrote = TRUE;
+                        if (ctx != NULL)
+                        {
+                            WdfSpinLockAcquire(ctx->Lock);
+                            ctx->AclTranslateCount++;
+                            ctx->Rid12Count++;
+                            WdfSpinLockRelease(ctx->Lock);
+                        }
+                    }
+                }
+                __except (EXCEPTION_EXECUTE_HANDLER)
+                {
+                    DbgPrint("MM: ACL scratch translate exception, passthrough\n");
+                }
+            }
+            if (!wrote)
+            {
+                ULONG pass = received;
+                if (pass > origCap) { pass = origCap; }
+                __try
+                {
+                    RtlCopyMemory(orig, scratch, pass);
+                    pBrb->BrbL2caAclTransfer.BufferSize = pass;
+                }
+                __except (EXCEPTION_EXECUTE_HANDLER)
+                {
+                    pBrb->BrbL2caAclTransfer.BufferSize = reqCtx->OrigBufferSize;
+                }
+            }
+        }
+    }
+    else if (NT_SUCCESS(status) && ctx != NULL && pBrb != NULL &&
+             pBrb->BrbHeader.Type == BRB_L2CA_ACL_TRANSFER &&
+             pBrb->BrbHeader.Length >= sizeof(BRB_L2CA_ACL_TRANSFER))
     {
         BOOLEAN sdpOk = FALSE;
         WdfSpinLockAcquire(ctx->Lock);
         sdpOk = (ctx->SdpPatchSuccess != 0);
         WdfSpinLockRelease(ctx->Lock);
 
-        // Never grow 6→8 unless hidclass already bound the injected
-        // 0x12+Wheel descriptor. Otherwise HidBth forwards 8 bytes into
-        // a 6-byte report (Event 41).
         if (sdpOk)
         {
             ULONG  bufSize = pBrb->BrbL2caAclTransfer.BufferSize;
             PVOID  buffer  = pBrb->BrbL2caAclTransfer.Buffer;
             PMDL   mdl     = pBrb->BrbL2caAclTransfer.BufferMDL;
-
             PUCHAR payload = (PUCHAR)buffer;
             if (payload == NULL && mdl != NULL)
             {
                 payload = (PUCHAR)MmGetSystemAddressForMdlSafe(mdl, NormalPagePriority);
             }
-
-            // BufferSize is received length, not allocation. Capacity is
-            // the MDL byte count when present; otherwise we cannot grow.
             ULONG capacity = 0;
             if (mdl != NULL)
             {
                 capacity = MmGetMdlByteCount(mdl);
             }
-
+            else if (payload != NULL)
+            {
+                capacity = bufSize + pBrb->BrbL2caAclTransfer.RemainingBufferSize;
+            }
+            WdfSpinLockAcquire(ctx->Lock);
+            ctx->LastAclReceived = bufSize;
+            ctx->LastAclCapacity = capacity;
+            WdfSpinLockRelease(ctx->Lock);
             if (payload != NULL && bufSize >= 1 && capacity >= 8)
             {
                 ULONG newLen = bufSize;
@@ -320,10 +501,74 @@ OnAclTransferComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
                 }
                 __except (EXCEPTION_EXECUTE_HANDLER)
                 {
-                    DbgPrint("MM: OnAclTransferComplete — buffer exception, passthrough\n");
+                    DbgPrint("MM: OnAclTransferComplete buffer exception, passthrough\n");
                 }
             }
         }
+    }
+
+    WdfRequestComplete(Request, status);
+}
+
+VOID
+OnOpenChannelComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
+                      _In_ PWDF_REQUEST_COMPLETION_PARAMS Params, _In_ WDFCONTEXT Context)
+{
+    UNREFERENCED_PARAMETER(Target);
+
+    PDEVICE_CONTEXT ctx = (PDEVICE_CONTEXT)Context;
+    NTSTATUS status = Params->IoStatus.Status;
+    PMM_REQUEST_CONTEXT reqCtx = GetRequestContext(Request);
+    PBRB pBrb = (reqCtx != NULL) ? (PBRB)reqCtx->Brb : NULL;
+
+    if (NT_SUCCESS(status) && ctx != NULL && pBrb != NULL &&
+        pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL &&
+        pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM &&
+        pBrb->BrbL2caOpenChannel.ChannelHandle != NULL)
+    {
+        WdfSpinLockAcquire(ctx->Lock);
+        ctx->MtControlHandle = pBrb->BrbL2caOpenChannel.ChannelHandle;
+        RtlCopyMemory(ctx->MtBtAddress,
+                      &pBrb->BrbL2caOpenChannel.BtAddress,
+                      sizeof(ctx->MtBtAddress));
+        ctx->MtEnableTries = 0;
+        ctx->MtControlOutSeen = 0;
+        ctx->MtEnableSent = FALSE;
+        WdfSpinLockRelease(ctx->Lock);
+        if (ctx->DiagWorkItem != NULL)
+        {
+            WdfWorkItemEnqueue(ctx->DiagWorkItem);
+        }
+    }
+
+    WdfRequestComplete(Request, status);
+}
+
+VOID
+OnAclOutComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
+                 _In_ PWDF_REQUEST_COMPLETION_PARAMS Params, _In_ WDFCONTEXT Context)
+{
+    UNREFERENCED_PARAMETER(Target);
+
+    PDEVICE_CONTEXT ctx = (PDEVICE_CONTEXT)Context;
+    NTSTATUS status = Params->IoStatus.Status;
+    PMM_REQUEST_CONTEXT reqCtx = GetRequestContext(Request);
+    PBRB pBrb = (reqCtx != NULL) ? (PBRB)reqCtx->Brb : NULL;
+
+    if (pBrb != NULL && reqCtx != NULL && reqCtx->UsedScratch)
+    {
+        pBrb->BrbL2caAclTransfer.Buffer = reqCtx->OrigBuffer;
+        pBrb->BrbL2caAclTransfer.BufferMDL = reqCtx->OrigMdl;
+        pBrb->BrbL2caAclTransfer.BufferSize = reqCtx->OrigBufferSize;
+        pBrb->BrbL2caAclTransfer.TransferFlags = reqCtx->OrigFlags;
+        reqCtx->UsedScratch = FALSE;
+    }
+
+    if (ctx != NULL)
+    {
+        WdfSpinLockAcquire(ctx->Lock);
+        ctx->MtEnableStatus = (ULONG)status;
+        WdfSpinLockRelease(ctx->Lock);
     }
 
     WdfRequestComplete(Request, status);
@@ -476,16 +721,131 @@ MmDiagTimerFunc(_In_ WDFTIMER Timer)
     }
 }
 
+// HidBth SET_REPORT BufferSize was 66. Third-party OUT size 4 was 0xC0000206.
+// Do not rewrite 0x55. Do not put 0xF1 in the HID descriptor.
+#define MM_MT_OUT_LEN  66
+
+static NTSTATUS
+MmSubmitBrb(_In_ PDEVICE_OBJECT TargetDev, _In_ PBRB Brb)
+{
+    KEVENT event;
+    IO_STATUS_BLOCK iosb;
+    PIRP irp;
+    NTSTATUS status;
+
+    KeInitializeEvent(&event, NotificationEvent, FALSE);
+    RtlZeroMemory(&iosb, sizeof(iosb));
+    irp = IoBuildDeviceIoControlRequest(
+        IOCTL_INTERNAL_BTH_SUBMIT_BRB,
+        TargetDev,
+        NULL,
+        0,
+        NULL,
+        0,
+        TRUE,
+        &event,
+        &iosb);
+    if (irp == NULL)
+    {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+    IoGetNextIrpStackLocation(irp)->Parameters.Others.Argument1 = Brb;
+    status = IoCallDriver(TargetDev, irp);
+    if (status == STATUS_PENDING)
+    {
+        KeWaitForSingleObject(&event, Executive, KernelMode, FALSE, NULL);
+        status = iosb.Status;
+    }
+    return status;
+}
+
+static VOID
+MmSendMtEnable(_In_ WDFDEVICE Device, _In_ PDEVICE_CONTEXT ctx)
+{
+    BOOLEAN sdpOk;
+    BOOLEAN sent;
+    ULONG tries;
+    UCHAR btAddr[8];
+    UCHAR pkt[MM_MT_OUT_LEN];
+    NTSTATUS status;
+    PBRB brb;
+    WDFIOTARGET ioTarget;
+    PDEVICE_OBJECT targetDev;
+    PVOID ctlHandle;
+
+    WdfSpinLockAcquire(ctx->Lock);
+    sdpOk = (ctx->SdpPatchSuccess != 0);
+    sent  = ctx->MtEnableSent;
+    tries = ctx->MtEnableTries;
+    ctlHandle = ctx->MtControlHandle;
+    RtlCopyMemory(btAddr, ctx->MtBtAddress, sizeof(btAddr));
+    WdfSpinLockRelease(ctx->Lock);
+
+    if (!sdpOk || ctlHandle == NULL || sent || tries >= 3)
+    {
+        return;
+    }
+
+    RtlZeroMemory(pkt, sizeof(pkt));
+    pkt[0] = 0x53;
+    pkt[1] = 0xF1;
+    pkt[2] = 0x02;
+    pkt[3] = 0x01;
+
+    WdfSpinLockAcquire(ctx->Lock);
+    ctx->MtEnableTries++;
+    tries = ctx->MtEnableTries;
+    RtlCopyMemory(ctx->MtPkt, pkt, sizeof(ctx->MtPkt));
+    WdfSpinLockRelease(ctx->Lock);
+
+    status = STATUS_INSUFFICIENT_RESOURCES;
+    ioTarget = WdfDeviceGetIoTarget(Device);
+    targetDev = (ioTarget != NULL) ?
+        WdfIoTargetWdmGetTargetDeviceObject(ioTarget) : NULL;
+    brb = (PBRB)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(BRB), MM_POOL_TAG);
+    if (targetDev != NULL && brb != NULL)
+    {
+        RtlZeroMemory(brb, sizeof(BRB));
+        brb->BrbHeader.Length = sizeof(BRB_L2CA_ACL_TRANSFER);
+        brb->BrbHeader.Type = (USHORT)BRB_L2CA_ACL_TRANSFER;
+        RtlCopyMemory(&brb->BrbL2caAclTransfer.BtAddress, btAddr, sizeof(btAddr));
+        brb->BrbL2caAclTransfer.ChannelHandle = ctlHandle;
+        brb->BrbL2caAclTransfer.TransferFlags = ACL_TRANSFER_DIRECTION_OUT;
+        brb->BrbL2caAclTransfer.BufferSize = MM_MT_OUT_LEN;
+        brb->BrbL2caAclTransfer.Buffer = pkt;
+        brb->BrbL2caAclTransfer.BufferMDL = NULL;
+        status = MmSubmitBrb(targetDev, brb);
+    }
+    if (brb != NULL)
+    {
+        ExFreePoolWithTag(brb, MM_POOL_TAG);
+    }
+
+    WdfSpinLockAcquire(ctx->Lock);
+    ctx->MtEnableStatus = (ULONG)status;
+    if (NT_SUCCESS(status))
+    {
+        ctx->MtEnableSent = TRUE;
+    }
+    WdfSpinLockRelease(ctx->Lock);
+
+    DbgPrint("MM: MmSendMtEnable 66-byte F1 status=0x%08X tries=%lu\n",
+             (ULONG)status, tries);
+}
+
 VOID
 MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
 {
     WDFDEVICE device = (WDFDEVICE)WdfWorkItemGetParentObject(WorkItem);
     PDEVICE_CONTEXT ctx = GetDeviceContext(device);
     if (ctx == NULL) { return; }
-
     ULONG ictlCount, scanHits, patchOk, lastSize, lastStatus;
-    ULONG hidReads, rid12, aclN, aclX;
+    ULONG hidReads, rid12, aclN, aclX, lastAclR, lastAclC;
+    ULONG mtStatus, mtTries, lastInLen, lastInFl, aclOut, lastOutSz, lastOutFl, lastOutHdr;
     UCHAR lastBytes[64];
+    UCHAR lastAclBytes[16];
+
+    MmSendMtEnable(device, ctx);
 
     WdfSpinLockAcquire(ctx->Lock);
     ictlCount  = ctx->IoctlInterceptCount;
@@ -497,7 +857,18 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
     rid12      = ctx->Rid12Count;
     aclN       = ctx->AclInterceptCount;
     aclX       = ctx->AclTranslateCount;
+    lastAclR   = ctx->LastAclReceived;
+    lastAclC   = ctx->LastAclCapacity;
+    lastInLen  = ctx->LastInBrbLength;
+    lastInFl   = ctx->LastInFlags;
+    aclOut     = ctx->AclOutCount;
+    lastOutSz  = ctx->LastOutBufferSize;
+    lastOutFl  = ctx->LastOutFlags;
+    lastOutHdr = ctx->LastOutHdr;
+    mtStatus   = ctx->MtEnableStatus;
+    mtTries    = ctx->MtEnableTries;
     RtlCopyMemory(lastBytes, ctx->LastSdpBytes, 64);
+    RtlCopyMemory(lastAclBytes, ctx->LastAclBytes, 16);
     WdfSpinLockRelease(ctx->Lock);
 
     UNICODE_STRING keyPath;
@@ -529,10 +900,23 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
     SET_DWORD(L"Rid12Count",          rid12);
     SET_DWORD(L"AclInterceptCount",   aclN);
     SET_DWORD(L"AclTranslateCount",   aclX);
+    SET_DWORD(L"LastAclReceived",     lastAclR);
+    SET_DWORD(L"LastAclCapacity",     lastAclC);
+    SET_DWORD(L"MtEnableStatus",     mtStatus);
+    SET_DWORD(L"MtEnableTries",      mtTries);
+    SET_DWORD(L"LastInBrbLength",    lastInLen);
+    SET_DWORD(L"LastInFlags",        lastInFl);
+    SET_DWORD(L"AclOutCount",        aclOut);
+    SET_DWORD(L"LastOutBufferSize",  lastOutSz);
+    SET_DWORD(L"LastOutFlags",       lastOutFl);
+    SET_DWORD(L"LastOutHdr",         lastOutHdr);
 
 #undef SET_DWORD
 
     RtlInitUnicodeString(&n, L"LastSdpBytes");
     ZwSetValueKey(key, &n, 0, REG_BINARY, lastBytes, 64);
+    RtlInitUnicodeString(&n, L"LastAclBytes");
+    ZwSetValueKey(key, &n, 0, REG_BINARY, lastAclBytes, 16);
     ZwClose(key);
 }
+

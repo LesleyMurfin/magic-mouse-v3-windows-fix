@@ -1,6 +1,7 @@
 # MagicMouseDriver (KMDF) — PID 0x0323 only
 
-**Unique 2.0.4 scroll package.** Signed `pnputil /add-driver` only. Do not merge until hardware proves pointer **and** scroll.
+**Unique 2.0.4 scroll package.** Signed `pnputil /add-driver` only. **2026-09-01 hardware:** pointer + **2-finger** surface scroll + battery `0x90`. 1-finger glass does not scroll. See `CHECKPOINT-2026-09-01-SCROLL.md`.
+
 
 **Do not install an unsigned copy-over on the live Apr 30 PC.** That machine keeps
 `MagicMouseDriver.sys` SHA256 `AD5D244B…` (oem16 `f7bf31c7`, pointer OK, no wheel).
