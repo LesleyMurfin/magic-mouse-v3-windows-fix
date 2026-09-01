@@ -9,7 +9,7 @@
 $script:KmdfDataDir     = 'C:\ProgramData\MagicMouseDriver'
 $script:KmdfLog         = Join-Path $script:KmdfDataDir 'install.log'
 $script:KmdfResult      = Join-Path $script:KmdfDataDir 'RESULT.txt'
-$script:KmdfServiceName = 'MagicMouseDriver'
+$script:KmdfServiceName = 'MagicMouseDriver204Scroll'
 $script:KmdfPidPattern  = 'BTHENUM\\\{00001124.*PID&0323'
 
 # Unique package identity (must not match failed oem26 or Apr 30 oem16).

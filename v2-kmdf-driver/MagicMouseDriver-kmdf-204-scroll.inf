@@ -75,15 +75,18 @@ AddReg  = MagicMouseDriver204_AddReg
 Include = input.inf
 Needs   = HID_Inst.NT.HW
 
+; Unique SCM name. AddService/LowerFilters MUST NOT be MagicMouseDriver —
+; that is the live oem16 service. pnputil would rewrite its ImagePath onto
+; this package and a later /delete-driver would strand Apr 30.
 [MagicMouseDriver204_AddReg]
 ; 0x00010000 = FLG_ADDREG_TYPE_MULTI_SZ — replaces any previous LowerFilters.
-HKR,,"LowerFilters",0x00010000,"MagicMouseDriver"
-HKLM,"SYSTEM\CurrentControlSet\Services\MagicMouseDriver\Parameters","EnableInjection",0x00010001,1
+HKR,,"LowerFilters",0x00010000,"MagicMouseDriver204Scroll"
+HKLM,"SYSTEM\CurrentControlSet\Services\MagicMouseDriver204Scroll\Parameters","EnableInjection",0x00010001,1
 
 [MagicMouseDriver204_Install.NT.Services]
 Include    = hidbth.inf
 Needs      = HIDBTH_Inst.NT.Services
-AddService = MagicMouseDriver, , MagicMouseDriver204_Service_Inst
+AddService = MagicMouseDriver204Scroll, , MagicMouseDriver204_Service_Inst
 
 [MagicMouseDriver204_Service_Inst]
 DisplayName   = %ServiceDesc%

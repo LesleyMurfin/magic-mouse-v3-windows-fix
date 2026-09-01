@@ -1,19 +1,12 @@
-// SPDX-License-Identifier: MIT
 #include "Driver.h"
 #include "InputHandler.h"
 #include "GestureEngine.h"
 #include "AclTranslate.h"
+#include <bthdef.h>
+#include <bthddi.h>
 
-// BRB_L2CA_ACL_TRANSFER field offsets on x64 (bthddi.h / Win10+).
-// BRB_HEADER.Type is at +0x16. ACL Buffer/Size follow the 0x70-byte header
-// + BTH_ADDR + ChannelHandle. Validated against WDK 10.0.14393 bthddi.h.
-#define MM_BRB_LENGTH_OFFSET  0x10
-#define MM_BRB_TYPE_OFFSET    0x16
-#define MM_ACL_FLAGS_OFFSET   0x80
-#define MM_ACL_BUFSIZE_OFFSET 0x84
-#define MM_ACL_BUFFER_OFFSET  0x88
-#define MM_ACL_MDL_OFFSET     0x90
-#define MM_ACL_MIN_BRB_LEN    0x98
+// BRB fields from WDK bthddi.h (BrbHeader / BrbL2caAclTransfer).
+// Do not use 14393 byte offsets — layout drift writes HID into foreign pool.
 
 static VOID
 ForwardPassthrough(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target)
@@ -195,37 +188,27 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
     {
         PIRP irp = WdfRequestWdmGetIrp(Request);
         PIO_STACK_LOCATION sl = IoGetCurrentIrpStackLocation(irp);
-        PUCHAR brb = (PUCHAR)sl->Parameters.Others.Argument1;
+        PBRB pBrb = (PBRB)sl->Parameters.Others.Argument1;
 
-        if (brb != NULL)
+        if (pBrb != NULL &&
+            pBrb->BrbHeader.Type == BRB_L2CA_ACL_TRANSFER &&
+            pBrb->BrbHeader.Length >= sizeof(BRB_L2CA_ACL_TRANSFER) &&
+            (pBrb->BrbL2caAclTransfer.TransferFlags & ACL_TRANSFER_DIRECTION_IN) != 0)
         {
-            USHORT type = 0;
-            ULONG  brbLen = 0;
-            RtlCopyMemory(&brbLen, brb + MM_BRB_LENGTH_OFFSET, sizeof(ULONG));
-            RtlCopyMemory(&type, brb + MM_BRB_TYPE_OFFSET, sizeof(USHORT));
+            PMM_REQUEST_CONTEXT reqCtx = GetRequestContext(Request);
+            reqCtx->Brb = pBrb;
 
-            if (type == (USHORT)BRB_L2CA_ACL_TRANSFER && brbLen >= MM_ACL_MIN_BRB_LEN)
+            WdfSpinLockAcquire(ctx->Lock);
+            ctx->AclInterceptCount++;
+            WdfSpinLockRelease(ctx->Lock);
+
+            WdfRequestFormatRequestUsingCurrentType(Request);
+            WdfRequestSetCompletionRoutine(Request, OnAclTransferComplete, ctx);
+            if (!WdfRequestSend(Request, target, WDF_NO_SEND_OPTIONS))
             {
-                ULONG flags = 0;
-                RtlCopyMemory(&flags, brb + MM_ACL_FLAGS_OFFSET, sizeof(ULONG));
-                if ((flags & ACL_TRANSFER_DIRECTION_IN) != 0)
-                {
-                    PMM_REQUEST_CONTEXT reqCtx = GetRequestContext(Request);
-                    reqCtx->Brb = brb;
-
-                    WdfSpinLockAcquire(ctx->Lock);
-                    ctx->AclInterceptCount++;
-                    WdfSpinLockRelease(ctx->Lock);
-
-                    WdfRequestFormatRequestUsingCurrentType(Request);
-                    WdfRequestSetCompletionRoutine(Request, OnAclTransferComplete, ctx);
-                    if (!WdfRequestSend(Request, target, WDF_NO_SEND_OPTIONS))
-                    {
-                        WdfRequestComplete(Request, WdfRequestGetStatus(Request));
-                    }
-                    return;
-                }
+                WdfRequestComplete(Request, WdfRequestGetStatus(Request));
             }
+            return;
         }
     }
 
@@ -286,20 +269,25 @@ OnAclTransferComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
     PDEVICE_CONTEXT ctx    = (PDEVICE_CONTEXT)Context;
     NTSTATUS        status = Params->IoStatus.Status;
     PMM_REQUEST_CONTEXT reqCtx = GetRequestContext(Request);
-    PUCHAR brb = (reqCtx != NULL) ? (PUCHAR)reqCtx->Brb : NULL;
+    PBRB pBrb = (reqCtx != NULL) ? (PBRB)reqCtx->Brb : NULL;
 
-    if (NT_SUCCESS(status) && ctx != NULL && brb != NULL)
+    if (NT_SUCCESS(status) && ctx != NULL && pBrb != NULL &&
+        pBrb->BrbHeader.Type == BRB_L2CA_ACL_TRANSFER &&
+        pBrb->BrbHeader.Length >= sizeof(BRB_L2CA_ACL_TRANSFER))
     {
-        ULONG brbLen = 0;
-        RtlCopyMemory(&brbLen, brb + MM_BRB_LENGTH_OFFSET, sizeof(ULONG));
-        if (brbLen >= MM_ACL_MIN_BRB_LEN)
+        BOOLEAN sdpOk = FALSE;
+        WdfSpinLockAcquire(ctx->Lock);
+        sdpOk = (ctx->SdpPatchSuccess != 0);
+        WdfSpinLockRelease(ctx->Lock);
+
+        // Never grow 6→8 unless hidclass already bound the injected
+        // 0x12+Wheel descriptor. Otherwise HidBth forwards 8 bytes into
+        // a 6-byte report (Event 41).
+        if (sdpOk)
         {
-            ULONG  bufSize = 0;
-            PVOID  buffer  = NULL;
-            PMDL   mdl     = NULL;
-            RtlCopyMemory(&bufSize, brb + MM_ACL_BUFSIZE_OFFSET, sizeof(ULONG));
-            RtlCopyMemory(&buffer,  brb + MM_ACL_BUFFER_OFFSET,  sizeof(PVOID));
-            RtlCopyMemory(&mdl,     brb + MM_ACL_MDL_OFFSET,     sizeof(PMDL));
+            ULONG  bufSize = pBrb->BrbL2caAclTransfer.BufferSize;
+            PVOID  buffer  = pBrb->BrbL2caAclTransfer.Buffer;
+            PMDL   mdl     = pBrb->BrbL2caAclTransfer.BufferMDL;
 
             PUCHAR payload = (PUCHAR)buffer;
             if (payload == NULL && mdl != NULL)
@@ -307,29 +295,23 @@ OnAclTransferComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
                 payload = (PUCHAR)MmGetSystemAddressForMdlSafe(mdl, NormalPagePriority);
             }
 
-            ULONG capacity = bufSize;
+            // BufferSize is received length, not allocation. Capacity is
+            // the MDL byte count when present; otherwise we cannot grow.
+            ULONG capacity = 0;
             if (mdl != NULL)
             {
-                ULONG mdlBytes = MmGetMdlByteCount(mdl);
-                if (mdlBytes > 0)
-                {
-                    capacity = mdlBytes;
-                }
+                capacity = MmGetMdlByteCount(mdl);
             }
 
-            if (payload != NULL && bufSize >= 1)
+            if (payload != NULL && bufSize >= 1 && capacity >= 8)
             {
                 ULONG newLen = bufSize;
                 __try
                 {
-                    // May grow 6-byte X/Y-only 0x12 to 8 (Wheel/AC Pan)
-                    // only when capacity is proven (MDL byte count, or
-                    // BufferSize if that is already >= 8). Never write
-                    // past the ACL buffer — that is an Event 41 candidate.
                     if (TranslateAclHidReport(payload, bufSize, capacity, &newLen, ctx) &&
                         newLen > 0 && newLen <= 256 && newLen <= capacity)
                     {
-                        RtlCopyMemory(brb + MM_ACL_BUFSIZE_OFFSET, &newLen, sizeof(ULONG));
+                        pBrb->BrbL2caAclTransfer.BufferSize = newLen;
                         WdfSpinLockAcquire(ctx->Lock);
                         ctx->AclTranslateCount++;
                         ctx->Rid12Count++;
@@ -371,25 +353,32 @@ OnReadComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
     }
 
     SIZE_T bytesRead = Params->IoStatus.Information;
+    BOOLEAN sdpOk = FALSE;
     WdfSpinLockAcquire(ctx->Lock);
     ctx->HidReadCount++;
     if (bytesRead > 0 && bytesRead <= bufLen && (buf[0] == 0x12 || buf[0] == 0x27))
     {
         ctx->Rid12Count++;
     }
+    sdpOk = (ctx->SdpPatchSuccess != 0);
     WdfSpinLockRelease(ctx->Lock);
 
     __try
     {
-        // 0x90 battery Input is passed through. 0x12 stays 0x12 (8 bytes).
-        if (bytesRead >= 6 && (buf[0] == 0x12 || buf[0] == 0x27) &&
-            (ctx->ProductId == 0 || ctx->ProductId == MM_PID_V3))
+        // Same Event 41 coupling as ACL: never grow 6→8 unless hidclass
+        // bound the injected 0x12+Wheel descriptor. bufLen is IRP
+        // allocation (proven capacity); bytesRead is used length.
+        // 0x90 battery Input is passed through. 0x12 stays 0x12.
+        if (sdpOk &&
+            bytesRead >= 6 && (buf[0] == 0x12 || buf[0] == 0x27) &&
+            (ctx->ProductId == 0 || ctx->ProductId == MM_PID_V3) &&
+            bufLen >= MM_MOUSE_REPORT_LEN)
         {
             UCHAR  translated[MM_MOUSE_REPORT_LEN];
             ULONG  translatedLen = sizeof(translated);
             NTSTATUS ts = TranslateMouse2ToHid(buf, bytesRead, translated, &translatedLen, ctx);
             if (NT_SUCCESS(ts) && translatedLen == MM_MOUSE_REPORT_LEN &&
-                bufLen >= MM_MOUSE_REPORT_LEN)
+                translatedLen <= bufLen)
             {
                 RtlCopyMemory(buf, translated, translatedLen);
                 WdfRequestSetInformation(Request, translatedLen);
@@ -451,7 +440,8 @@ OnSdpQueryComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
     }
 
     ULONG    newLen      = (ULONG)sdpLen;
-    NTSTATUS patchStatus = SdpRewrite_Process((PUCHAR)buf, (ULONG)sdpLen, &newLen);
+    NTSTATUS patchStatus = SdpRewrite_Process((PUCHAR)buf, (ULONG)sdpLen,
+                                              (ULONG)bufAllocLen, &newLen);
 
     WdfSpinLockAcquire(ctx->Lock);
     ctx->LastPatchStatus = (ULONG)patchStatus;
@@ -460,7 +450,8 @@ OnSdpQueryComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
         ctx->SdpScanHits++;
         ctx->SdpPatchSuccess++;
     }
-    else if (patchStatus == STATUS_MORE_PROCESSING_REQUIRED)
+    else if (patchStatus == STATUS_MORE_PROCESSING_REQUIRED ||
+             patchStatus == STATUS_BUFFER_TOO_SMALL)
     {
         ctx->SdpScanHits++;
     }
@@ -511,7 +502,7 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
 
     UNICODE_STRING keyPath;
     RtlInitUnicodeString(&keyPath,
-        L"\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Services\\MagicMouseDriver\\Diag");
+        L"\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Services\\MagicMouseDriver204Scroll\\Diag");
     OBJECT_ATTRIBUTES attr;
     InitializeObjectAttributes(&attr, &keyPath,
                                OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);

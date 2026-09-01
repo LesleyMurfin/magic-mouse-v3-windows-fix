@@ -45,16 +45,36 @@ if grep -q 'ServiceBinary = %12%\\MagicMouseDriver.sys' "$INF"; then
 else
   ok "INF does not target live restore name"
 fi
+if grep -qE '^MagicMouseDriver\.sys' "$INF"; then
+  bad "INF CopyFiles must not be MagicMouseDriver.sys"
+else
+  ok "INF CopyFiles is not live restore name"
+fi
 if grep -q 'PID&0323' "$INF"; then ok "0323 hardware ID in INF"; else bad "0323 hardware ID in INF"; fi
 if grep -qE 'PID&030[Dd]|PID&0269|PID&0310' "$INF"; then
   bad "INF hardware IDs must not include 030D/0269/0310"
 else
   ok "INF hardware IDs are 0323-only"
 fi
-if grep -q 'LowerFilters",0x00010000,"MagicMouseDriver"' "$INF"; then
-  ok "sole LowerFilters=MagicMouseDriver"
+if grep -qE 'AddService[[:space:]]*=[[:space:]]*MagicMouseDriver204Scroll[[:space:]]*,' "$INF"; then
+  ok "AddService MagicMouseDriver204Scroll"
 else
-  bad "sole LowerFilters=MagicMouseDriver"
+  bad "AddService MagicMouseDriver204Scroll"
+fi
+if grep -qE 'AddService[[:space:]]*=[[:space:]]*MagicMouseDriver[[:space:]]*,' "$INF"; then
+  bad "AddService must not be live MagicMouseDriver"
+else
+  ok "AddService does not hijack live MagicMouseDriver"
+fi
+if grep -q 'LowerFilters",0x00010000,"MagicMouseDriver204Scroll"' "$INF"; then
+  ok "LowerFilters=MagicMouseDriver204Scroll"
+else
+  bad "LowerFilters=MagicMouseDriver204Scroll"
+fi
+if grep -qE 'LowerFilters",0x00010000,"MagicMouseDriver"[[:space:]]*$' "$INF"; then
+  bad "LowerFilters must not be live MagicMouseDriver"
+else
+  ok "LowerFilters does not hijack live MagicMouseDriver"
 fi
 if grep -q 'LowerFilters.*,"applewirelessmouse"' "$INF"; then
   bad "INF must not set applewirelessmouse as a filter"
@@ -113,12 +133,27 @@ if grep -q 'AD5D244B176D650961594EDED153C46F9A52004C424DABFD86E50844E447546B' "$
 else
   bad "Apr 30 SHA is the restore baseline (refused as this package)"
 fi
+if grep -q "KmdfServiceName = 'MagicMouseDriver204Scroll'" "$ROOT/scripts/Kmdf-Common.ps1"; then
+  ok "KmdfServiceName MagicMouseDriver204Scroll"
+else
+  bad "KmdfServiceName MagicMouseDriver204Scroll"
+fi
+if grep -q "KmdfServiceName = 'MagicMouseDriver'" "$ROOT/scripts/Kmdf-Common.ps1"; then
+  bad "KmdfServiceName must not be live MagicMouseDriver"
+else
+  ok "KmdfServiceName does not hijack live MagicMouseDriver"
+fi
 if test -f "$ROOT/scripts/Freeze-KmdfArtifact.ps1"; then ok "freeze-hash script exists"; else bad "freeze-hash script exists"; fi
 if grep -q 'MagicMouseDriver-kmdf-2.0.4-scroll-' "$ROOT/scripts/Freeze-KmdfArtifact.ps1" && \
    grep -q 'sha8' "$ROOT/FREEZE-HASH.md"; then
   ok "named artifact MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys"
 else
   bad "named artifact MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys"
+fi
+if grep -F -q 'Freeze output must not be System32\drivers or DriverStore' "$ROOT/scripts/Freeze-KmdfArtifact.ps1"; then
+  ok "freeze refuses System32/DriverStore OutDir"
+else
+  bad "freeze refuses System32/DriverStore OutDir"
 fi
 if test -f "$ROOT/mm-dev.ps1" || test -f "$ROOT/scripts/mm-dev.ps1"; then
   bad "mm-dev.ps1 must not ship"

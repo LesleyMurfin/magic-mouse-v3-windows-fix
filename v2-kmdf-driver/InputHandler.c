@@ -76,14 +76,16 @@ ScanForSdpHidDescriptor(
 
 static NTSTATUS
 PatchSdpHidDescriptor(
-    _Inout_updates_bytes_(bufSize) PUCHAR  buf,
-    _In_  ULONG    bufSize,
+    _Inout_updates_bytes_(allocLen) PUCHAR  buf,
+    _In_  ULONG    usedLen,
+    _In_  ULONG    allocLen,
     _In_  ULONG    descOffset,
     _In_  ULONG    descLen,
     _Out_ PULONG   newBufUsed)
 {
     ASSERT(descOffset >= 11);
     if (g_HidDescriptorSize == 0) { return STATUS_INVALID_PARAMETER; }
+    if (allocLen < usedLen) { return STATUS_INVALID_PARAMETER; }
 
     ULONG newDescLen   = g_HidDescriptorSize;
     ULONG innerPayload = 2 + 2 + newDescLen;
@@ -94,11 +96,10 @@ PatchSdpHidDescriptor(
     if (outerPayload > 0xFF) { return STATUS_INVALID_PARAMETER; }
 
     ULONG tailOffset = descOffset + descLen;
-    if (tailOffset > bufSize) { return STATUS_INVALID_PARAMETER; }
-    ULONG tailBytes  = bufSize - tailOffset;
+    if (tailOffset > usedLen) { return STATUS_INVALID_PARAMETER; }
+    ULONG tailBytes  = usedLen - tailOffset;
     ULONG needed     = descOffset + newDescLen + tailBytes;
-    if (needed > bufSize) { return STATUS_BUFFER_TOO_SMALL; }
-
+    if (needed > allocLen) { return STATUS_BUFFER_TOO_SMALL; }
     if (newDescLen != descLen && tailBytes > 0)
     {
         ULONG newTailOffset = descOffset + newDescLen;
@@ -120,7 +121,7 @@ PatchSdpHidDescriptor(
 
     // buf[0..7] = BTH_SDP_STREAM_RESPONSE; buf[8] is AttributeLists tag.
     LONG delta = (LONG)newDescLen - (LONG)descLen;
-    if (delta != 0 && bufSize >= 11 && buf[8] == SDP_SEQ_1B)
+    if (delta != 0 && usedLen >= 11 && buf[8] == SDP_SEQ_1B)
     {
         LONG newTop = (LONG)(UCHAR)buf[9] + delta;
         if (newTop >= 0 && newTop <= 0xFF)
@@ -137,7 +138,7 @@ PatchSdpHidDescriptor(
             RtlCopyMemory(buf + 4, &respSize, sizeof(ULONG));
         }
     }
-    else if (delta != 0 && bufSize >= 12 && buf[8] == SDP_SEQ_2B)
+    else if (delta != 0 && usedLen >= 12 && buf[8] == SDP_SEQ_2B)
     {
         USHORT top    = (USHORT)(((USHORT)buf[9] << 8) | (USHORT)buf[10]);
         LONG   newTop = (LONG)top + delta;
@@ -163,35 +164,38 @@ PatchSdpHidDescriptor(
 
 NTSTATUS
 SdpRewrite_Process(
-    _Inout_updates_bytes_(bufSize) PUCHAR  buf,
-    _In_  ULONG  bufSize,
+    _Inout_updates_bytes_(allocLen) PUCHAR  buf,
+    _In_  ULONG  usedLen,
+    _In_  ULONG  allocLen,
     _Out_ PULONG newLen)
 {
-    *newLen = bufSize;
+    *newLen = usedLen;
 
-    if (buf == NULL || bufSize < SDP_SCAN_MATCH_LEN)
+    if (buf == NULL || usedLen < SDP_SCAN_MATCH_LEN || allocLen < usedLen)
     {
         return STATUS_INVALID_PARAMETER;
     }
 
     ULONG descOffset = 0, descLen = 0;
-    if (!ScanForSdpHidDescriptor(buf, bufSize, &descOffset, &descLen))
+    if (!ScanForSdpHidDescriptor(buf, usedLen, &descOffset, &descLen))
     {
         return STATUS_NOT_FOUND;
     }
 
-    DbgPrint("MM: SDP 0x0206 at buf[%lu], existing=%lu B, injecting %lu B\n",
-             descOffset, descLen, g_HidDescriptorSize);
+    DbgPrint("MM: SDP 0x0206 at buf[%lu], existing=%lu B, injecting %lu B (alloc=%lu)\n",
+             descOffset, descLen, g_HidDescriptorSize, allocLen);
 
     ULONG    used = 0;
-    NTSTATUS s    = PatchSdpHidDescriptor(buf, bufSize, descOffset, descLen, &used);
+    NTSTATUS s    = PatchSdpHidDescriptor(buf, usedLen, allocLen, descOffset, descLen, &used);
     if (!NT_SUCCESS(s))
     {
         DbgPrint("MM: PatchSdpHidDescriptor 0x%08X — passthrough\n", s);
-        return STATUS_MORE_PROCESSING_REQUIRED;
+        // Fail closed: do not rewrite. BUFFER_TOO_SMALL means the
+        // injected descriptor cannot fit in the allocation.
+        return s;
     }
 
-    DbgPrint("MM: Patch OK — SDP buffer %lu -> %lu bytes\n", bufSize, used);
+    DbgPrint("MM: Patch OK — SDP buffer %lu -> %lu bytes\n", usedLen, used);
     *newLen = used;
     return STATUS_SUCCESS;
 }

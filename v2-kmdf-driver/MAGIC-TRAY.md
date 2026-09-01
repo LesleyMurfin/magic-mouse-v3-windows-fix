@@ -7,7 +7,7 @@
 - Offer **Install KMDF** that uses the **signed unique package** only:
   `pnputil /add-driver MagicMouseDriver-kmdf-204-scroll.inf /install`
 - Bind **PID 0323 only**.
-- Keep `LowerFilters=MagicMouseDriver` **sole**.
+- Keep `LowerFilters=MagicMouseDriver204Scroll` **sole**. `MagicMouseDriver` is the Apr 30 oem16 service — do not set it.
 - Pull the freeze-named artifact `MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys`.
 
 ## Do not

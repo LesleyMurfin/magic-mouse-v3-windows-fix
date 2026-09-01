@@ -40,6 +40,7 @@ function Get-KmdfUniqueOemNames {
     foreach ($block in $blocks) {
         if ($block -notmatch 'MagicMouseDriver-kmdf-204-scroll\.inf') { continue }
         if ($block -match 'Original Name:\s+MagicMouseDriver\.inf') { continue }
+        if ($block -match 'Published Name:\s+oem16\.inf') { continue }
         if ($block -match 'Published Name:\s+(oem\d+\.inf)') {
             $found += $Matches[1]
         }
@@ -55,6 +56,9 @@ function Uninstall-KmdfUniquePackage {
         return
     }
     foreach ($oem in $oems) {
+        if ($oem -match '^oem16\.inf$') {
+            throw "Refusing /delete-driver oem16 (Apr 30 restore)."
+        }
         Write-KmdfLog -Message "pnputil /delete-driver $oem (unique package only)" -Level 'INFO'
         & pnputil.exe /delete-driver $oem /uninstall 2>&1 | ForEach-Object { Write-KmdfLog -Message "$_" -Level 'INFO' }
     }
@@ -89,6 +93,21 @@ function Install-KmdfUniquePackage {
     }
     if ($infText -match 'ServiceBinary\s*=\s*%12%\\MagicMouseDriver\.sys') {
         throw "INF ServiceBinary must not be MagicMouseDriver.sys (Apr 30 restore file)."
+    }
+    if ($infText -match '(?m)^MagicMouseDriver\.sys') {
+        throw "INF CopyFiles must not be MagicMouseDriver.sys (Apr 30 restore file)."
+    }
+    if ($infText -match 'AddService\s*=\s*MagicMouseDriver\s*,') {
+        throw "INF AddService must not be MagicMouseDriver (live oem16 SCM name)."
+    }
+    if ($infText -notmatch 'AddService\s*=\s*MagicMouseDriver204Scroll\s*,') {
+        throw "INF AddService must be MagicMouseDriver204Scroll."
+    }
+    if ($infText -notmatch 'LowerFilters.*,0x00010000,"MagicMouseDriver204Scroll"') {
+        throw "INF LowerFilters must be MagicMouseDriver204Scroll."
+    }
+    if ($infText -match 'LowerFilters.*,0x00010000,"MagicMouseDriver"(?!204Scroll)') {
+        throw "INF LowerFilters must not be MagicMouseDriver (live oem16 filter)."
     }
 
     if (Test-KmdfForbiddenSys -Path $sys) {

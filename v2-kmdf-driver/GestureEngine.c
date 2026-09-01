@@ -50,8 +50,8 @@ AccumulateSurfaceScroll(
     _In_reads_bytes_(inLen) PUCHAR in,
     _In_ SIZE_T inLen,
     _Inout_ PDEVICE_CONTEXT ctx,
-    _Out_ PINT outWheel,
-    _Out_ PINT outHWheel)
+    _Out_ INT* outWheel,
+    _Out_ INT* outHWheel)
 {
     *outWheel  = 0;
     *outHWheel = 0;

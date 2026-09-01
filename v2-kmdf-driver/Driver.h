@@ -50,16 +50,9 @@
 #define IOCTL_INTERNAL_BTH_SUBMIT_BRB 0x00410003UL
 #endif
 
-// BRB_L2CA_ACL_TRANSFER (bthddi.h). Defined here so the source builds against
-// a WDK that has bthddi.h and so reviewers can see the constant without
-// opening the SDK.
-#ifndef BRB_L2CA_ACL_TRANSFER
-#define BRB_L2CA_ACL_TRANSFER 0x0105
-#endif
-
-#ifndef ACL_TRANSFER_DIRECTION_IN
-#define ACL_TRANSFER_DIRECTION_IN 0x00000001UL
-#endif
+// BRB_L2CA_ACL_TRANSFER / ACL_TRANSFER_DIRECTION_IN come from bthddi.h
+// (included in Driver.c). Do not #define 14393 literals here — they
+// shadow the WDK enum and pick the wrong layout on current Windows 11.
 
 // Injected RID 0x12 report:
 //   [RID 0x12][buttons][X i16][Y i16][AC Pan][Wheel] = 8 bytes.
