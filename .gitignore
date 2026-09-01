@@ -34,10 +34,12 @@ TestResults/
 Thumbs.db
 .DS_Store
 
-# Git-ignore driver binaries EXCEPT in release/
+# Git-ignore driver binaries EXCEPT the labeled PATH-A ship-blocker (if present).
+# KMDF still *installs* as MagicMouseDriver.sys; PATH-A still *installs* as
+# applewirelessmouse.sys. Package / backup names must stay distinct.
 *.sys
-!v1-binary-patch/applewirelessmouse.sys
-!v1-binary-patch/installer/applewirelessmouse.sys
+!v1-binary-patch/applewirelessmouse-patched-pathA-SHIPBLOCKER.sys
+!v1-binary-patch/installer/applewirelessmouse-patched-pathA-SHIPBLOCKER.sys
 
 # Certificates EXCEPT release/
 *.cer
