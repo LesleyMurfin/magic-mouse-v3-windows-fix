@@ -73,9 +73,9 @@ function Sign-KmdfCommunityPackage {
     $sys = Join-Path $Here $script:KmdfUniqueSys
     $cat = Join-Path $Here $script:KmdfUniqueCat
     if (-not (Test-Path -LiteralPath $inf)) { Fail "Missing $inf" }
-    if (-not (Test-Path -LiteralPath $sys)) { Fail "Missing $sys — need the unique WDK .sys, not MagicMouseDriver.sys" }
+    if (-not (Test-Path -LiteralPath $sys)) { Fail "Missing $sys - need the unique WDK .sys, not MagicMouseDriver.sys" }
     if (Test-Path -LiteralPath (Join-Path $Here $script:KmdfLiveSysName)) {
-        Fail "Package folder has MagicMouseDriver.sys — remove it. That name is Apr 30 restore."
+        Fail "Package folder has MagicMouseDriver.sys - remove it. That name is Apr 30 restore."
     }
     if (Test-KmdfForbiddenSys -Path $sys) { Fail 'Refusing banned .sys' }
 
@@ -96,17 +96,17 @@ function Sign-KmdfCommunityPackage {
 
     $inf2cat = Get-Command Inf2Cat.exe -ErrorAction SilentlyContinue
     if ($inf2cat) {
-        Write-KmdfLog -Message 'Inf2Cat present — building driver catalog' -Level 'INFO'
+        Write-KmdfLog -Message 'Inf2Cat present - building driver catalog' -Level 'INFO'
         & Inf2Cat.exe /driver:$Here /os:10_X64
         if ($LASTEXITCODE -ne 0) { Fail "Inf2Cat exited $LASTEXITCODE" }
     }
     else {
-        Write-KmdfLog -Message 'Inf2Cat not found — New-FileCatalog (testsigning-only)' -Level 'WARN'
+        Write-KmdfLog -Message 'Inf2Cat not found - New-FileCatalog (testsigning-only)' -Level 'WARN'
         $files = @(
             (Get-Item -LiteralPath $inf),
             (Get-Item -LiteralPath $sys)
         )
-        New-FileCatalog -Path $files.FullName -CatalogFilePath $cat -CatalogVersion 2.0 -Force | Out-Null
+        New-FileCatalog -Path $files.FullName -CatalogFilePath $cat -CatalogVersion 2.0 | Out-Null
     }
     if (-not (Test-Path -LiteralPath $cat)) { Fail "Missing $cat after catalog step" }
     $csig = Set-AuthenticodeSignature -FilePath $cat -Certificate $Cert -HashAlgorithm SHA256 -TimestampServer 'http://timestamp.digicert.com' -ErrorAction SilentlyContinue

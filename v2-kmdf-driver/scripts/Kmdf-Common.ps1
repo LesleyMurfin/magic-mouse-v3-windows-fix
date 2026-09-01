@@ -91,11 +91,11 @@ function Test-KmdfForbiddenSys {
     param([Parameter(Mandatory)][string]$Path)
     $name = [System.IO.Path]::GetFileName($Path)
     if ($name -eq $script:KmdfLiveSysName) {
-        Write-KmdfLog -Message "Refusing live-named $name — that filename is the Apr 30 restore file. Use $script:KmdfUniqueSys / $script:KmdfArtifactGlob." -Level 'ERROR'
+        Write-KmdfLog -Message "Refusing live-named $name - that filename is the Apr 30 restore file. Use $script:KmdfUniqueSys / $script:KmdfArtifactGlob." -Level 'ERROR'
         return $true
     }
     if ($name -like 'applewirelessmouse*' -or $name -eq $script:KmdfPathAShipBlocker) {
-        Write-KmdfLog -Message "Refusing PATH-A package $name — SHIPBLOCKER BSOD. Never the 0323 product." -Level 'ERROR'
+        Write-KmdfLog -Message "Refusing PATH-A package $name - SHIPBLOCKER BSOD. Never the 0323 product." -Level 'ERROR'
         return $true
     }
     if ($name -like '*may20-pointerdead*' -or $name -eq $script:KmdfArtifactMay20) {
@@ -108,7 +108,7 @@ function Test-KmdfForbiddenSys {
     }
     $sha = Get-KmdfFileSha256 -Path $Path
     if ($sha -eq $script:KmdfShaMay20) {
-        Write-KmdfLog -Message "Refusing May 20 SHA $sha — pointer-dead." -Level 'ERROR'
+        Write-KmdfLog -Message "Refusing May 20 SHA $sha - pointer-dead." -Level 'ERROR'
         return $true
     }
     if ($sha -eq $script:KmdfShaFailed204) {
@@ -116,7 +116,7 @@ function Test-KmdfForbiddenSys {
         return $true
     }
     if ($sha -eq $script:KmdfShaApr30) {
-        Write-KmdfLog -Message "Refusing Apr 30 SHA $sha as this package — that binary stays oem16 / MagicMouseDriver.sys for restore." -Level 'ERROR'
+        Write-KmdfLog -Message "Refusing Apr 30 SHA $sha as this package - that binary stays oem16 / MagicMouseDriver.sys for restore." -Level 'ERROR'
         return $true
     }
     return $false
@@ -135,7 +135,7 @@ function Test-KmdfSignedByThumb {
     $got = $sig.SignerCertificate.Thumbprint.ToUpperInvariant()
     $want = $Thumb.ToUpperInvariant()
     if ($got -ne $want) {
-        Write-KmdfLog -Message "$Path signed by $got — required thumb is $want (16940C0F…)." -Level 'ERROR'
+        Write-KmdfLog -Message "$Path signed by $got - required thumb is $want (16940C0F)." -Level 'ERROR'
         return $false
     }
     if ($sig.Status -ne 'Valid' -and $sig.Status -ne 'UnknownError') {
