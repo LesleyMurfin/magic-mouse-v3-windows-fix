@@ -3,6 +3,7 @@
 #include "InputHandler.h"
 #include "GestureEngine.h"
 #include "AclTranslate.h"
+#include "TrackpadPtp.h"
 
 // BRB_L2CA_ACL_TRANSFER field offsets on x64 (bthddi.h / Win10+).
 // BRB_HEADER.Type is at +0x16. ACL Buffer/Size follow the 0x70-byte header
@@ -369,8 +370,22 @@ OnReadComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
 
     __try
     {
-        // 0x90 battery Input is passed through. 0x12 stays 0x12 (8 bytes).
-        if (bytesRead >= 6 && (buf[0] == 0x12 || buf[0] == 0x27) &&
+        // Trackpad PIDs: Apple 0x28/0x31 → PTP RID 0x01. 0323 stays on 0x12.
+        if (MmIsTrackpadPid(ctx->ProductId) && bytesRead >= 1 &&
+            bufLen >= TP_PTP_REPORT_LEN)
+        {
+            UCHAR  translated[TP_PTP_REPORT_LEN];
+            ULONG  translatedLen = sizeof(translated);
+            NTSTATUS ts = TranslateTrackpadToPtp(buf, bytesRead, translated,
+                                                 &translatedLen, ctx->ProductId,
+                                                 &ctx->PtpScanTime);
+            if (NT_SUCCESS(ts) && translatedLen == TP_PTP_REPORT_LEN)
+            {
+                RtlCopyMemory(buf, translated, translatedLen);
+                WdfRequestSetInformation(Request, translatedLen);
+            }
+        }
+        else if (bytesRead >= 6 && (buf[0] == 0x12 || buf[0] == 0x27) &&
             (ctx->ProductId == 0 || ctx->ProductId == MM_PID_V3))
         {
             UCHAR  translated[MM_MOUSE_REPORT_LEN];
@@ -430,16 +445,23 @@ OnSdpQueryComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
     if (snapLen < 64) { RtlZeroMemory(ctx->LastSdpBytes + snapLen, 64 - snapLen); }
     WdfSpinLockRelease(ctx->Lock);
 
-    // This INF binds 0323 only. Still refuse to rewrite if PID is a known
-    // other Magic Mouse (defense in depth — do not retarget 030D).
-    if (ctx->ProductId != 0 && ctx->ProductId != MM_PID_V3)
+    // 0323 mouse blob, or trackpad PTP blob. Never rewrite 030D/0269/0310.
+    ULONG    newLen      = (ULONG)sdpLen;
+    NTSTATUS patchStatus;
+    if (MmIsTrackpadPid(ctx->ProductId))
+    {
+        patchStatus = SdpRewrite_ProcessEx((PUCHAR)buf, (ULONG)sdpLen, &newLen,
+                                           g_PtpHidDescriptor, g_PtpHidDescriptorSize);
+    }
+    else if (ctx->ProductId != 0 && ctx->ProductId != MM_PID_V3)
     {
         WdfRequestComplete(Request, status);
         return;
     }
-
-    ULONG    newLen      = (ULONG)sdpLen;
-    NTSTATUS patchStatus = SdpRewrite_Process((PUCHAR)buf, (ULONG)sdpLen, &newLen);
+    else
+    {
+        patchStatus = SdpRewrite_Process((PUCHAR)buf, (ULONG)sdpLen, &newLen);
+    }
 
     WdfSpinLockAcquire(ctx->Lock);
     ctx->LastPatchStatus = (ULONG)patchStatus;

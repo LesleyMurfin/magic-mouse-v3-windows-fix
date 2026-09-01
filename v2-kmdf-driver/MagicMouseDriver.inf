@@ -1,9 +1,8 @@
 ; MagicMouseDriver.inf
 ; SPDX-License-Identifier: MIT
 ;
-; KMDF lower filter for Apple Magic Mouse PID 0x0323 only
-; (2024 / Magic Mouse 2 USB-C over Bluetooth).
-;
+; KMDF lower filter for Apple Magic Mouse PID 0x0323 and Magic Trackpad
+; PIDs 0x030E / 0x0265 / 0x0324 (PTP tap). Does not bind 0x030D / 0x0269 / 0x0310.
 ; Stack: HidBth → MagicMouseDriver → BthEnum
 ;
 ; Live HID 2026-08-30 21:23 MDT (Apr 30 MagicMouseFix AD5D244B):
@@ -43,8 +42,11 @@ DefaultDestDir = 12
 %ManufacturerName% = MagicMouseDriver, NTamd64
 
 [MagicMouseDriver.NTamd64]
-; PID 0x0323 only — VID 0x004C (Apple Bluetooth)
+; PID 0x0323 — VID 0x004C (Apple Bluetooth)
 %DeviceDesc% = MagicMouseDriver_Install, BTHENUM\{00001124-0000-1000-8000-00805F9B34FB}_VID&0001004C_PID&0323
+%TrackpadV1Desc% = MagicMouseDriver_Install, BTHENUM\{00001124-0000-1000-8000-00805F9B34FB}_VID&0001004C_PID&030E
+%TrackpadV2Desc% = MagicMouseDriver_Install, BTHENUM\{00001124-0000-1000-8000-00805F9B34FB}_VID&0001004C_PID&0265
+%TrackpadV3Desc% = MagicMouseDriver_Install, BTHENUM\{00001124-0000-1000-8000-00805F9B34FB}_VID&0001004C_PID&0324
 
 [MagicMouseDriver_Install.NT]
 Include   = hidbth.inf
@@ -85,5 +87,8 @@ MagicMouseDriver.sys = 1,,
 [Strings]
 ManufacturerName = "Magic Mouse Driver"
 DeviceDesc       = "Apple Magic Mouse (PID 0323) KMDF filter"
-ServiceDesc      = "MagicMouseDriver (0323 KMDF lower filter)"
+TrackpadV1Desc   = "Apple Magic Trackpad (PID 030E) KMDF PTP filter"
+TrackpadV2Desc   = "Apple Magic Trackpad 2 (PID 0265) KMDF PTP filter"
+TrackpadV3Desc   = "Apple Magic Trackpad 2024 (PID 0324) KMDF PTP filter"
+ServiceDesc      = "MagicMouseDriver (0323 / trackpad KMDF lower filter)"
 DiskName         = "Magic Mouse Driver Installation Disk"

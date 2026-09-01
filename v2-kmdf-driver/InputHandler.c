@@ -80,12 +80,13 @@ PatchSdpHidDescriptor(
     _In_  ULONG    bufSize,
     _In_  ULONG    descOffset,
     _In_  ULONG    descLen,
+    _In_reads_bytes_(newDescLen) const UCHAR *desc,
+    _In_  ULONG    newDescLen,
     _Out_ PULONG   newBufUsed)
 {
     ASSERT(descOffset >= 11);
-    if (g_HidDescriptorSize == 0) { return STATUS_INVALID_PARAMETER; }
+    if (desc == NULL || newDescLen == 0) { return STATUS_INVALID_PARAMETER; }
 
-    ULONG newDescLen   = g_HidDescriptorSize;
     ULONG innerPayload = 2 + 2 + newDescLen;
     ULONG outerPayload = 2 + innerPayload;
 
@@ -112,7 +113,7 @@ PatchSdpHidDescriptor(
         RtlZeroMemory(buf + gapStart, gapLen);
     }
 
-    RtlCopyMemory(buf + descOffset, g_HidDescriptor, newDescLen);
+    RtlCopyMemory(buf + descOffset, desc, newDescLen);
 
     buf[descOffset - 1] = (UCHAR)newDescLen;
     buf[descOffset - 5] = (UCHAR)innerPayload;
@@ -162,14 +163,16 @@ PatchSdpHidDescriptor(
 }
 
 NTSTATUS
-SdpRewrite_Process(
+SdpRewrite_ProcessEx(
     _Inout_updates_bytes_(bufSize) PUCHAR  buf,
     _In_  ULONG  bufSize,
-    _Out_ PULONG newLen)
+    _Out_ PULONG newLen,
+    _In_reads_bytes_(descSize) const UCHAR *desc,
+    _In_  ULONG  descSize)
 {
     *newLen = bufSize;
 
-    if (buf == NULL || bufSize < SDP_SCAN_MATCH_LEN)
+    if (buf == NULL || bufSize < SDP_SCAN_MATCH_LEN || desc == NULL || descSize == 0)
     {
         return STATUS_INVALID_PARAMETER;
     }
@@ -181,10 +184,11 @@ SdpRewrite_Process(
     }
 
     DbgPrint("MM: SDP 0x0206 at buf[%lu], existing=%lu B, injecting %lu B\n",
-             descOffset, descLen, g_HidDescriptorSize);
+             descOffset, descLen, descSize);
 
     ULONG    used = 0;
-    NTSTATUS s    = PatchSdpHidDescriptor(buf, bufSize, descOffset, descLen, &used);
+    NTSTATUS s    = PatchSdpHidDescriptor(buf, bufSize, descOffset, descLen,
+                                          desc, descSize, &used);
     if (!NT_SUCCESS(s))
     {
         DbgPrint("MM: PatchSdpHidDescriptor 0x%08X — passthrough\n", s);
@@ -194,4 +198,14 @@ SdpRewrite_Process(
     DbgPrint("MM: Patch OK — SDP buffer %lu -> %lu bytes\n", bufSize, used);
     *newLen = used;
     return STATUS_SUCCESS;
+}
+
+NTSTATUS
+SdpRewrite_Process(
+    _Inout_updates_bytes_(bufSize) PUCHAR  buf,
+    _In_  ULONG  bufSize,
+    _Out_ PULONG newLen)
+{
+    return SdpRewrite_ProcessEx(buf, bufSize, newLen,
+                                g_HidDescriptor, g_HidDescriptorSize);
 }

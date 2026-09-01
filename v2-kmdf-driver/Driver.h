@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 //
-// MagicMouseDriver — KMDF lower filter for Apple Magic Mouse PID 0x0323 only.
+// MagicMouseDriver — KMDF lower filter for Apple Magic Mouse PID 0x0323
+// and Magic Trackpad PIDs 0x030E / 0x0265 / 0x0324 (PTP tap). 0323 path unchanged.
 //
 // Stack:
 //   hidclass.sys → HidBth.sys → [this filter] → BthEnum PDO
@@ -22,7 +23,7 @@
 //        - IRP_MJ_READ completions (backup; hidclass reads usually stop at HidBth)
 //
 // Sole filter. Do not stack with applewirelessmouse (v1 binary is a 0xD1
-// ship-blocker). This package does not bind PID 0x030D / 0x0269.
+// ship-blocker). This package does not bind PID 0x030D / 0x0269 / 0x0310.
 
 #pragma once
 
@@ -35,8 +36,11 @@
 #define MM_FILE_VERSION_STR     "2.0.4.0"
 #define MM_ARTIFACT_SYS_NAME    "MagicMouseDriver-kmdf-2.0.4-scroll.sys"
 
-// Magic Mouse 2024 / Magic Mouse 2 USB-C — the only PID this package binds.
-#define MM_PID_V3  0x0323u
+// Magic Mouse 2024 / Magic Mouse 2 USB-C, plus Magic Trackpad BT PIDs.
+#define MM_PID_V3           0x0323u
+#define MM_PID_TRACKPAD_V1  0x030Eu
+#define MM_PID_TRACKPAD_V2  0x0265u
+#define MM_PID_TRACKPAD_V3  0x0324u
 
 // IOCTL_BTH_SDP_SERVICE_SEARCH_ATTRIBUTE
 // CTL_CODE(FILE_DEVICE_BLUETOOTH=0x41, Function=0x84, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -91,6 +95,8 @@ typedef struct _DEVICE_CONTEXT
     // Mechanical click latch (2-finger right / 3-finger middle). Not a tap.
     BOOLEAN ClickHeld;
     UCHAR   ClickLatched;
+
+    ULONG   PtpScanTime;
 
     WDFTIMER    DiagTimer;
     WDFWORKITEM DiagWorkItem;

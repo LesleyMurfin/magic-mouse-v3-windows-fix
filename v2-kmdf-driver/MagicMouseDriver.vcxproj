@@ -75,6 +75,7 @@
     <ClCompile Include="HidDescriptor.c" />
     <ClCompile Include="InputHandler.c" />
     <ClCompile Include="AclTranslate.c" />
+    <ClCompile Include="TrackpadPtp.c" />
   </ItemGroup>
 
   <ItemGroup>
@@ -83,6 +84,7 @@
     <ClInclude Include="HidDescriptor.h" />
     <ClInclude Include="InputHandler.h" />
     <ClInclude Include="AclTranslate.h" />
+    <ClInclude Include="TrackpadPtp.h" />
   </ItemGroup>
 
   <ItemGroup>

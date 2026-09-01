@@ -10,10 +10,15 @@ bad() { echo "FAIL $1"; fail=1; }
 echo "Validating $ROOT"
 
 if grep -q 'PID&0323' "$ROOT/MagicMouseDriver.inf"; then ok "0323 hardware ID in INF"; else bad "0323 hardware ID in INF"; fi
+if grep -q 'PID&030E' "$ROOT/MagicMouseDriver.inf" && grep -q 'PID&0265' "$ROOT/MagicMouseDriver.inf" && grep -q 'PID&0324' "$ROOT/MagicMouseDriver.inf"; then
+  ok "trackpad 030E/0265/0324 hardware IDs in INF"
+else
+  bad "trackpad 030E/0265/0324 hardware IDs in INF"
+fi
 if grep -qE 'PID&030[Dd]|PID&0269|PID&0310' "$ROOT/MagicMouseDriver.inf"; then
   bad "INF hardware IDs must not include 030D/0269/0310"
 else
-  ok "INF hardware IDs are 0323-only"
+  ok "INF does not bind 030D/0269/0310"
 fi
 if grep -q 'LowerFilters",0x00010000,"MagicMouseDriver"' "$ROOT/MagicMouseDriver.inf"; then
   ok "sole LowerFilters=MagicMouseDriver"
@@ -45,6 +50,14 @@ else
 fi
 test -f "$ROOT/Driver.c" && ok "Driver.c present" || bad "Driver.c present"
 test -f "$ROOT/AclTranslate.c" && ok "AclTranslate.c present" || bad "AclTranslate.c present"
+test -f "$ROOT/TrackpadPtp.c" && ok "TrackpadPtp.c present" || bad "TrackpadPtp.c present"
+grep -q '0x09, 0x05' "$ROOT/TrackpadPtp.c" && ok "PTP Touch Pad usage 0x05" || bad "PTP Touch Pad usage 0x05"
+grep -q '0x85, 0x01' "$ROOT/TrackpadPtp.c" && ok "PTP RID 0x01" || bad "PTP RID 0x01"
+if grep -q 'MagicTrackpad.sys\|MagicUtilities' "$ROOT/TrackpadPtp.c"; then
+  bad "TrackpadPtp must not vendor MU"
+else
+  ok "TrackpadPtp does not vendor MU"
+fi
 grep -q '0x85, 0x12' "$ROOT/HidDescriptor.c" && ok "descriptor COL01 RID 0x12" || bad "descriptor COL01 RID 0x12"
 grep -q '0x85, 0x90' "$ROOT/HidDescriptor.c" && ok "descriptor COL02 RID 0x90" || bad "descriptor COL02 RID 0x90"
 grep -q '0x09, 0x38' "$ROOT/HidDescriptor.c" && ok "descriptor Wheel usage 0x38" || bad "descriptor Wheel usage 0x38"

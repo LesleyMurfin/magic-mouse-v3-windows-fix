@@ -15,6 +15,7 @@
 
 #include "AclTranslate.h"
 #include "GestureEngine.h"
+#include "TrackpadPtp.h"
 
 #ifndef HID_MSG_DATA_INPUT
 #define HID_MSG_DATA_INPUT 0xA1
@@ -32,6 +33,52 @@ TranslateAclHidReport(
     if (buf == NULL || ctx == NULL || len < 1)
     {
         return FALSE;
+    }
+
+    if (MmIsTrackpadPid(ctx->ProductId))
+    {
+        PUCHAR report = buf;
+        ULONG  reportLen = len;
+        BOOLEAN hidHdr = FALSE;
+        UCHAR translated[TP_PTP_REPORT_LEN];
+        ULONG translatedLen;
+        NTSTATUS ts;
+
+        if (buf[0] == TP_RID_BATTERY ||
+            (buf[0] == HID_MSG_DATA_INPUT && len >= 2 && buf[1] == TP_RID_BATTERY))
+        {
+            return FALSE;
+        }
+
+        if (buf[0] == HID_MSG_DATA_INPUT && len >= 2)
+        {
+            hidHdr = TRUE;
+            report = buf + 1;
+            reportLen = len - 1;
+        }
+
+        translatedLen = sizeof(translated);
+        WdfSpinLockAcquire(ctx->Lock);
+        ts = TranslateTrackpadToPtp(report, reportLen, translated, &translatedLen,
+                                    ctx->ProductId, &ctx->PtpScanTime);
+        WdfSpinLockRelease(ctx->Lock);
+        if (!NT_SUCCESS(ts) || translatedLen != TP_PTP_REPORT_LEN)
+        {
+            return FALSE;
+        }
+
+        if (hidHdr)
+        {
+            buf[0] = HID_MSG_DATA_INPUT;
+            RtlCopyMemory(buf + 1, translated, TP_PTP_REPORT_LEN);
+            *newLen = 1 + TP_PTP_REPORT_LEN;
+        }
+        else
+        {
+            RtlCopyMemory(buf, translated, TP_PTP_REPORT_LEN);
+            *newLen = TP_PTP_REPORT_LEN;
+        }
+        return TRUE;
     }
 
     // Battery: live HidD_GetInputReport(0x90) on COL02. Do not rewrite.
