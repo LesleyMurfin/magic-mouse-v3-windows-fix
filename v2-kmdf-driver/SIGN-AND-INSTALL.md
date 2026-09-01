@@ -71,4 +71,19 @@ Private key stays on the PC. Cert thumb:
 
 5. Confirm pointer **and** wheel. If the stack faults, restore Apr 30 from oem16 / `MagicMouseDriver.sys` SHA `AD5D244B…`. Safe Mode takeown should not be required because this package does not hardlink over that file.
 
+
+## $0 community install (no paid cert)
+
+End users run **`Setup-Community.cmd`** (Admin) from this folder, with the unique `.sys` + `.inf` present:
+
+1. Creates `CN=MagicMouseDriver Community` code-signing cert on **this PC** (non-exportable key; not in git).
+2. Trusts it in LocalMachine Root + TrustedPublisher.
+3. `bcdedit /set testsigning on` if needed, then **reboot and run again**.
+4. Signs unique `.sys` + `.cat` (Inf2Cat if WDK is present, else `New-FileCatalog`).
+5. `pnputil /add-driver MagicMouseDriver-kmdf-204-scroll.inf /install` only. Sleep 3s. `HidD_SetFeature(F1)`.
+
+Requires: **Secure Boot OFF**, **Memory integrity OFF**, testsigning ON. Not WHQL. Not Secure Boot compatible.
+
+Still banned: System32 copy-over, oem16 delete, PATH-A, live `MagicMouseDriver.sys` in the folder, PFX in git.
+
 Test signing / HVCI: a self-signed `.sys` still needs `bcdedit /set testsigning on` and Memory integrity **off**. That is a Windows policy step, not a copy-over.

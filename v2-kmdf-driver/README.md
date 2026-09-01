@@ -1,6 +1,9 @@
 # MagicMouseDriver (KMDF) — PID 0x0323 only
 
-**Unique 2.0.4 scroll package.** Signed `pnputil /add-driver` only. **2026-09-01 hardware:** pointer + **2-finger** surface scroll + battery `0x90`. 1-finger glass does not scroll. See `CHECKPOINT-2026-09-01-SCROLL.md`.
+**Unique 2.0.4 scroll package.** **2026-09-01 hardware:** pointer + **2-finger** surface scroll + battery `0x90`. 1-finger glass does not scroll. See `CHECKPOINT-2026-09-01-SCROLL.md`.
+
+**Other PCs ($0):** copy this folder, Admin-run `Setup-Community.cmd`. Makes a **local** self-signed cert, enables testsigning (reboot once), `pnputil` the unique INF, F1. Secure Boot and Memory integrity must be **off**. Not WHQL. Never pays for a cert. Developer path remains thumb `16940C0F` + `Install-KMDF.cmd`.
+
 
 
 **Do not install an unsigned copy-over on the live Apr 30 PC.** That machine keeps
