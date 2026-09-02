@@ -1,0 +1,23 @@
+# Magic Mouse v3 Windows scroll (PID 0323)
+
+> Kernel research and KMDF filter for Apple Magic Mouse 2024 / Magic Mouse v3 on Windows 10/11. Not Magic Mouse v1/v2. Not Magic Tray (userspace battery app). PATH-A patched applewirelessmouse is not Magic Tray’s KMDF fallback.
+
+- Hardware: Bluetooth PID 0x0323 only.
+- Problem: Boot Camp INF has no 0323; HID COL01/COL02 can collapse after DSM (Mode B, scroll gone).
+- Magic Tray installs `v2-kmdf-driver/Install-KMDF.cmd` from this repo.
+- Battery in the tray is Input 0x90 COL02 (userspace), not this .sys.
+- Signing: self-signed / Test Mode until EV + attestation. Fund via https://lesleymurfin.github.io/magic-tray/funding.html (Stripe off GitHub Sponsors).
+
+## Docs
+
+- [This site](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/)
+- [README](https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/README.md)
+- [Bug analysis](https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/bug-analysis.md)
+- [HID research](https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/hid-research.md)
+- [Mode A/B diagram](https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/diagrams/diagram-mode-ab.md)
+- [Magic Tray](https://lesleymurfin.github.io/magic-tray/)
+- [Stars and signing](https://lesleymurfin.github.io/magic-tray/funding.html)
+
+## Optional
+
+- [tealtadpole Boot Camp](https://github.com/tealtadpole/MagicMouse2DriversWin11x64): v1/v2 only

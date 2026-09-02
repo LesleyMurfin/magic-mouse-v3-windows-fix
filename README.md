@@ -1,8 +1,25 @@
-# Magic Mouse v3 Windows Scroll Fix
+# Magic Mouse v3 (2024) Windows scroll
 
-**STATUS: Production Ready v1.0.0**
+Kernel research and drivers for **Apple Magic Mouse 2024 / Magic Mouse v3** (Bluetooth PID `0x0323`) on Windows 10/11. Not v1 (`030D`) or v2 (`0269`).
 
-A Windows kernel driver patch that restores scroll functionality on Apple Magic Mouse v3 (2024) after Bluetooth reconnection.
+If this helped, **star this repo** and **[Magic Tray](https://github.com/LesleyMurfin/magic-tray)** (battery in the tray; it installs KMDF from here). Signing goal (Stripe, not GitHub Sponsors): [funding](https://lesleymurfin.github.io/magic-tray/funding.html).
+
+Site: [lesleymurfin.github.io/magic-mouse-v3-windows-fix](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/) · Tray site: [lesleymurfin.github.io/magic-tray](https://lesleymurfin.github.io/magic-tray/)
+
+**STATUS:** KMDF is what Magic Tray recommends. The v1 patched `applewirelessmouse.sys` is documented below as research; Magic Tray will not use it as a KMDF fallback.
+
+## Contents
+
+- [What this fixes](#what-this-fixes)
+- [Supported hardware](#supported-hardware)
+- [Quick install](#quick-install-3-steps)
+- [How it works](#how-it-works)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+
+
+A Windows kernel path that restores scroll on Magic Mouse v3 after Bluetooth reconnection.
 
 ## What This Fixes
 

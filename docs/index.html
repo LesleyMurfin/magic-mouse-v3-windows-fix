@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Magic Mouse v3 (2024) Windows scroll — KMDF</title>
+  <meta name="description" content="Open-source Windows driver research for Apple Magic Mouse 2024 / Magic Mouse v3 (PID 0323). Mode A/B HID collapse. KMDF path used by Magic Tray. Star this repo and Magic Tray if it helps.">
+  <link rel="canonical" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/">
+  <link rel="describedby" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/llms.txt">
+  <meta property="og:title" content="Magic Mouse v3 (2024) Windows scroll">
+  <meta property="og:description" content="PID 0323 is not in Boot Camp. Research + KMDF. Not Magic Mouse v1/v2.">
+  <meta property="og:url" content="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/">
+  <meta name="twitter:card" content="summary">
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+  <header>
+    <p class="kicker">Magic Mouse v3 · PID 0323 · Windows 10/11</p>
+    <nav>
+      <a href="./" aria-current="page">Home</a>
+      <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix#readme">README</a>
+      <a href="https://lesleymurfin.github.io/magic-tray/v3.html">Why v3 is hard</a>
+      <a href="https://lesleymurfin.github.io/magic-tray/funding.html">Stars &amp; signing</a>
+      <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray</a>
+    </nav>
+    <h1>Magic Mouse 2024 (v3) scroll on Windows</h1>
+    <p class="lead">This repo is the kernel side for <strong>PID 0323 only</strong>. Apple never put that ID in Boot Camp. After Bluetooth idle, Windows can collapse HID collections (Mode A → Mode B): cursor lives, wheel dies. Magic Tray installs the <strong>KMDF</strong> package from here. The v1 patched <code>applewirelessmouse.sys</code> is research history, not the tray fallback.</p>
+    <p class="cta">
+      <a class="primary" href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Star this driver</a>
+      <a class="ghost" href="https://github.com/LesleyMurfin/magic-tray">Star Magic Tray</a>
+    </p>
+  </header>
+  <main>
+    <h2>Not v1 / v2</h2>
+    <p>Magic Mouse v1 (<code>030D</code>) and v2 (<code>0269</code>) use the catalog-signed Boot Camp INF. This tree will not help those mice. See <a href="https://github.com/tealtadpole/MagicMouse2DriversWin11x64">tealtadpole</a> or Magic Tray’s Boot Camp action.</p>
+    <h2>Research</h2>
+    <ul class="plain">
+      <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/bug-analysis.md">Bug analysis</a> (DSM / BTHPORT)</li>
+      <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/hid-research.md">HID research</a> (RID 0x90)</li>
+      <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/diagrams/diagram-mode-ab.md">Mode A/B diagram</a></li>
+    </ul>
+    <h2>Signing</h2>
+    <p>KMDF is self-signed today (Test Mode). Goal is EV + Microsoft attestation, funded off GitHub via Stripe — <a href="https://lesleymurfin.github.io/magic-tray/funding.html">funding page</a>. No subscription that kills scroll.</p>
+  </main>
+  <footer>
+    <p>MIT · Revive Business Solutions / Lesley Murfin · <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray site</a></p>
+  </footer>
+</body>
+</html>
