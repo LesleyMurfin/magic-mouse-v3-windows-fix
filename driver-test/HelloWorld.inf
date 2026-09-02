@@ -1,0 +1,51 @@
+; HelloWorld.inf - Build-validation INF only.
+; Binds to USB\VID_FFFF&PID_FFFF (non-existent device).
+; Not intended for installation on real hardware.
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = USB
+ClassGuid   = {36FC9E60-C465-11CF-8056-444553540000}
+Provider    = %ManufacturerName%
+DriverVer   = 01/01/2027,1.0.0.0
+CatalogFile = HelloWorld.cat
+PnpLockdown = 1
+
+[Manufacturer]
+%ManufacturerName% = Standard, NTamd64
+
+[Standard.NTamd64]
+%DeviceName% = HelloWorld_Device, USB\VID_FFFF&PID_FFFF
+
+[HelloWorld_Device.NT]
+CopyFiles = HelloWorld_CopyFiles
+
+[HelloWorld_CopyFiles]
+HelloWorld.sys
+
+[HelloWorld_Device.NT.Services]
+AddService = HelloWorld, %SPSVCINST_ASSOCSERVICE%, HelloWorld_Service_Inst
+
+[HelloWorld_Service_Inst]
+DisplayName    = %ServiceDescription%
+ServiceType    = 1
+StartType      = 3
+ErrorControl   = 1
+ServiceBinary  = %12%\HelloWorld.sys
+
+[DestinationDirs]
+DefaultDestDir  = 12
+HelloWorld_CopyFiles = 12
+
+[SourceDisksNames]
+1 = %DiskName%
+
+[SourceDisksFiles]
+HelloWorld.sys = 1
+
+[Strings]
+ManufacturerName   = "Build Test"
+DeviceName         = "HelloWorld Build Test Device"
+ServiceDescription = "HelloWorld Build Test Driver"
+DiskName           = "HelloWorld Driver Disk"
+SPSVCINST_ASSOCSERVICE = 0x00000002

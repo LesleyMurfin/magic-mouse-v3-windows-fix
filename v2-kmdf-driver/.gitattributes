@@ -1,0 +1,17 @@
+# Driver source files MUST use CRLF on Windows (signing depends on byte-exact content)
+# See: upstream MagicMouse2DriversWin10x64 issue #1 (hash mismatch from LF conversion)
+*.inf  text eol=crlf
+*.cat  binary
+*.sys  binary
+*.tmf  text eol=crlf
+*.h    text eol=crlf
+*.c    text eol=crlf
+*.rc   text eol=crlf
+
+# Build/sign artifacts -- never modify
+build/** binary
+*.cer  binary
+*.pfx  binary
+
+# Documentation -- let git auto-detect (Markdown is platform-agnostic)
+*.md   text

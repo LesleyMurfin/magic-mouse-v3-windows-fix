@@ -1,0 +1,112 @@
+; MagicMouseDriver.inf  (M13)
+; SPDX-License-Identifier: MIT
+;
+; Installs MagicMouseDriver.sys as a LOWER FILTER on the Apple Magic Mouse 2024
+; BTHENUM HID PDO, sitting between BTHENUM and HidBth.
+;
+; Mechanism (M13): intercepts IOCTL_BTH_SDP_SERVICE_SEARCH_ATTRIBUTE (0x410210)
+; in a completion routine and rewrites SDP attribute 0x0206 (HIDDescriptorList)
+; with Descriptor C: RID=0x02 scroll mouse + RID=0x90 vendor battery.
+; Confirmed correct by Ghidra RE of Apple's applewirelessmouse.sys (2026-04-30).
+;
+; M12 used IOCTL_INTERNAL_BTH_SUBMIT_BRB (0x410003) — wrong IOCTL. Fixed in M13.
+;
+; Hardware ID: BTHENUM\{00001124-0000-1000-8000-00805F9B34FB}_VID&0001004C_PID&0323
+; (Magic Mouse 2024, Bluetooth HID, PID 0x0323)
+;
+; Install (elevated):
+;   pnputil /add-driver MagicMouseDriver.inf /install
+;   (uninstall Apple driver first: pnputil /delete-driver applewirelessmouse.inf /uninstall)
+;
+; Uninstall:
+;   pnputil /delete-driver oem<N>.inf /uninstall /force
+;
+; Verify after re-pair:
+;   Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\MagicMouseDriver\Diag"
+;   SdpPatchSuccess > 0 confirms descriptor injection is working.
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = HIDClass
+ClassGUID   = {745A17A0-74D3-11D0-B6FE-00A0C90F57DA}
+Provider    = %ManufacturerName%
+DriverPackageDisplayName = %DeviceDesc%
+DriverPackageType = PlugAndPlay
+DriverVer   = 05/18/2026,2.0.0.0
+CatalogFile = MagicMouseDriver.cat
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 12
+
+[Manufacturer]
+%ManufacturerName% = MagicMouseDriver, NTamd64
+
+[MagicMouseDriver.NTamd64]
+; Magic Mouse 2024 (v3), VID 0x004C
+%DeviceDesc%    = MagicMouseDriver_Install, BTHENUM\{00001124-0000-1000-8000-00805F9B34FB}_VID&0001004C_PID&0323
+; Magic Mouse (v1) — PID 030D (main) and 0310 (wireless), VID 0x05AC
+%DeviceDescV1%  = MagicMouseDriver_Install, BTHENUM\{00001124-0000-1000-8000-00805F9B34FB}_VID&000105AC_PID&030D
+%DeviceDescV1B% = MagicMouseDriver_Install, BTHENUM\{00001124-0000-1000-8000-00805F9B34FB}_VID&000105AC_PID&0310
+
+; ---- Install: delegate function driver to hidbth.inf, copy our filter binary ----
+
+[MagicMouseDriver_Install.NT]
+Include  = hidbth.inf
+Needs    = HIDBTH_Inst.NT
+CopyFiles = MagicMouseDriver_Copy
+
+[MagicMouseDriver_Copy]
+MagicMouseDriver.sys
+
+; ---- HW: add ourselves as lower filter; pull in HID input section from input.inf ----
+
+[MagicMouseDriver_Install.NT.HW]
+AddReg  = MagicMouseDriver_AddReg
+Include = input.inf
+Needs   = HID_Inst.NT.HW
+
+[MagicMouseDriver_AddReg]
+; M13 as sole lower filter on the v3 BTHENUM stack.
+; Intercepts IOCTL 0x410210, rewrites SDP attribute 0x0206 with Descriptor C.
+; Do NOT install alongside applewirelessmouse — whichever is highest in the
+; filter list wins; both trying to inject causes undefined descriptor output.
+HKR,,"LowerFilters",0x00010000,"MagicMouseDriver"
+
+; Default configuration: EnableInjection=1 (can be set to 0 to passthrough for testing)
+HKLM,"SYSTEM\CurrentControlSet\Services\MagicMouseDriver\Parameters","EnableInjection",0x00010001,1
+
+; ---- Services: pull in HidBth's services + add our filter service (no SPSVCINST_ASSOCSERVICE) ----
+
+[MagicMouseDriver_Install.NT.Services]
+; Per applewirelessmouse.inf reference: do NOT specify SPSVCINST_ASSOCSERVICE on
+; filter drivers. The Include/Needs of hidbth.inf provides the function driver
+; service entry (HidBth itself).
+Include    = hidbth.inf
+Needs      = HIDBTH_Inst.NT.Services
+AddService = MagicMouseDriver, , MagicMouseDriver_Service_Inst
+
+[MagicMouseDriver_Service_Inst]
+DisplayName   = %ServiceDesc%
+ServiceType   = 1               ; SERVICE_KERNEL_DRIVER
+StartType     = 3               ; SERVICE_DEMAND_START
+ErrorControl  = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary = %12%\MagicMouseDriver.sys
+
+; ---- SourceDisks (validator requirement) ----
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+MagicMouseDriver.sys = 1,,
+
+; ---- Strings ----
+
+[Strings]
+ManufacturerName = "Magic Mouse Driver"
+DeviceDesc       = "Apple Magic Mouse 2024 (M13 SDP filter)"
+DeviceDescV1     = "Apple Magic Mouse (v1)"
+DeviceDescV1B    = "Apple Magic Mouse (v1, wireless)"
+ServiceDesc      = "Magic Mouse Driver M13 (SDP descriptor injection)"
+DiskName         = "Magic Mouse Driver Installation Disk"

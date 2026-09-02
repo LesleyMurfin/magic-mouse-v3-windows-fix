@@ -1,0 +1,70 @@
+; MagicKbDesc.inx
+; HID lower filter that patches the report descriptor returned by
+; hidbth.sys so RID 0x47 (Battery Strength) on Col02 is declared as
+; both Input and Feature. Apple keyboards over Bluetooth Classic.
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = HIDClass
+ClassGuid   = {745A17A0-74D3-11D0-B6FE-00A0C90F57DA}
+Provider    = %ProviderName%
+CatalogFile = MagicKbDesc.cat
+PnpLockDown = 1
+DriverVer   =                  ; stampinf will fill this in
+
+[DestinationDirs]
+DefaultDestDir = 13   ; %SystemRoot%\System32\Drivers
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+MagicKbDesc.sys = 1,,
+
+[Manufacturer]
+%ManufacturerName% = Standard,NTamd64.10.0...17763
+
+; Apple keyboard PIDs — full whitelist from PRD-185 (lesley-workspace).
+; A1314 dual-PID coverage is critical (0x0239 = 2009 fw rev,
+; 0x0255 = 2011 fw rev — same Apple model number).
+[Standard.NTamd64.10.0...17763]
+%DeviceDesc% = MagicKbDesc_Inst, BTHENUM\{00001124-0000-1000-8000-00805f9b34fb}_VID&000205ac_PID&022c
+%DeviceDesc% = MagicKbDesc_Inst, BTHENUM\{00001124-0000-1000-8000-00805f9b34fb}_VID&000205ac_PID&022d
+%DeviceDesc% = MagicKbDesc_Inst, BTHENUM\{00001124-0000-1000-8000-00805f9b34fb}_VID&000205ac_PID&022e
+%DeviceDesc% = MagicKbDesc_Inst, BTHENUM\{00001124-0000-1000-8000-00805f9b34fb}_VID&000205ac_PID&0239
+%DeviceDesc% = MagicKbDesc_Inst, BTHENUM\{00001124-0000-1000-8000-00805f9b34fb}_VID&000205ac_PID&0255
+%DeviceDesc% = MagicKbDesc_Inst, BTHENUM\{00001124-0000-1000-8000-00805f9b34fb}_VID&0001004c_PID&0267
+%DeviceDesc% = MagicKbDesc_Inst, BTHENUM\{00001124-0000-1000-8000-00805f9b34fb}_VID&0001004c_PID&029a
+%DeviceDesc% = MagicKbDesc_Inst, BTHENUM\{00001124-0000-1000-8000-00805f9b34fb}_VID&0001004c_PID&029c
+%DeviceDesc% = MagicKbDesc_Inst, BTHENUM\{00001124-0000-1000-8000-00805f9b34fb}_VID&0001004c_PID&029f
+%DeviceDesc% = MagicKbDesc_Inst, BTHENUM\{00001124-0000-1000-8000-00805f9b34fb}_VID&0001004c_PID&0320
+%DeviceDesc% = MagicKbDesc_Inst, BTHENUM\{00001124-0000-1000-8000-00805f9b34fb}_VID&0001004c_PID&0321
+%DeviceDesc% = MagicKbDesc_Inst, BTHENUM\{00001124-0000-1000-8000-00805f9b34fb}_VID&0001004c_PID&0322
+
+[MagicKbDesc_Inst.NT]
+Include        = input.inf, hidbth.inf
+Needs          = HIDBTH_Inst.NT
+CopyFiles      = MagicKbDesc_Files
+LowerFilters   = MagicKbDesc
+
+[MagicKbDesc_Inst.NT.Services]
+Include    = input.inf, hidbth.inf
+Needs      = HIDBTH_Inst.NT.Services
+AddService = MagicKbDesc, , MagicKbDesc_Service
+
+[MagicKbDesc_Service]
+DisplayName    = %ServiceDesc%
+ServiceType    = 1                       ; SERVICE_KERNEL_DRIVER
+StartType      = 3                       ; SERVICE_DEMAND_START
+ErrorControl   = 1                       ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %13%\MagicKbDesc.sys
+
+[MagicKbDesc_Files]
+MagicKbDesc.sys
+
+[Strings]
+ProviderName     = "Lesley Murfin"
+ManufacturerName = "Apple Inc."
+DiskName         = "Magic Keyboard Descriptor Patcher Installation Disk"
+DeviceDesc       = "Apple Wireless Keyboard - Bluetooth (Battery Patch)"
+ServiceDesc      = "Magic Keyboard Descriptor Patcher Service"

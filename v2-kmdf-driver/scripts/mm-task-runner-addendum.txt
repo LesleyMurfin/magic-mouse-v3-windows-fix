@@ -1,0 +1,42 @@
+mm-task-runner.ps1 addendum for A4 (HIDPAYLOAD) phase support
+==============================================================
+
+Add the following block to mm-task-runner.ps1 BEFORE the `else` default block
+(approximately after line 244, after the DISCOVER: case).
+
+Note: File at D:\mm3-driver\scripts\mm-test-A4-hidpayload-capture.ps1
+
+--- PATCH START ---
+    # Special phase prefix "HIDPAYLOAD:*" routes to mm-test-A4-hidpayload-capture.ps1
+    elseif ($phase -like 'HIDPAYLOAD:*') {
+        $a4Script = 'D:\mm3-driver\scripts\mm-test-A4-hidpayload-capture.ps1'
+        if (-not (Test-Path $a4Script)) {
+            Log "ERROR: mm-test-A4-hidpayload-capture.ps1 not found at $a4Script"
+            "127|$nonce" | Set-Content $ResFile -Encoding ASCII
+            exit 127
+        }
+        $extraArg = ($phase -split ':', 2)[1]
+        Log "Using $a4Script arg='$extraArg'"
+        try {
+            if ($extraArg -like 'ETL:*') {
+                $etlPath = ($extraArg -split ':', 2)[1]
+                & $a4Script -ExistingEtl $etlPath
+            } else {
+                & $a4Script
+            }
+            $rc = $LASTEXITCODE
+            if ($null -eq $rc) { $rc = 0 }
+        } catch {
+            Log "Exception running mm-test-A4-hidpayload-capture.ps1: $_"
+            $rc = 99
+        }
+    }
+--- PATCH END ---
+
+WSL dispatch examples:
+  ./scripts/mm-queue-submit.sh "HIDPAYLOAD:Fresh"
+  ./scripts/mm-queue-submit.sh "HIDPAYLOAD:ETL:C:\mm-a4-etw-20260428-220000\a4-capture.etl"
+
+The second form runs Get-WinEvent against an existing ETL file instead of starting
+a new capture session. Useful for re-analyzing large existing ETL files without
+running a new 60-second capture.
