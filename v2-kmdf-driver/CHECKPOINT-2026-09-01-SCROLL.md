@@ -10,6 +10,9 @@ User: **it's working.** Pointer, battery, **2-finger** surface scroll. 1-finger 
 | Branch | `ai/kmdf-204-unique-pkg-7748` |
 | Do not edit | `/home/lesley/orca/workspaces/magic-mouse-v3-fix/Bios-Driver` |
 
+Ship / test / attestation vs hobbyist zip: `SHIPPING.md`.
+
+
 
 ## What is loaded on the Apr 30 PC
 

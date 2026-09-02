@@ -86,4 +86,7 @@ Requires: **Secure Boot OFF**, **Memory integrity OFF**, testsigning ON. Not WHQ
 
 Still banned: System32 copy-over, oem16 delete, PATH-A, live `MagicMouseDriver.sys` in the folder, PFX in git.
 
+Swap-test, restore folder, hobbyist vs EV attestation: `SHIPPING.md`.
+
+
 Test signing / HVCI: a self-signed `.sys` still needs `bcdedit /set testsigning on` and Memory integrity **off**. That is a Windows policy step, not a copy-over.
