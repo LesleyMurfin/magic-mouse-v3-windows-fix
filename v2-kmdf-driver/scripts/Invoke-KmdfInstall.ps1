@@ -5,10 +5,10 @@ Unattended KMDF install path. Run by the MM-Kmdf-Install SYSTEM task.
 .DESCRIPTION
 Does not prompt. Writes C:\ProgramData\MagicMouseDriver\install.log and RESULT.txt.
 
-  1. Optional build (WDK/EWDK on a fixed path — Session 0 cannot see a user-mounted ISO)
+  1. Optional build (WDK/EWDK on a fixed path - Session 0 cannot see a user-mounted ISO)
   2. Enable test signing if needed
-  3. Create/reuse CN=MagicMouseFix (thumb B902C286…) code-signing cert
-  4. Catalog + sign .sys/.cat — refuse the May 20 WDKTestCert (pointer-dead)
+  3. Create/reuse CN=MagicMouseFix (thumb B902C286...) code-signing cert
+  4. Catalog + sign .sys/.cat - refuse the May 20 WDKTestCert (pointer-dead)
   5. pnputil install; LowerFilters=MagicMouseDriver sole on PID 0323 only
   6. Bluetooth bounce only if 0323 HID did not start
   7. Reboot if test signing just changed or pnputil asked for it
@@ -44,16 +44,16 @@ function Test-KmdfForbiddenSys {
     param([Parameter(Mandatory)][string]$Path)
     $name = [System.IO.Path]::GetFileName($Path)
     if ($name -like '*may20-pointerdead*' -or $name -eq $script:KmdfArtifactMay20) {
-        Write-KmdfLog -Message "Refusing labeled May 20 pointer-dead artifact $name — installer never installs this SHA." -Level 'ERROR'
+        Write-KmdfLog -Message "Refusing labeled May 20 pointer-dead artifact $name - installer never installs this SHA." -Level 'ERROR'
         return $true
     }
     if ($name -like 'applewirelessmouse*') {
-        Write-KmdfLog -Message "Refusing PATH-A package $name — never install as MagicMouseDriver.sys / 0323 product." -Level 'ERROR'
+        Write-KmdfLog -Message "Refusing PATH-A package $name - never install as MagicMouseDriver.sys / 0323 product." -Level 'ERROR'
         return $true
     }
     $sha = Get-KmdfFileSha256 -Path $Path
     if ($sha -eq $script:KmdfShaPointerDead) {
-        Write-KmdfLog -Message "Refusing May 20 WDKTestCert ($script:KmdfArtifactMay20 / $sha) — pointer-dead. Will not install it." -Level 'ERROR'
+        Write-KmdfLog -Message "Refusing May 20 WDKTestCert ($script:KmdfArtifactMay20 / $sha) - pointer-dead. Will not install it." -Level 'ERROR'
         return $true
     }
     return $false
@@ -225,7 +225,7 @@ function New-KmdfSignedPackage {
         & $inf2cat /driver:$stage /os:10_X64 2>&1 | ForEach-Object { Write-KmdfLog -Message "$_" -Level 'INFO' }
         if ($LASTEXITCODE -ne 0) { throw "inf2cat exited $LASTEXITCODE" }
     } else {
-        Write-KmdfLog -Message "inf2cat not found — New-FileCatalog fallback" -Level 'WARN'
+        Write-KmdfLog -Message "inf2cat not found - New-FileCatalog fallback" -Level 'WARN'
         New-FileCatalog -Path $stage -CatalogFilePath $cat -CatalogVersion 2.0 | Out-Null
     }
     if (-not (Test-Path -LiteralPath $cat)) { throw "Catalog was not created." }
@@ -238,14 +238,14 @@ function New-KmdfSignedPackage {
             & $signtool sign /fd sha256 /sm /sha1 $Cert.Thumbprint /tr http://timestamp.digicert.com /td sha256 $f 2>&1 |
                 ForEach-Object { Write-KmdfLog -Message "$_" -Level 'INFO' }
             if ($LASTEXITCODE -ne 0) {
-                Write-KmdfLog -Message "Timestamped sign failed on $f — retry without timestamp" -Level 'WARN'
+                Write-KmdfLog -Message "Timestamped sign failed on $f - retry without timestamp" -Level 'WARN'
                 & $signtool sign /fd sha256 /sm /sha1 $Cert.Thumbprint $f 2>&1 |
                     ForEach-Object { Write-KmdfLog -Message "$_" -Level 'INFO' }
                 if ($LASTEXITCODE -ne 0) { throw "signtool failed on $f" }
             }
         }
     } else {
-        Write-KmdfLog -Message "signtool not found — Set-AuthenticodeSignature" -Level 'WARN'
+        Write-KmdfLog -Message "signtool not found - Set-AuthenticodeSignature" -Level 'WARN'
         foreach ($f in @($sysDst, $cat)) {
             $sig = Set-AuthenticodeSignature -FilePath $f -Certificate $Cert
             Write-KmdfLog -Message "$f Authenticode=$($sig.Status)" -Level 'INFO'
@@ -277,16 +277,16 @@ function Install-KmdfPnputil {
     $rc = $LASTEXITCODE
     if ($rc -eq 0) { return $false }
     if ($rc -eq 3010) {
-        Write-KmdfLog -Message "pnputil 3010 — reboot required" -Level 'WARN'
+        Write-KmdfLog -Message "pnputil 3010 - reboot required" -Level 'WARN'
         return $true
     }
     throw "pnputil /add-driver exited $rc"
 }
 
-function Bind-Kmdf0323Only {
+function Set-Kmdf0323Binding {
     $mice = @(Get-Kmdf0323Device)
     if ($mice.Count -eq 0) {
-        Write-KmdfLog -Message "PID 0323 not enumerated yet — package is staged. Pair the mouse; post-boot verify will bind." -Level 'WARN'
+        Write-KmdfLog -Message "PID 0323 not enumerated yet - package is staged. Pair the mouse; post-boot verify will bind." -Level 'WARN'
         return
     }
     foreach ($m in $mice) {
@@ -344,7 +344,7 @@ try {
     }
 
     if (Test-KmdfHvci) {
-        Write-KmdfLog -Message "HVCI / Memory Integrity is ON. Windows 11 will refuse this self-signed .sys. Turn it off: Settings → Privacy & security → Windows Security → Device security → Core isolation → Memory integrity OFF, then reboot and click Install-KMDF.cmd again." -Level 'ERROR'
+        Write-KmdfLog -Message "HVCI / Memory Integrity is ON. Windows 11 will refuse this self-signed .sys. Turn it off: Settings -> Privacy & security -> Windows Security -> Device security -> Core isolation -> Memory integrity OFF, then reboot and click Install-KMDF.cmd again." -Level 'ERROR'
         Write-KmdfResult -Status 'FAIL' -Detail 'HVCI / Memory Integrity is enabled. Disable it, reboot, run Install-KMDF.cmd again.'
         exit 2
     }
@@ -370,18 +370,18 @@ try {
     Install-KmdfTrust -Cert $cert
     $stage = New-KmdfSignedPackage -SysPath $sys -Cert $cert
     if (Install-KmdfPnputil -StageDir $stage) { $needReboot = $true }
-    Bind-Kmdf0323Only
+    Set-Kmdf0323Binding
 
     $hidStarted = $true
     foreach ($m in @(Get-Kmdf0323Device)) {
         if ($m.Status -notmatch 'Started|OK') { $hidStarted = $false }
     }
     if (-not $hidStarted) {
-        Write-KmdfLog -Message "0323 HID not started — Bluetooth bounce" -Level 'WARN'
+        Write-KmdfLog -Message "0323 HID not started - Bluetooth bounce" -Level 'WARN'
         Invoke-KmdfBluetoothBounce
-        Bind-Kmdf0323Only
+        Set-Kmdf0323Binding
     } else {
-        Write-KmdfLog -Message "0323 HID started — skipping Bluetooth bounce" -Level 'OK'
+        Write-KmdfLog -Message "0323 HID started - skipping Bluetooth bounce" -Level 'OK'
     }
 
     Save-KmdfState -State @{
@@ -401,7 +401,7 @@ try {
         Write-KmdfLog -Message "Install verified without reboot." -Level 'OK'
         exit 0
     }
-    Write-KmdfLog -Message "Immediate verify failed — scheduling reboot so the stack can rebuild." -Level 'WARN'
+    Write-KmdfLog -Message "Immediate verify failed - scheduling reboot so the stack can rebuild." -Level 'WARN'
     Write-KmdfResult -Status 'PENDING' -Detail 'Install finished; verify failed before reboot. Rebooting for MM-Kmdf-PostBoot.'
     & shutdown.exe /r /t 15 /c "MagicMouseDriver KMDF: reboot to rebuild 0323 stack"
     exit 0

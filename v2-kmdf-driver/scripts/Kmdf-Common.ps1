@@ -14,11 +14,11 @@ $script:KmdfCertSubject  = 'CN=MagicMouseFix'
 $script:KmdfCertThumb    = 'B902C2864315E2DE359450024768CE7D01715C38'
 # Apr 30 live binary: pointer OK, scroll dead. Keep as fallback, do not treat as final product.
 $script:KmdfShaPointerOk = 'AD5D244B176D650961594EDED153C46F9A52004C424DABFD86E50844E447546B'
-# May 20 2.0.2.0 WDKTestCert — HID started, pointer dead. Never install.
+# May 20 2.0.2.0 WDKTestCert - HID started, pointer dead. Never install.
 $script:KmdfShaPointerDead = '559B136AEB869D1B85EE21583BB7BFD72782A31EE476A2622014D87CE6762F30'
 $script:KmdfPidPattern   = 'BTHENUM\\\{00001124.*PID&0323'
 $script:KmdfServiceName  = 'MagicMouseDriver'
-# Windows / INF / service name — do not change. Package artifacts use the labels below.
+# Windows / INF / service name - do not change. Package artifacts use the labels below.
 $script:KmdfInstallSysName = 'MagicMouseDriver.sys'
 $script:KmdfArtifactScroll = 'MagicMouseDriver-kmdf-2.0.4-scroll.sys'
 $script:KmdfArtifactApr30  = 'MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys'

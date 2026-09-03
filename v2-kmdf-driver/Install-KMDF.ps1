@@ -5,7 +5,7 @@ One click for a non-technical user: register a SYSTEM task and install MagicMous
 .DESCRIPTION
 Double-click Install-KMDF.cmd. The first run asks for Administrator once so it can
 register MM-Kmdf-Install and MM-Kmdf-PostBoot as SYSTEM. After that, this script
-only starts the task — no UAC.
+only starts the task - no UAC.
 
 The SYSTEM task builds if needed, self-signs, installs, binds 0323 only
 (LowerFilters=MagicMouseDriver, no applewirelessmouse, no 030D), bounces
@@ -92,7 +92,7 @@ function Register-KmdfSystemTasks {
         -Action $installAction `
         -Principal $principal `
         -Settings $installSettings `
-        -Description 'MagicMouseDriver KMDF one-click install (PID 0323 only). Trigger with schtasks /run — no UAC after first register.' `
+        -Description 'MagicMouseDriver KMDF one-click install (PID 0323 only). Trigger with schtasks /run - no UAC after first register.' `
         -Force | Out-Null
 
     Register-ScheduledTask -TaskName $script:KmdfTaskPostBoot `
@@ -145,7 +145,7 @@ function Uninstall-KmdfPackage {
     Write-Host "Uninstall finished. Reboot if the mouse stack looks stuck." -ForegroundColor Green
 }
 
-# --- later clicks: task already there → no UAC ---
+# --- later clicks: task already there -> no UAC ---
 if (-not $Uninstall) {
     $existing = Get-ScheduledTask -TaskName $script:KmdfTaskInstall -ErrorAction SilentlyContinue
     if ($existing) {

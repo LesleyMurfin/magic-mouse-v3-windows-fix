@@ -60,7 +60,7 @@ if (-not $DriverSrc) {
 }
 $CertPath     = Join-Path $ScriptRoot "MagicMouseFix.cer"
 $BackupDir    = "C:\ProgramData\MagicMousePatch\backup"
-# Windows service / ImagePath name — do not change.
+# Windows service / ImagePath name - do not change.
 $TargetDriver = "C:\Windows\System32\drivers\applewirelessmouse.sys"
 $ServiceName  = "applewirelessmouse"
 

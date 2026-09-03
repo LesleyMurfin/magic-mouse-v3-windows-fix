@@ -36,7 +36,7 @@ try {
     }
 
     if (-not $stackOk -or -not $svc -or $svc.Status -ne 'Running') {
-        Write-KmdfLog -Message "Stack/service not ready — Bluetooth bounce + rebind" -Level 'WARN' -LogPath $script:KmdfVerifyLog
+        Write-KmdfLog -Message "Stack/service not ready - Bluetooth bounce + rebind" -Level 'WARN' -LogPath $script:KmdfVerifyLog
         Invoke-KmdfBluetoothBounce
         Start-Sleep -Seconds 8
         $mice = @(Get-Kmdf0323Device)
