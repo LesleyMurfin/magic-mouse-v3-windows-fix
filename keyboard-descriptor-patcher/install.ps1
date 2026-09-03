@@ -1,4 +1,4 @@
-# install.ps1 — pnputil /add-driver MagicKbDesc.inf /install /force.
+# install.ps1 - pnputil /add-driver MagicKbDesc.inf /install /force.
 # Reuses the M12 SYSTEM scheduled task runner so the install runs with
 # elevated PnP rights. Self-elevates if not already admin.
 

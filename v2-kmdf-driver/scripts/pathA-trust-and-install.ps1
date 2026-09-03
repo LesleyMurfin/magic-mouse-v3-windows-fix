@@ -1,14 +1,17 @@
-# PATH-A v3 trust-and-install — runs as SYSTEM via task runner
+# PATH-A v3 trust-and-install - runs as SYSTEM via task runner
 # Adds M14 cert to LocalMachine\Root + invokes pnputil /add-driver /install /force
 # Outputs to log file passed as $LogPath argument.
 
+# $LogPath is read by the Log helper below. PSReviewUnusedParameter does not follow
+# variable usage into nested function definitions, so it needs to be told explicitly.
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'LogPath',
+    Justification = 'Consumed by the Log function defined further down this script.')]
 param(
     [Parameter(Mandatory=$true)][string]$LogPath
 )
 
 $ErrorActionPreference = 'Continue'
 $thumb = '16940C0F937D569363560D5FEC5CD8FA6D6D9BCE'
-$cerPath = 'C:\mm-dev-queue\MagicMouseFix.cer'
 $infPath = 'C:\mm-dev-queue\AppleWirelessMouse.inf'
 
 function Log([string]$msg) {
@@ -70,13 +73,14 @@ if (-not (Test-Path $infPath)) {
 }
 Log "PASS: INF found at $infPath"
 
-# Step 5: pnputil /add-driver /install /force — with timeout safety
+# Step 5: pnputil /add-driver /install /force - with timeout safety
 Log "Running pnputil /add-driver $infPath /install /force..."
+# $using: rather than -ArgumentList: Start-Job param() blocks confuse
+# PSUseUsingScopeModifierInNewRunspaces, and $using: is the idiomatic form.
 $pnpJob = Start-Job -ScriptBlock {
-    param($inf)
-    $output = & pnputil /add-driver $inf /install /force 2>&1 | Out-String
+    $output = & pnputil /add-driver $using:infPath /install /force 2>&1 | Out-String
     return @{ rc = $LASTEXITCODE; output = $output }
-} -ArgumentList $infPath
+}
 
 # Wait up to 90 seconds (pnputil can be slow)
 $completed = Wait-Job $pnpJob -Timeout 90
@@ -96,7 +100,7 @@ if ($completed) {
         exit 5
     }
 } else {
-    Log "FAIL: pnputil hung beyond 90s timeout — killing job"
+    Log "FAIL: pnputil hung beyond 90s timeout - killing job"
     Stop-Job $pnpJob
     Remove-Job $pnpJob -Force
     exit 6
@@ -114,7 +118,7 @@ if ($ourEntry) {
     }
     Log "PASS: PATH-A v6.3.0.0 driver registered in DriverStore"
 } else {
-    Log "WARN: PATH-A v6.3.0.0 not visible in pnputil /enum-drivers — install may have failed silently"
+    Log "WARN: PATH-A v6.3.0.0 not visible in pnputil /enum-drivers - install may have failed silently"
 }
 
 Log "=== PATH-A trust-and-install complete ==="

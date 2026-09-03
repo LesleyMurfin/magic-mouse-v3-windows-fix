@@ -48,7 +48,7 @@ Write-Log "startup-repair: begin (WDF filter mode)"
 # PATH-A v5 SRE-Windows fix (S2): only v3 (PID 0323) has multi-TLC enumeration.
 # v1 (030D), v2 (0269), and 0310 use a single TLC and don't have COL02/COL03.
 # Running the LowerFilter dance on those PIDs is what triggered BSOD #2 on
-# 2026-05-08 (failed v1 repair at 16:01:57 → 0xD1 NULL deref at 16:15:42).
+# 2026-05-08 (failed v1 repair at 16:01:57 -> 0xD1 NULL deref at 16:15:42).
 # Restrict the repair scope to v3 only.
 $knownPids = @("0323")
 $paramsTemplate = "HKLM:\SYSTEM\CurrentControlSet\Services\MagicMouseFixV3\Parameters"
@@ -57,7 +57,7 @@ $anyRepaired = $false
 foreach ($mmPid in $knownPids) {
     if ($mmPid -ne "0323") {
         # Defensive guard: if the array is ever expanded, only v3 must run the repair.
-        Write-Log "PID 0x$($mmPid.ToUpper()): skip — only v3 (0323) supports multi-TLC repair (SRE-Windows v5 S2)"
+        Write-Log "PID 0x$($mmPid.ToUpper()): skip - only v3 (0323) supports multi-TLC repair (SRE-Windows v5 S2)"
         continue
     }
     # Find BTHENUM parent device (HID service UUID {00001124} only)
@@ -98,7 +98,7 @@ foreach ($mmPid in $knownPids) {
     }
 
     # Step 1: Verify our patched binary is present (PATH-A v5 renamed from
-    # applewirelessmouse.sys to MagicMouseFixV3.sys — see SRE-Windows v5 review S1).
+    # applewirelessmouse.sys to MagicMouseFixV3.sys - see SRE-Windows v5 review S1).
     $wdfBin = "C:\Windows\System32\drivers\MagicMouseFixV3.sys"
     $wdfItem = Get-Item $wdfBin -ErrorAction SilentlyContinue
     if (-not $wdfItem) {

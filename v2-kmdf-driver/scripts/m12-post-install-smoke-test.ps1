@@ -13,9 +13,9 @@ Validates:
   4. Tray app's view: log in last 60s shows battery percentage
 
 Exit codes:
-  0 — all checks passed (driver functional)
-  2 — driver installed but at least one check failed (degraded)
-  3 — driver not installed or not loaded
+  0 - all checks passed (driver functional)
+  2 - driver installed but at least one check failed (degraded)
+  3 - driver not installed or not loaded
 
 Usage (elevated optional but recommended for service query):
     powershell -NoProfile -ExecutionPolicy Bypass -File m12-post-install-smoke-test.ps1
@@ -42,7 +42,7 @@ try {
         Add-Result 'service' 'FAIL' "MagicMouseDriver service exists but state=$($svc.Status)"
     }
 } catch {
-    Add-Result 'service' 'FAIL' "MagicMouseDriver service not found — driver did not install"
+    Add-Result 'service' 'FAIL' "MagicMouseDriver service not found - driver did not install"
 }
 
 # 2. Device + driver binding
@@ -74,7 +74,7 @@ try {
 }
 
 # 3. HID descriptor: open device, try HidD_GetInputReport(0x90)
-# We use the ManagedHidWrapper P/Invoke approach — minimal C# inline.
+# We use the ManagedHidWrapper P/Invoke approach - minimal C# inline.
 $hidProbeCs = @"
 using System;
 using System.Runtime.InteropServices;
@@ -120,14 +120,14 @@ try {
     } else {
         $any = $false
         foreach ($p in $hidPaths) {
-            # Resolve to \\?\ device interface path — probe HKLM for the interface GUID symbolic link
+            # Resolve to \\?\ device interface path - probe HKLM for the interface GUID symbolic link
             $devPath = $null
             try {
                 $iface = Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard `
                             -ClassName Win32_PnPDeviceInterface -ErrorAction SilentlyContinue |
                             Where-Object { $_.DeviceID -eq $p.DeviceID } | Select-Object -First 1
                 if ($iface) { $devPath = $iface.SymbolicLink }
-            } catch {}
+            } catch { Write-Verbose "Device interface probe failed: $_ - falling back to derived path" }
             if (-not $devPath) {
                 # Fallback: derive from the registry mountpoint
                 $devPath = "\\?\HID#" + ($p.DeviceID -replace '\\', '#') + "#{4d1e55b2-f16f-11cf-88cb-001111000030}"
@@ -163,7 +163,6 @@ try {
         if (-not $latest) {
             Add-Result 'tray-log' 'SKIP' 'No tray log files found'
         } else {
-            $cutoff = (Get-Date).AddSeconds(-60)
             $recent = Get-Content $latest.FullName -Tail 200 | Where-Object {
                 $_ -match '\d{2}:\d{2}:\d{2}'
             }
@@ -184,8 +183,6 @@ Write-Host ""
 Write-Host "=== M12 Post-Install Smoke Test ==="
 $results | Format-Table Name,Status,Detail -AutoSize -Wrap
 
-$failed = ($results | Where-Object Status -eq 'FAIL').Count
-$traceOnly = ($results | Where-Object Status -in 'TRACE') | Measure-Object | Select-Object -ExpandProperty Count
 $realResults = $results | Where-Object Status -ne 'TRACE'
 $realFailed = ($realResults | Where-Object Status -eq 'FAIL').Count
 
@@ -195,9 +192,9 @@ if ($realFailed -eq 0) {
 } else {
     $serviceFail = ($results | Where-Object { $_.Name -eq 'service' -and $_.Status -eq 'FAIL' }).Count
     if ($serviceFail) {
-        Write-Host "RESULT: NOT INSTALLED — driver service missing"
+        Write-Host "RESULT: NOT INSTALLED - driver service missing"
         exit 3
     }
-    Write-Host "RESULT: DEGRADED — $realFailed check(s) failed"
+    Write-Host "RESULT: DEGRADED - $realFailed check(s) failed"
     exit 2
 }

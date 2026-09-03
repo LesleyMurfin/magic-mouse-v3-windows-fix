@@ -1,4 +1,4 @@
-# install-driver.ps1 — Install a pre-signed driver package via pnputil.
+# install-driver.ps1 - Install a pre-signed driver package via pnputil.
 # Standalone: powershell -ExecutionPolicy Bypass -File install-driver.ps1 -InfPath <path>
 # Via queue: INSTALL-DRIVER|<nonce>|<inf-path>
 # Pre-requisite: driver package must already be signed (use sign-driver.ps1 first).
@@ -20,7 +20,7 @@ $rc = $LASTEXITCODE
 if ($rc -eq 0) {
     Write-Host "Driver installed successfully."
 } elseif ($rc -eq 3010) {
-    Write-Host "Driver installed — REBOOT REQUIRED to activate."
+    Write-Host "Driver installed - REBOOT REQUIRED to activate."
 } else {
     Write-Error "pnputil failed ($rc)"
 }

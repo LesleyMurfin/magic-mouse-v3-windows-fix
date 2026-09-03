@@ -1,4 +1,4 @@
-# build-driver.ps1 — Build the KMDF Magic Mouse driver (M13).
+# build-driver.ps1 - Build the KMDF Magic Mouse driver (M13).
 # Standalone: powershell -ExecutionPolicy Bypass -File build-driver.ps1
 # Via queue: BUILD|<nonce>|Release|x64
 #
@@ -29,7 +29,7 @@ if (-not $ewdkSetup) {
 }
 
 if (-not $SlnPath) {
-    # Default to WSL2 path — requires WSL2 to be running
+    # Default to WSL2 path - requires WSL2 to be running
     $SlnPath = '\\wsl.localhost\Ubuntu\home\lesley\projects\magic-mouse-tray\driver\MagicMouseDriver.sln'
 }
 

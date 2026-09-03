@@ -147,7 +147,6 @@ $slnDir     = Split-Path -Parent $SolutionPath
 $sdvDir     = Join-Path $slnDir 'sdv'
 $dvlXml     = Join-Path $sdvDir 'sdv.dvl.xml'
 $sdvLog     = Join-Path $sdvDir 'SDV.log'
-$sdvResults = Join-Path $sdvDir 'sdv-results.xml'
 
 Write-Log "Looking for SDV report at: $sdvDir"
 

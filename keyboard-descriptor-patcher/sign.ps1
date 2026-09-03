@@ -1,4 +1,4 @@
-# sign.ps1 — sign MagicKbDesc.sys + .cat with the M12 CN=MagicMouseFix cert.
+# sign.ps1 - sign MagicKbDesc.sys + .cat with the M12 CN=MagicMouseFix cert.
 # Reuses the M12 trust path (cert already in TrustedPublisher).
 
 $ErrorActionPreference = 'Stop'
@@ -12,7 +12,7 @@ foreach ($f in @($sysPath, $catPath)) {
     }
 }
 
-# Reuse M12 thumbprint (CN=MagicMouseFix) — see sign-and-install.ps1.
+# Reuse M12 thumbprint (CN=MagicMouseFix) - see sign-and-install.ps1.
 $thumb = 'B902C2864315E2DE359450024768CE7D01715C38'
 $timestampUrl = 'http://timestamp.digicert.com'
 $signtool = 'F:\Program Files\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe'

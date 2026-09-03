@@ -23,8 +23,19 @@ function Check {
     if (-not $Ok) { $script:pass = $false }
 }
 
+# MD5 is used here as a non-cryptographic identity check: it catches a stale or
+# replaced staging file, and is not relied on as a security control. The baseline
+# below was recorded in MD5 when this MagicKbDesc.sys was built, so the comparison
+# has to stay MD5 to remain meaningful.
+function Get-StagedSysFingerprint {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingBrokenHashAlgorithms', '',
+        Justification = 'Non-cryptographic build-identity check against a recorded MD5 baseline.')]
+    param([Parameter(Mandatory=$true)][string]$Path)
+    return (Get-FileHash -Algorithm MD5 -Path $Path).Hash.ToLower()
+}
+
 Write-Host "=================================================================" -ForegroundColor Cyan
-Write-Host "  Pre-Reboot Checkpoint — MagicKbDesc state" -ForegroundColor Cyan
+Write-Host "  Pre-Reboot Checkpoint - MagicKbDesc state" -ForegroundColor Cyan
 Write-Host "=================================================================" -ForegroundColor Cyan
 
 # Staging dir
@@ -36,7 +47,7 @@ Check -Name "Staging SYS present" -Ok (Test-Path $stageSys) -Detail $stageSys
 Check -Name "Staging CAT present" -Ok (Test-Path $stageCat) -Detail $stageCat
 
 if (Test-Path $stageSys) {
-    $stageMd5 = (Get-FileHash -Algorithm MD5 $stageSys).Hash.ToLower()
+    $stageMd5 = Get-StagedSysFingerprint -Path $stageSys
     Check -Name "Staging SYS MD5 = e11d8b97660d6b9324e82225c37201c0" `
           -Ok ($stageMd5 -eq 'e11d8b97660d6b9324e82225c37201c0') `
           -Detail "actual: $stageMd5"
@@ -58,7 +69,7 @@ $scOut = sc.exe query MagicKbDesc 2>&1 | Out-String
 if ($scOut -match 'marked for deletion') {
     Check -Name "Service state" -Ok $false -Detail "marked for deletion (REBOOT REQUIRED)"
 } elseif ($scOut -match 'does not exist') {
-    Check -Name "Service state" -Ok $true -Detail "not registered (clean — INSTALL-DRIVER will create)"
+    Check -Name "Service state" -Ok $true -Detail "not registered (clean - INSTALL-DRIVER will create)"
 } else {
     Check -Name "Service state" -Ok $true -Detail ($scOut -split "`n" | Select-String 'STATE' | ForEach-Object { $_.Line.Trim() })
 }
@@ -81,11 +92,11 @@ Check -Name "Worktree branch HEAD" -Ok ($gitState -match 'fix\(kbd-driver\): pee
 Write-Host ""
 Write-Host "=================================================================" -ForegroundColor Cyan
 if ($pass) {
-    Write-Host "  ALL CHECKS PASSED — safe to reboot now." -ForegroundColor Green
+    Write-Host "  ALL CHECKS PASSED - safe to reboot now." -ForegroundColor Green
     Write-Host "  After reboot run:" -ForegroundColor White
     Write-Host "    powershell.exe -ExecutionPolicy Bypass -File post-reboot-validate.ps1" -ForegroundColor Yellow
 } else {
-    Write-Host "  ONE OR MORE CHECKS FAILED — fix before reboot." -ForegroundColor Red
+    Write-Host "  ONE OR MORE CHECKS FAILED - fix before reboot." -ForegroundColor Red
 }
 Write-Host "=================================================================" -ForegroundColor Cyan
 exit $(if ($pass) { 0 } else { 1 })

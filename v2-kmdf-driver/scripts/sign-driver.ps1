@@ -1,9 +1,9 @@
-# sign-driver.ps1 — Sign a .sys + .cat pair with a PFX cert.
+# sign-driver.ps1 - Sign a .sys + .cat pair with a PFX cert.
 # Standalone: powershell -ExecutionPolicy Bypass -File sign-driver.ps1 -SysPath ... -CatPath ... -PfxPath ...
 # Via queue: SIGN|<nonce>|<sys-path>|<cat-path>|<pfx-path>|<pfx-pass-env-var>
 #
 # Empirically validated signtool path: F:\Program Files\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe
-# (F:\ is the EWDK ISO drive on this dev machine — confirmed in mm-task-runner.ps1)
+# (F:\ is the EWDK ISO drive on this dev machine - confirmed in mm-task-runner.ps1)
 # Fallback: C:\Program Files (x86)\Windows Kits\10\ for machines with WDK/SDK on C:\
 param(
     [Parameter(Mandatory)][string]$SysPath,

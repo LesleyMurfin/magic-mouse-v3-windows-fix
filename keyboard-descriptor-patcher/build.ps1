@@ -1,8 +1,8 @@
-# build.ps1 — compile MagicKbDesc.sys via the M12 EWDK pipeline.
+# build.ps1 - compile MagicKbDesc.sys via the M12 EWDK pipeline.
 #
 # Uses the existing mm-task-runner.ps1 BUILD route which handles
 # EWDK ISO mount detection and msbuild invocation. SYSTEM-priv
-# scheduled task — driver builds need privileged access for
+# scheduled task - driver builds need privileged access for
 # certain WDK steps.
 #
 # Run from project root:
@@ -10,11 +10,10 @@
 
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $slnPath  = Join-Path $PSScriptRoot 'MagicKbDesc.sln'
 
 if (-not (Test-Path $slnPath)) {
-    throw "MagicKbDesc.sln not found at $slnPath — has the .vcxproj been authored yet?"
+    throw "MagicKbDesc.sln not found at $slnPath - has the .vcxproj been authored yet?"
 }
 
 # Generate nonce for the queue protocol.

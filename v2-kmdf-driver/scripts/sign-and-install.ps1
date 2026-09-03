@@ -7,7 +7,6 @@
 #   sign-and-install.ps1 -DriverDir 'C:\mm-dev-queue\PATH-A-v5' `
 #                        -InfName  'MagicMouseFixV3.inf' `
 #                        -CatName  'MagicMouseFixV3.cat' `
-#                        -ServiceName 'MagicMouseFixV3' `
 #                        -ExistingCertThumbprint '16940C0F937D569363560D5FEC5CD8FA6D6D9BCE'
 #
 # When -ExistingCertThumbprint is provided, the existing cert in LocalMachine\My is
@@ -17,7 +16,6 @@ param(
     [string]$DriverDir              = (Join-Path $PSScriptRoot "driver"),
     [string]$InfName                = 'AppleWirelessMouse.inf',
     [string]$CatName                = 'applewirelessmouse.cat',
-    [string]$ServiceName            = 'applewirelessmouse',
     [string]$ExistingCertThumbprint = ''   # if empty, create new self-signed cert (v3 default behavior)
 )
 

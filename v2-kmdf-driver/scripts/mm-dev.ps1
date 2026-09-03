@@ -232,7 +232,7 @@ function Build-Driver {
     }
 
     Write-Log "Running EWDK msbuild (Rebuild) via temp batch file..."
-    # Write a temp .bat to avoid PowerShell→cmd double-quote mangling.
+    # Write a temp .bat to avoid PowerShell->cmd double-quote mangling.
     # cmd /c with embedded quotes produces '""' is not recognized errors.
     $tempBat = [System.IO.Path]::GetTempFileName() -replace '\.tmp$','.bat'
     @"
@@ -272,7 +272,7 @@ msbuild "$VcxProj" /p:Configuration=Debug /p:Platform=x64 /t:Rebuild /nologo /v:
 # ---------------------------------------------------------------------------
 # SIGN
 # ---------------------------------------------------------------------------
-function Sign-Driver {
+function Invoke-DriverSigning {
     Write-Section "SIGN - $(Get-Date -Format 'HH:mm:ss')"
 
     if (-not (Test-Path $SignToolExe)) {
@@ -354,7 +354,7 @@ function Uninstall-DriverDirect {
                 pnputil /restart-device $devId 2>&1 | ForEach-Object { Add-Content -Path $SessionLog -Value $_ -Encoding UTF8 }
                 Start-Sleep -Seconds 2
             }
-        } catch { }
+        } catch { Write-Log "LowerFilters cleanup skipped: $_" 'WARN' }
     }
 
     Write-Log "Stopping service..."
@@ -421,7 +421,7 @@ function Install-Driver {
     }
     Write-Log "Device: $devId"
 
-    # Set LowerFilters — MagicMouseDriver(0) below applewirelessmouse(1).
+    # Set LowerFilters - MagicMouseDriver(0) below applewirelessmouse(1).
     # Our driver at index 0 patches SDP completion first; applewirelessmouse sees our
     # combined descriptor and does not re-patch. Swapping (test ee18af4) confirmed
     # applewirelessmouse DOES gesture processing but conflicts with our combined descriptor
@@ -487,7 +487,7 @@ function Install-Driver {
 # ---------------------------------------------------------------------------
 # VERIFY - post-install health check
 # ---------------------------------------------------------------------------
-function Verify-Install {
+function Test-Install {
     Write-Section "VERIFY - $(Get-Date -Format 'HH:mm:ss')"
     $allOk = $true
 
@@ -570,7 +570,7 @@ function Verify-Install {
 # ---------------------------------------------------------------------------
 # ROLLBACK - recovery path: remove our filter entirely
 # ---------------------------------------------------------------------------
-function Rollback-Driver {
+function Restore-Driver {
     Write-Section "ROLLBACK - $(Get-Date -Format 'HH:mm:ss')"
     # Use direct uninstall (no pnputil /delete-driver which hangs in SYSTEM context).
     Uninstall-DriverDirect
@@ -739,21 +739,21 @@ Write-Log "=== mm-dev.ps1 Phase=$Phase ===" 'HEAD'
 $exitCode = 0
 switch ($Phase) {
     'State'    { Get-DriverState }
-    'Build'    { if (-not (Build-Driver))   { $exitCode = 1 } }
-    'Sign'     { if (-not (Sign-Driver))    { $exitCode = 1 } }
-    'Install'  { if (-not (Install-Driver)) { $exitCode = 1 } }
-    'Verify'   { if (-not (Verify-Install)) { $exitCode = 1 } }
-    'Rollback' { if (-not (Rollback-Driver)){ $exitCode = 1 } }
+    'Build'    { if (-not (Build-Driver))         { $exitCode = 1 } }
+    'Sign'     { if (-not (Invoke-DriverSigning)) { $exitCode = 1 } }
+    'Install'  { if (-not (Install-Driver))       { $exitCode = 1 } }
+    'Verify'   { if (-not (Test-Install))         { $exitCode = 1 } }
+    'Rollback' { if (-not (Restore-Driver))       { $exitCode = 1 } }
     'Restore'  { if (-not (Restore-LowerFilters)) { $exitCode = 1 } }
-    'Capture'  { if (-not (Read-Rid27Captures)) { $exitCode = 1 } }
+    'Capture'  { if (-not (Read-Rid27Captures))   { $exitCode = 1 } }
     'Log'      { Show-SessionLog }
     'Debug'    { Show-DebugLog }
     'Full' {
         Get-DriverState
         $ok = Build-Driver
-        if ($ok) { $ok = Sign-Driver }
+        if ($ok) { $ok = Invoke-DriverSigning }
         if ($ok) { $ok = Install-Driver }
-        if ($ok) { $ok = Verify-Install }
+        if ($ok) { $ok = Test-Install }
         Get-DriverState
         if ($ok) {
             Read-Rid27Captures | Out-Null

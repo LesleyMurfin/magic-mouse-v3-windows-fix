@@ -24,9 +24,9 @@ function Test-IsAdmin {
 
 if (-not (Test-IsAdmin)) {
     Write-Host "Not admin - re-launching elevated (accept UAC)..." -ForegroundColor Yellow
-    $args = @('-NoProfile','-ExecutionPolicy','Bypass','-File',"$PSCommandPath")
-    if ($Uninstall) { $args += '-Uninstall' }
-    $proc = Start-Process powershell.exe -ArgumentList $args -Verb RunAs -Wait -PassThru
+    $psArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File',"$PSCommandPath")
+    if ($Uninstall) { $psArgs += '-Uninstall' }
+    $proc = Start-Process powershell.exe -ArgumentList $psArgs -Verb RunAs -Wait -PassThru
     exit $proc.ExitCode
 }
 

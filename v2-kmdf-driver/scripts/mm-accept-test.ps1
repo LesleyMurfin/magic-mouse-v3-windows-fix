@@ -478,7 +478,7 @@ if (-not (Test-Path $DebugLog)) {
                     'yyyy-MM-dd HH:mm:ss.fff', $null)
                 $timestampParsed = $true
                 $withinWindow    = ($entryTs -ge $cutoff)
-            } catch { }
+            } catch { Write-Verbose "Unparseable DebugView timestamp '$timeStr': $_" }
         }
 
         if ($timestampParsed) {

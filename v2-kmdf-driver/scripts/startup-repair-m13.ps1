@@ -27,7 +27,6 @@ Write-Log "startup-repair-m13: begin"
 
 $targetPids  = @("0323","030D","0310")
 $svcName     = "MagicMouseDriver"
-$anyReboot   = $false
 $anyRepaired = $false
 
 foreach ($pid4 in $targetPids) {

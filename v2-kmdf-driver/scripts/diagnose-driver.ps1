@@ -30,7 +30,7 @@ function Write-Section {
 Write-Log "Apple Wireless Mouse Driver Diagnostic"
 Write-Log "Date: $(Get-Date)"
 
-# ── 1. Driver .sys file ──────────────────────────────────────
+# -- 1. Driver .sys file --------------------------------------
 Write-Section "1. Driver .sys file"
 if (Test-Path $sysFile) {
     $file = Get-Item $sysFile
@@ -46,7 +46,7 @@ if (Test-Path $sysFile) {
     Write-Log "NOT FOUND: $sysFile  <-- driver binary is missing"
 }
 
-# ── 2. Service config ────────────────────────────────────────
+# -- 2. Service config ----------------------------------------
 Write-Section "2. Service config (sc qc)"
 $scOutput = & sc.exe qc $driverName 2>&1
 $scOutput | ForEach-Object { Write-Log "  $_" }
@@ -55,8 +55,8 @@ Write-Section "2b. Service state (sc query)"
 $scQuery = & sc.exe query $driverName 2>&1
 $scQuery | ForEach-Object { Write-Log "  $_" }
 
-# ── 3. Autorunsc (Unicode-safe via Select-String) ────────────
-Write-Section "3. Autoruns — registered driver entries"
+# -- 3. Autorunsc (Unicode-safe via Select-String) ------------
+Write-Section "3. Autoruns - registered driver entries"
 $autorunsPath = @(
     "$env:USERPROFILE\Downloads\autorunsc.exe",
     "C:\Tools\autorunsc.exe",
@@ -80,8 +80,8 @@ if ($autorunsPath) {
     Write-Log "Download from: https://learn.microsoft.com/sysinternals/downloads/autoruns"
 }
 
-# ── 4. Sigcheck (if available) ───────────────────────────────
-Write-Section "4. Sigcheck — deep signature verification"
+# -- 4. Sigcheck (if available) -------------------------------
+Write-Section "4. Sigcheck - deep signature verification"
 $sigcheckPath = @(
     "$env:USERPROFILE\Downloads\sigcheck.exe",
     "C:\Tools\sigcheck.exe",
@@ -95,11 +95,11 @@ if ($sigcheckPath -and (Test-Path $sysFile)) {
 } elseif (-not $sigcheckPath) {
     Write-Log "sigcheck.exe not found. Skipping."
 } else {
-    Write-Log "Driver .sys not present — skipping sigcheck."
+    Write-Log "Driver .sys not present - skipping sigcheck."
 }
 
-# ── 5. pnputil device info ───────────────────────────────────
-Write-Section "5. PnP devices — Apple HID/BT entries"
+# -- 5. pnputil device info -----------------------------------
+Write-Section "5. PnP devices - Apple HID/BT entries"
 & pnputil /enum-devices 2>&1 |
     Select-String -Pattern "apple|00001124-0000-1000-8000-00805f9b34fb" -CaseSensitive:$false |
     ForEach-Object { Write-Log "  $_" }
@@ -109,8 +109,8 @@ Write-Section "5b. INF package info (oem0.inf)"
     Select-String -Pattern "apple|oem0\.inf" -CaseSensitive:$false |
     ForEach-Object { Write-Log "  $_" }
 
-# ── 6. Windows Event Log errors ──────────────────────────────
-Write-Section "6. System event log — driver/service errors (last 48h)"
+# -- 6. Windows Event Log errors ------------------------------
+Write-Section "6. System event log - driver/service errors (last 48h)"
 $since = (Get-Date).AddHours(-48)
 Get-WinEvent -LogName System -ErrorAction SilentlyContinue |
     Where-Object {
@@ -120,11 +120,11 @@ Get-WinEvent -LogName System -ErrorAction SilentlyContinue |
     } |
     Sort-Object TimeCreated |
     ForEach-Object {
-        Write-Log "  [$($_.TimeCreated)] ID=$($_.Id) — $($_.Message -replace '\s+',' ')"
+        Write-Log "  [$($_.TimeCreated)] ID=$($_.Id) - $($_.Message -replace '\s+',' ')"
     }
 
-# ── 7. Registry LowerFilters check ───────────────────────────
-Write-Section "7. Registry — LowerFilters entry"
+# -- 7. Registry LowerFilters check ---------------------------
+Write-Section "7. Registry - LowerFilters entry"
 $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{745a17a0-74d3-11d0-b6fe-00a0c90f57da}\0005"
 try {
     $lf = (Get-ItemProperty $regPath -ErrorAction Stop).LowerFilters
@@ -133,7 +133,7 @@ try {
     Write-Log "  Could not read registry key: $_"
 }
 
-# ── Done ─────────────────────────────────────────────────────
+# -- Done -----------------------------------------------------
 Write-Section "DONE"
 Write-Log "Full log saved to: $logFile"
 Write-Host ""
