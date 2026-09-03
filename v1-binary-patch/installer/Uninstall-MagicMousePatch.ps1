@@ -128,7 +128,8 @@ function Restore-DriverBackup {
         }
         return
     }
-    $backups = Get-ChildItem -Path $BackupDir -Filter "applewirelessmouse_*.sys" -ErrorAction SilentlyContinue |
+    $backups = @(Get-ChildItem -Path $BackupDir -Filter "applewirelessmouse-pre-pathA_*.sys" -ErrorAction SilentlyContinue) +
+               @(Get-ChildItem -Path $BackupDir -Filter "applewirelessmouse_*.sys" -ErrorAction SilentlyContinue) |
                Sort-Object LastWriteTime -Descending
     if (-not $backups) {
         Write-Status "No backup files found; removing patched driver instead" "WARN"

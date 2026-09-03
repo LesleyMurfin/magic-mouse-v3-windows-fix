@@ -2,12 +2,12 @@ name: PowerShell Lint
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, ai/magic-mouse-initial-release ]
     paths:
       - '**.ps1'
       - '.github/workflows/ps-lint.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ main, ai/magic-mouse-initial-release ]
     paths:
       - '**.ps1'
       - '.github/workflows/ps-lint.yml'

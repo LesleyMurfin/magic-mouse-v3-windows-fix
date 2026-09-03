@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.4] - 2026-08-31
+
+### Changed
+
+- Artifact / backup / FileVersion labels so KMDF and PATH-A cannot be mixed up. Windows still installs KMDF as `MagicMouseDriver.sys` and PATH-A as `applewirelessmouse.sys`.
+  - Pointer-only: `MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys` (FileVersion not 2.0.4.0)
+  - Pointer-dead: `MagicMouseDriver-kmdf-may20-pointerdead-559B136A.sys` (FileVersion 2.0.2.0; installer refuses)
+  - Scroll candidate: `MagicMouseDriver-kmdf-2.0.4-scroll.sys` (FileVersion / DriverVer **2.0.4.0**)
+  - PATH-A ship-blocker: `applewirelessmouse-patched-pathA-SHIPBLOCKER.sys` (v1-binary-patch only)
+- Live HID 2026-08-30 21:23 MDT on Apr 30 MagicMouseFix (`AD5D244B`): **stay on the path HidBth delivers**
+  - COL01 Input **0x12** is X/Y only (no Wheel usage 0x0038) — that is why pointer moves and scroll does not
+  - COL02 `HidD_GetInputReport(0x90)` works: `bytes=[90 04 2F ...]` → 47% at `buf[2]`
+  - Feature **0x47 fails** on COL01 and COL02. Product battery is RID **0x90 Input**, not 0x47
+- SDP inject now adds Wheel (GD 0x38) and AC Pan (Consumer 0x0238) on **RID 0x12**, plus RID **0x90** battery Input
+- Gesture/ACL rewrite stays on 8-byte RID **0x12** (`[12][buttons][X i16][Y i16][AC Pan][Wheel]`). Does **not** convert to RID 0x02
+- Do not install this build on the live Apr 30 PC until a Windows WDK `.sys` exists. Do not merge until hardware proves scroll
+
+## [2.0.3] - 2026-08-31
+
+### Added
+
+- KMDF `MagicMouseDriver` source package in `v2-kmdf-driver/` (PID **0x0323 only**)
+- One-click `Install-KMDF.cmd`: first run registers SYSTEM tasks `MM-Kmdf-Install` and `MM-Kmdf-PostBoot`; later runs start the task with no UAC
+- Unattended SYSTEM path: test-signing, self-sign cert + catalog, `pnputil` install, sole `LowerFilters=MagicMouseDriver`, Bluetooth disable/enable bounce, reboot if required, post-boot verify
+- RID 0x12 / 0x27 → 6-byte RID 0x02 translation (optical X/Y + buttons + **vertical and horizontal surface scroll**) on ACL completions and IRP_MJ_READ — **superseded in 2.0.4** (live hidclass bound 0x12, not 0x02)
+- Installer refuses May 20 WDKTestCert SHA256 `559B136A…`; reuses `CN=MagicMouseFix` when present; Bluetooth bounce only if HID did not start
+- `MAGIC-TRAY.md`: tray PR #74 should pull this KMDF for 0323 and must not vendor it
+
+### Fixed
+
+- Live 2.0.2.0: HID started, pointer did not move — descriptor injection without matching X/Y reports
+
+### Removed / rejected
+
+- No `mm-dev.ps1 -Phase Full`
+- No dual-filter `MagicMouseDriver,applewirelessmouse`
+- No 030D / 0310 INF hardware IDs
+- v1 patched `applewirelessmouse.sys` marked ship-blocker (BSOD 0xD1)
+
 ## [1.0.0] - 2026-05-18
 
 ### Added
