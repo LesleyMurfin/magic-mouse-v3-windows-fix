@@ -1,12 +1,19 @@
-# Magic Mouse v3 (2024) Windows scroll
+# Magic Mouse 2024 (v3) Windows Driver — Scroll Fix for PID 0323
 
-Kernel research and drivers for **Apple Magic Mouse 2024 / Magic Mouse v3** (Bluetooth PID `0x0323`) on Windows 10/11. Not v1 (`030D`) or v2 (`0269`).
+A free, MIT-licensed **Magic Mouse v3 Windows driver** for the USB-C **Apple Magic Mouse 2024** (Bluetooth **PID 0323**) on **Windows 10/11**. Apple ships no Windows driver for PID `0x0323` and its Boot Camp INF has no `0323` entry, so two-finger scroll dies after a Bluetooth idle disconnect while the cursor keeps working. This project restores and protects scroll by keeping the HID collection stack from collapsing. Not v1 (`030D`) or v2 (`0269`).
 
-If this helped, **star this repo** and **[Magic Tray](https://github.com/LesleyMurfin/magic-tray)** (battery in the tray; it installs KMDF from here). Signing goal (Stripe, not GitHub Sponsors): [funding](https://lesleymurfin.github.io/magic-tray/funding.html).
+**Read the guides:**
+[Magic Mouse v3 Windows driver site](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/) ·
+[Install the driver on Windows 11](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html) ·
+[Fix Magic Mouse scroll not working](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html) ·
+[Magic Mouse battery percentage on Windows](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/battery.html) ·
+[Magic Mouse v3 driver FAQ](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/faq.html)
 
-Site: [lesleymurfin.github.io/magic-mouse-v3-windows-fix](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/) · Tray site: [lesleymurfin.github.io/magic-tray](https://lesleymurfin.github.io/magic-tray/)
+**Battery percentage:** use [Magic Tray (Windows app)](https://github.com/LesleyMurfin/magic-tray) — a Windows system-tray utility (software, not a physical desk tray) that reads HID Input `0x90` COL02 and installs the KMDF package from this repo. Site: [Magic Tray (Windows app) home](https://lesleymurfin.github.io/magic-tray/).
 
 **STATUS:** KMDF is what Magic Tray recommends. The v1 patched `applewirelessmouse.sys` is documented below as research; Magic Tray will not use it as a KMDF fallback.
+
+If this helped, **star this repo** and **[Magic Tray](https://github.com/LesleyMurfin/magic-tray)**. Signing goal (Stripe, not GitHub Sponsors): [funding](https://lesleymurfin.github.io/magic-tray/funding.html).
 
 ## Contents
 
