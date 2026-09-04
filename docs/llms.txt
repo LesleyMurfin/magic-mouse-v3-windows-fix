@@ -1,23 +1,72 @@
-# Magic Mouse v3 Windows scroll (PID 0323)
+# Magic Mouse 2024 (v3) Windows Driver
 
-> Kernel research and KMDF filter for Apple Magic Mouse 2024 / Magic Mouse v3 on Windows 10/11. Not Magic Mouse v1/v2. Not Magic Tray (userspace battery app). PATH-A patched applewirelessmouse is not Magic Tray’s KMDF fallback.
+> The Magic Mouse 2024 (v3) Windows driver is a free, MIT-licensed KMDF filter driver for the USB-C
+> Apple Magic Mouse (Bluetooth VID 05AC, PID 0323) on Windows 10 and Windows 11 x64. Apple ships no
+> official Windows driver for PID 0323 and its Boot Camp INF has no 0323 entry, so scroll dies after a
+> Bluetooth idle disconnect. This Magic Mouse v3 Windows driver restores and protects two-finger
+> scroll by stopping the HID collection stack from collapsing.
 
-- Hardware: Bluetooth PID 0x0323 only.
-- Problem: Boot Camp INF has no 0323; HID COL01/COL02 can collapse after DSM (Mode B, scroll gone).
-- Magic Tray installs `v2-kmdf-driver/Install-KMDF.cmd` from this repo.
-- Battery in the tray is Input 0x90 COL02 (userspace), not this .sys.
-- Signing: self-signed / Test Mode until EV + attestation. Fund via https://lesleymurfin.github.io/magic-tray/funding.html (Stripe off GitHub Sponsors).
+## Quick answers
 
-## Docs
+- Q: Official Apple Windows driver for the 2024 Magic Mouse? A: None exists for PID 0323.
+- Q: Does Boot Camp work? A: No. Apple's Boot Camp INF has no `0323` entry, so it never binds.
+- Q: Why does Magic Mouse scroll stop working on Windows 11? A: Bluetooth idle disconnect plus DeviceSetupManager (DSM) property sync collapses the HID collections (Mode A to Mode B): cursor works, scroll stops.
+- Q: Does it recover by itself? A: No; previously only a driver reinstall or re-pair restored scroll.
+- Q: Does this driver show battery percentage? A: No. Battery arrives on HID Input report `0x90`, collection COL02, read in userspace by the Magic Tray app.
+- Q: How do I get battery percentage on Windows? A: Install Magic Tray, the Windows system-tray app. A healthy HID collection stack keeps that read reliable.
+- Q: Cost? A: Free, MIT licensed, no subscription.
+- Q: Is it signed? A: Self-signed today, so Windows Test Mode or disabled signature enforcement is required until EV plus Microsoft attestation signing lands.
+- Q: Which model do I have? A: Device Manager > Human Interface Devices > Apple Magic Mouse > Properties > Details > Hardware Ids: look for `PID_0323`.
 
-- [This site](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/)
-- [README](https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/README.md)
-- [Bug analysis](https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/bug-analysis.md)
-- [HID research](https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/hid-research.md)
-- [Mode A/B diagram](https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/diagrams/diagram-mode-ab.md)
-- [Magic Tray](https://lesleymurfin.github.io/magic-tray/)
-- [Stars and signing](https://lesleymurfin.github.io/magic-tray/funding.html)
+## Hardware matrix
 
-## Optional
+| Device | PID | What to install |
+|---|---|---|
+| Magic Mouse 2024 (v3), USB-C | `0x0323` | This project: the `v2-kmdf-driver` KMDF package |
+| Magic Mouse v2 (Lightning, 2015) | `0x0269` | Not here. Boot Camp or sbagirici's v1/v2 fix |
+| Magic Mouse v1 (AA, 2009) | `0x030D` | Not here. Boot Camp or sbagirici's v1/v2 fix |
+| Apple Wireless Mouse | `0x0310` | Not here. Apple's Boot Camp drivers cover it |
+| Magic Trackpads | `0x030E`, `0x0265`, `0x0324` | Not here. No trackpad support |
 
-- [tealtadpole Boot Camp](https://github.com/tealtadpole/MagicMouse2DriversWin11x64): v1/v2 only
+## Pages
+
+- https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/ - what the driver is, quick facts, PID 0323.
+- https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html - installing the KMDF driver, including Test Mode.
+- https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html - why scroll stops on Windows 11, and the fix.
+- https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/battery.html - battery percentage on Windows via Magic Tray.
+- https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/faq.html - direct answers to common questions.
+
+## Source and research
+
+- Repository: https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix
+- Bug analysis: https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/bug-analysis.md
+- HID research: https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/hid-research.md
+- Mode A/B diagram: https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/diagrams/diagram-mode-ab.md
+
+## Related project
+
+Magic Tray is a Windows system-tray app that shows Apple Magic Mouse battery percentage in the
+Windows notification area. It is software, not a physical desk tray, stand, or 3D-printed accessory.
+Magic Tray installs this repository's KMDF package (`v2-kmdf-driver/Install-KMDF.cmd`).
+
+- Site: https://lesleymurfin.github.io/magic-tray/
+- Repository: https://github.com/LesleyMurfin/magic-tray
+
+## Not this
+
+- Not for Magic Mouse v1 (`0x030D`) or v2 (`0x0269`); Boot Camp and sbagirici's fix cover those.
+- Not Magic Utilities, which is paid/subscription. This driver is free and MIT licensed.
+- Not an Etsy-style wooden or 3D-printed desk tray. Magic Tray is Windows software.
+- The PATH-A patched `applewirelessmouse.sys` in `v1-binary-patch/` is research history, not Magic Tray's KMDF fallback.
+
+## Canonical facts
+
+- Device: Apple Magic Mouse 2024, USB-C, called Magic Mouse v3 here; Bluetooth VID `05AC`, PID `0x0323`.
+- No official Apple Windows driver exists for PID 0323; the Boot Camp INF has no `0323` entry.
+- Failure mode: idle Bluetooth disconnect plus DSM property sync collapses the HID collections (Mode A to Mode B); scroll stops, no self-recovery.
+- Recommended path: the KMDF filter driver in `v2-kmdf-driver/`, which targets full prevention.
+- `v1-binary-patch/` (patched `applewirelessmouse.sys`, v1.0.0) showed an empirical 3.1x improvement over baseline; multi-day prevention is not characterized.
+- Signing: self-signed today, so Windows Test Mode or disabled signature enforcement is required.
+- OS support: Windows 10 build 14393 or later, Windows 11 any build, x64.
+- Battery percentage comes from HID Input report `0x90`, collection COL02, read in userspace by Magic Tray, never by this driver.
+- License: MIT, Copyright 2026 Revive Business Solutions. Free. Not affiliated with Apple.

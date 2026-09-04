@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Install Magic Mouse 2024 (v3) Windows Driver</title>
+  <meta name="description" content="Install the Magic Mouse 2024 (v3) Windows driver in seven steps: confirm PID 0323, verify the SHA256 hash, enable Test Mode, run Install-KMDF.cmd, reboot.">
+  <link rel="canonical" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html">
+  <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
+  <link rel="describedby" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/llms.txt">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Magic Mouse v3 Windows Driver">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:title" content="How to install the Magic Mouse 2024 (v3) Windows driver">
+  <meta property="og:description" content="Seven steps: confirm PID 0323, verify the hash, enable Test Mode, run Install-KMDF.cmd, reboot, and test an idle Bluetooth reconnect.">
+  <meta property="og:url" content="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html">
+  <meta property="og:image" content="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Magic Mouse 2024 (v3) Windows driver &mdash; scroll fix for PID 0323">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="site.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#webpage",
+      "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html",
+      "name": "How to install the Magic Mouse 2024 (v3) Windows driver",
+      "description": "Install the Magic Mouse 2024 (v3) Windows driver in seven steps: confirm PID 0323, verify the SHA256 hash, enable Test Mode, run Install-KMDF.cmd, reboot.",
+      "isPartOf": {
+        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#website"
+      },
+      "about": {
+        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#software"
+      },
+      "primaryImageOfPage": {
+        "@type": "ImageObject",
+        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#primaryimage",
+        "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/og.png",
+        "width": 1200,
+        "height": 630
+      },
+      "breadcrumb": {
+        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#breadcrumb"
+      },
+      "datePublished": "2026-05-01",
+      "dateModified": "2026-09-04",
+      "inLanguage": "en"
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#breadcrumb",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Windows driver",
+          "item": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Install",
+          "item": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html"
+        }
+      ]
+    },
+    {
+      "@type": "HowTo",
+      "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#howto",
+      "name": "How to install the Magic Mouse 2024 (v3) Windows driver",
+      "description": "Install the KMDF filter driver that restores two-finger scroll on the Apple Magic Mouse 2024 (PID 0323) under Windows 10 and Windows 11.",
+      "inLanguage": "en",
+      "isPartOf": {
+        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#webpage"
+      },
+      "about": {
+        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#software"
+      },
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Confirm your mouse reports PID 0323",
+          "text": "Open Device Manager, expand Human Interface Devices, open Apple Magic Mouse, then Properties, Details, Hardware Ids, and look for PID_0323.",
+          "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#step-1"
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Download the driver package from the GitHub repo",
+          "text": "Download the v2-kmdf-driver package from the magic-mouse-v3-windows-fix repository on GitHub.",
+          "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#step-2"
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Verify the SHA256 hash of the download",
+          "text": "In PowerShell, run Get-FileHash -Algorithm SHA256 against the downloaded archive and compare the result with the hash published alongside the download.",
+          "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#step-3"
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Enable Windows Test Mode",
+          "text": "The KMDF driver is self-signed today, so Windows must accept test-signed kernel code: from an elevated prompt run bcdedit /set testsigning on, with Secure Boot off, then reboot.",
+          "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#step-4"
+        },
+        {
+          "@type": "HowToStep",
+          "position": 5,
+          "name": "Install the KMDF driver package",
+          "text": "Run Install-KMDF.cmd from the v2-kmdf-driver folder as administrator, or let the Magic Tray Windows app perform the same install for you.",
+          "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#step-5"
+        },
+        {
+          "@type": "HowToStep",
+          "position": 6,
+          "name": "Reboot and verify scroll survives a Bluetooth disconnect",
+          "text": "Reboot, leave the mouse idle until Windows drops the Bluetooth link, wake it, and confirm two-finger scroll still works.",
+          "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#step-6"
+        },
+        {
+          "@type": "HowToStep",
+          "position": 7,
+          "name": "Uninstall or roll back",
+          "text": "To roll back, find the published INF with pnputil /enum-drivers, remove it with pnputil /delete-driver, then run bcdedit /set testsigning off and reboot.",
+          "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#step-7"
+        }
+      ]
+    }
+  ]
+}</script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <header>
+    <p class="kicker">Install &middot; KMDF package &middot; PID 0323</p>
+  <nav aria-label="Site">
+    <a href="./">Windows driver</a>
+    <a href="install.html" aria-current="page">Install</a>
+    <a href="scroll-fix.html">Scroll fix</a>
+    <a href="battery.html">Battery %</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
+    <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray app</a>
+  </nav>
+    <h1>How to install the Magic Mouse 2024 (v3) Windows driver</h1>
+    <p class="lead">Install the <strong>Magic Mouse 2024 (v3) Windows driver</strong> by confirming your mouse is <strong>PID 0323</strong>, enabling Windows Test Mode, and running <code>Install-KMDF.cmd</code> from the <code>v2-kmdf-driver</code> package as administrator. It takes two reboots on Windows 10 (build 14393 or later) or Windows 11 x64. The driver is free, MIT licensed, and self-signed today, which is why Test Mode is still required.</p>
+    <p class="cta">
+      <a class="primary" href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Get the driver on GitHub</a>
+      <a class="ghost" href="scroll-fix.html">Scroll still dead? Read the fix</a>
+    </p>
+  </header>
+  <main id="content">
+    <h2>At a glance</h2>
+    <dl class="faq">
+      <dt>Device</dt>
+      <dd>Apple Magic Mouse 2024 (USB-C), called Magic Mouse v3 in this project. Bluetooth VID <code>05AC</code>, PID <code>0x0323</code>.</dd>
+      <dt>Package to install</dt>
+      <dd><code>v2-kmdf-driver</code> &mdash; a KMDF filter driver. Installer: <code>Install-KMDF.cmd</code>.</dd>
+      <dt>OS support</dt>
+      <dd>Windows 10 build 14393 or later, and Windows 11 any build. x64 only.</dd>
+      <dt>Signing</dt>
+      <dd>Self-signed, so Test Mode is required. EV certificate plus Microsoft attestation signing is the goal.</dd>
+      <dt>Price and licence</dt>
+      <dd>Free, no subscription. MIT licence.</dd>
+      <dt>What it fixes</dt>
+      <dd>Two-finger scroll dying after a Bluetooth idle disconnect collapses the HID collections.</dd>
+    </dl>
+
+    <h2>What do I need before I install?</h2>
+    <ul class="plain">
+      <li><strong>Windows 10 build 14393 or later, or Windows 11</strong>, x64.</li>
+      <li><strong>An administrator account</strong> &mdash; this is a kernel-mode driver.</li>
+      <li><strong>The mouse paired over Bluetooth</strong> and reporting <code>PID_0323</code>.</li>
+      <li><strong>Secure Boot off</strong>, otherwise Windows ignores the Test Mode setting.</li>
+      <li><strong>Two reboots</strong> &mdash; one to enter Test Mode, one after the driver installs.</li>
+    </ul>
+
+    <h2>Install steps</h2>
+    <ol class="steps">
+      <li id="step-1"><strong>Confirm your mouse reports PID 0323.</strong> Open <strong>Device Manager</strong> &rarr; <strong>Human Interface Devices</strong> &rarr; <strong>Apple Magic Mouse</strong> &rarr; Properties &rarr; Details &rarr; <strong>Hardware Ids</strong>, and look for <code>PID_0323</code>. If you see <code>PID_030D</code> or <code>PID_0269</code> you have a v1 or v2 mouse; stop here and read the <a href="scroll-fix.html">Magic Mouse scroll fix table for v1, v2 and v3</a> instead.</li>
+      <li id="step-2"><strong>Download the driver package from the GitHub repo.</strong> Get the <code>v2-kmdf-driver</code> package from the <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">magic-mouse-v3-windows-fix repository on GitHub</a>. That is the recommended path and the same package the <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray (Windows app)</a> installs.</li>
+      <li id="step-3"><strong>Verify the SHA256 hash of the download.</strong> In PowerShell, run <code>Get-FileHash -Algorithm SHA256 &lt;file&gt;</code> and compare the result with the hash published alongside the download. Do not install a kernel driver whose hash does not match.</li>
+      <li id="step-4"><strong>Enable Windows Test Mode.</strong> The KMDF driver is self-signed today, so Windows must be willing to load test-signed kernel code. From an elevated prompt: <code>bcdedit /set testsigning on</code>, then reboot. Secure Boot must be off, or Windows ignores the setting. See <a href="#test-mode">what Test Mode actually means</a> below.</li>
+      <li id="step-5"><strong>Install the KMDF driver package.</strong> Run <code>Install-KMDF.cmd</code> from the <code>v2-kmdf-driver</code> folder as administrator. The <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a> ships the same action, so you can let Magic Tray do this install for you instead of running the script by hand.</li>
+      <li id="step-6"><strong>Reboot and verify scroll survives a Bluetooth disconnect.</strong> Reboot. Then leave the mouse alone until Windows drops the Bluetooth link, wake it, and check two-finger scroll. That idle-then-reconnect cycle is the exact condition that used to kill the wheel, so it is the only test that matters. Background: <a href="scroll-fix.html">why Magic Mouse scroll stops working on Windows 11</a>.</li>
+      <li id="step-7"><strong>Uninstall or roll back.</strong> List installed packages with <code>pnputil /enum-drivers</code>, find the entry for this driver, and remove it with <code>pnputil /delete-driver &lt;oemN.inf&gt; /uninstall</code>. You can also uninstall the device under Human Interface Devices in Device Manager and tick the option to delete the driver software. Then turn Test Mode off with <code>bcdedit /set testsigning off</code> and reboot.</li>
+    </ol>
+
+    <h2 id="test-mode">What does Test Mode actually mean?</h2>
+    <p>Test Mode tells Windows to load kernel drivers that are signed with a certificate Windows does not trust by default. Nothing else about the machine changes, but Windows shows a watermark in the desktop corner, Secure Boot has to stay off, and some anti-cheat and enterprise policies refuse to run while test signing is on. Turning it off is one command and a reboot.</p>
+    <p>This is a funding problem, not a design choice. Kernel drivers need an EV code-signing certificate and Microsoft attestation signing before Windows will load them normally, and that is the stated goal for this driver &mdash; see the <a href="https://lesleymurfin.github.io/magic-tray/funding.html">signing and funding page</a>.</p>
+    <p class="note">Do not disable driver signature enforcement on a machine you do not control, and do not install kernel drivers you have not hash-checked.</p>
+
+    <h2>Is the v1 binary patch an alternative?</h2>
+    <p>No &mdash; the patched <code>applewirelessmouse.sys</code> in <code>v1-binary-patch/</code> is research history, not the recommended path. It measured a 3.1x improvement over the unpatched baseline and it reduces, and may prevent, scroll loss, but multi-day prevention was never characterised, and it is not what the Magic Tray app installs. Use the KMDF package above.</p>
+    <ul class="plain">
+      <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/bug-analysis.md">Bug analysis: DeviceSetupManager and BTHPORT</a></li>
+      <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/diagrams/diagram-mode-ab.md">Mode A / Mode B HID collection diagram</a></li>
+      <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/hid-research.md">HID research, including Input report 0x90</a></li>
+    </ul>
+
+    <h2>What should I read next?</h2>
+    <p>Magic Tray is Windows software &mdash; a system-tray utility &mdash; not a desk accessory, stand, or 3D-printed tray.</p>
+    <ul class="plain">
+      <li><a href="scroll-fix.html">Magic Mouse 2024 (v3) scroll not working on Windows 11</a> &mdash; symptoms, cause, and the PID lookup table.</li>
+      <li><a href="battery.html">Magic Mouse battery percentage on Windows 11</a> &mdash; what actually reads the battery.</li>
+      <li><a href="faq.html">Magic Mouse v3 Windows driver FAQ</a> &mdash; signing, Boot Camp, v1 and v2 support.</li>
+      <li><a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray (Windows app)</a> &mdash; installs this driver and shows battery percentage in the tray.</li>
+    </ul>
+  </main>
+  <footer>
+    <p><strong>Magic Mouse 2024 (v3) Windows driver</strong> — MIT licensed, free, no subscription.
+      Maintained by Revive Business Solutions / Lesley Murfin.</p>
+    <p><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver repo</a> ·
+      <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a> ·
+      <a href="https://lesleymurfin.github.io/magic-tray/drivers.html">Which driver do I need</a> ·
+      <a href="llms.txt">llms.txt</a></p>
+    <p>Not affiliated with Apple Inc. Apple, Magic Mouse, and Boot Camp are trademarks of Apple Inc.</p>
+  </footer>
+</body>
+</html>
