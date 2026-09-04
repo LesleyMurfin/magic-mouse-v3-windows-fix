@@ -63,8 +63,3 @@ env/
 
 # Local research — private, never pushed
 docs/research/
-
-# AI agent working dirs (Claude Code) — never pushed
-.ai/
-.ai/learning/
-.ai/telemetry/
