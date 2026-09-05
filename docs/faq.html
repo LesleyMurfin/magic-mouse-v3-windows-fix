@@ -207,7 +207,7 @@
     <a href="battery.html">Battery %</a>
     <a href="faq.html" aria-current="page">FAQ</a>
     <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
-    <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray app</a>
+    <a href="https://magictray.app/">Magic Tray app</a>
   </nav>
     <h1>Magic Mouse v3 Windows driver FAQ</h1>
     <p class="lead">Short answers about the <strong>Magic Mouse 2024 (v3) Windows driver</strong>: Apple never shipped a Windows driver for this mouse, <strong>PID 0323</strong> is absent from Boot Camp, and scroll dies on <strong>Windows 11</strong> when a Bluetooth idle disconnect collapses the HID collections. This <strong>Magic Mouse v3 Windows driver</strong> is free, MIT licensed, and self-signed, so Test Mode is required today.</p>
@@ -233,16 +233,16 @@
     <p>Check the Hardware Ids: Device Manager &rarr; Human Interface Devices &rarr; Apple Magic Mouse &rarr; Properties &rarr; Details &rarr; Hardware Ids. <code>PID_0323</code> means v3, and the charge port is USB-C. <code>PID_030D</code> is v1 and <code>PID_0269</code> is v2.</p>
 
     <h2>Is the driver signed, and why do I need Test Mode?</h2>
-    <p>The driver is self-signed today, so Windows only loads it with test signing enabled and Secure Boot off. An EV certificate plus Microsoft attestation signing is the goal, funded off GitHub via Stripe &mdash; see the <a href="https://lesleymurfin.github.io/magic-tray/funding.html">signing and funding page</a> and <a href="install.html#test-mode">what Test Mode actually means</a>.</p>
+    <p>The driver is self-signed today, so Windows only loads it with test signing enabled and Secure Boot off. An EV certificate plus Microsoft attestation signing is the goal, funded off GitHub via Stripe &mdash; see the <a href="https://magictray.app/funding.html">signing and funding page</a> and <a href="install.html#test-mode">what Test Mode actually means</a>.</p>
 
     <h2>Is the Magic Mouse v3 Windows driver free?</h2>
     <p>Yes. It is free and MIT licensed, with no subscription. It is maintained by Revive Business Solutions / Lesley Murfin, and the whole source tree is on <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub</a>.</p>
 
     <h2>Is this the same as Magic Utilities?</h2>
-    <p>No. Magic Utilities is separate paid software sold on subscription. This project is a free, MIT-licensed kernel driver aimed at the 2024 Magic Mouse scroll bug, and the battery percentage side is handled by the free <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray (Windows app)</a>.</p>
+    <p>No. Magic Utilities is separate paid software sold on subscription. This project is a free, MIT-licensed kernel driver aimed at the 2024 Magic Mouse scroll bug, and the battery percentage side is handled by the free <a href="https://magictray.app/">Magic Tray (Windows app)</a>.</p>
 
     <h2>Does the driver fix the battery percentage on Windows?</h2>
-    <p>No. This kernel driver does not read battery. The free <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray (Windows app)</a> reads HID Input report <code>0x90</code> on collection COL02 and shows the percentage next to the Windows clock. See <a href="battery.html">Magic Mouse battery percentage on Windows 11</a>.</p>
+    <p>No. This kernel driver does not read battery. The free <a href="https://magictray.app/">Magic Tray (Windows app)</a> reads HID Input report <code>0x90</code> on collection COL02 and shows the percentage next to the Windows clock. See <a href="battery.html">Magic Mouse battery percentage on Windows 11</a>.</p>
 
     <h2>Does it support Magic Mouse v1 or v2?</h2>
     <p>No. This driver targets PID <code>0x0323</code> only. Magic Mouse v1 (<code>0x030D</code>) and v2 (<code>0x0269</code>) are covered by Apple&rsquo;s Boot Camp INF and by community fixes from <a href="https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows">sbagirici</a> and <a href="https://github.com/tealtadpole/MagicMouse2DriversWin11x64">tealtadpole</a>. The <a href="scroll-fix.html">PID lookup table</a> spells out which one you need.</p>
@@ -264,7 +264,7 @@
       <li><a href="install.html">How to install the Magic Mouse 2024 (v3) Windows driver</a> &mdash; seven steps, Test Mode, rollback.</li>
       <li><a href="scroll-fix.html">Magic Mouse 2024 (v3) scroll not working on Windows 11</a> &mdash; cause and PID table.</li>
       <li><a href="battery.html">Magic Mouse battery percentage on Windows 11</a> &mdash; what reads report <code>0x90</code>.</li>
-      <li><a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray (Windows app)</a> &mdash; Windows system-tray utility that installs this driver and shows battery percentage. Not a desk accessory, stand, or 3D-printed tray.</li>
+      <li><a href="https://magictray.app/">Magic Tray (Windows app)</a> &mdash; Windows system-tray utility that installs this driver and shows battery percentage. Not a desk accessory, stand, or 3D-printed tray.</li>
       <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver source and issue tracker on GitHub</a>.</li>
     </ul>
   </main>
@@ -273,7 +273,7 @@
       Maintained by Revive Business Solutions / Lesley Murfin.</p>
     <p><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver repo</a> ·
       <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a> ·
-      <a href="https://lesleymurfin.github.io/magic-tray/drivers.html">Which driver do I need</a> ·
+      <a href="https://magictray.app/drivers.html">Which driver do I need</a> ·
       <a href="llms.txt">llms.txt</a></p>
     <p>Not affiliated with Apple Inc. Apple, Magic Mouse, and Boot Camp are trademarks of Apple Inc.</p>
   </footer>
