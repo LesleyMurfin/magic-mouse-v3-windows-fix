@@ -49,7 +49,7 @@ Magic Tray is a Windows system-tray app that shows Apple Magic Mouse battery per
 Windows notification area. It is software, not a physical desk tray, stand, or 3D-printed accessory.
 Magic Tray installs this repository's KMDF package (`v2-kmdf-driver/Install-KMDF.cmd`).
 
-- Site: https://lesleymurfin.github.io/magic-tray/
+- Site: https://magictray.app/
 - Repository: https://github.com/LesleyMurfin/magic-tray
 
 ## Not this

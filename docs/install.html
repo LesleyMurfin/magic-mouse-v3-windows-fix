@@ -145,7 +145,7 @@
     <a href="battery.html">Battery %</a>
     <a href="faq.html">FAQ</a>
     <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
-    <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray app</a>
+    <a href="https://magictray.app/">Magic Tray app</a>
   </nav>
     <h1>How to install the Magic Mouse 2024 (v3) Windows driver</h1>
     <p class="lead">Install the <strong>Magic Mouse 2024 (v3) Windows driver</strong> by confirming your mouse is <strong>PID 0323</strong>, enabling Windows Test Mode, and running <code>Install-KMDF.cmd</code> from the <code>v2-kmdf-driver</code> package as administrator. It takes two reboots on Windows 10 (build 14393 or later) or Windows 11 x64. The driver is free, MIT licensed, and self-signed today, which is why Test Mode is still required.</p>
@@ -183,7 +183,7 @@
     <h2>Install steps</h2>
     <ol class="steps">
       <li id="step-1"><strong>Confirm your mouse reports PID 0323.</strong> Open <strong>Device Manager</strong> &rarr; <strong>Human Interface Devices</strong> &rarr; <strong>Apple Magic Mouse</strong> &rarr; Properties &rarr; Details &rarr; <strong>Hardware Ids</strong>, and look for <code>PID_0323</code>. If you see <code>PID_030D</code> or <code>PID_0269</code> you have a v1 or v2 mouse; stop here and read the <a href="scroll-fix.html">Magic Mouse scroll fix table for v1, v2 and v3</a> instead.</li>
-      <li id="step-2"><strong>Download the driver package from the GitHub repo.</strong> Get the <code>v2-kmdf-driver</code> package from the <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">magic-mouse-v3-windows-fix repository on GitHub</a>. That is the recommended path and the same package the <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray (Windows app)</a> installs.</li>
+      <li id="step-2"><strong>Download the driver package from the GitHub repo.</strong> Get the <code>v2-kmdf-driver</code> package from the <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">magic-mouse-v3-windows-fix repository on GitHub</a>. That is the recommended path and the same package the <a href="https://magictray.app/">Magic Tray (Windows app)</a> installs.</li>
       <li id="step-3"><strong>Verify the SHA256 hash of the download.</strong> In PowerShell, run <code>Get-FileHash -Algorithm SHA256 &lt;file&gt;</code> and compare the result with the hash published alongside the download. Do not install a kernel driver whose hash does not match.</li>
       <li id="step-4"><strong>Enable Windows Test Mode.</strong> The KMDF driver is self-signed today, so Windows must be willing to load test-signed kernel code. From an elevated prompt: <code>bcdedit /set testsigning on</code>, then reboot. Secure Boot must be off, or Windows ignores the setting. See <a href="#test-mode">what Test Mode actually means</a> below.</li>
       <li id="step-5"><strong>Install the KMDF driver package.</strong> Run <code>Install-KMDF.cmd</code> from the <code>v2-kmdf-driver</code> folder as administrator. The <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a> ships the same action, so you can let Magic Tray do this install for you instead of running the script by hand.</li>
@@ -193,7 +193,7 @@
 
     <h2 id="test-mode">What does Test Mode actually mean?</h2>
     <p>Test Mode tells Windows to load kernel drivers that are signed with a certificate Windows does not trust by default. Nothing else about the machine changes, but Windows shows a watermark in the desktop corner, Secure Boot has to stay off, and some anti-cheat and enterprise policies refuse to run while test signing is on. Turning it off is one command and a reboot.</p>
-    <p>This is a funding problem, not a design choice. Kernel drivers need an EV code-signing certificate and Microsoft attestation signing before Windows will load them normally, and that is the stated goal for this driver &mdash; see the <a href="https://lesleymurfin.github.io/magic-tray/funding.html">signing and funding page</a>.</p>
+    <p>This is a funding problem, not a design choice. Kernel drivers need an EV code-signing certificate and Microsoft attestation signing before Windows will load them normally, and that is the stated goal for this driver &mdash; see the <a href="https://magictray.app/funding.html">signing and funding page</a>.</p>
     <p class="note">Do not disable driver signature enforcement on a machine you do not control, and do not install kernel drivers you have not hash-checked.</p>
 
     <h2>Is the v1 binary patch an alternative?</h2>
@@ -210,7 +210,7 @@
       <li><a href="scroll-fix.html">Magic Mouse 2024 (v3) scroll not working on Windows 11</a> &mdash; symptoms, cause, and the PID lookup table.</li>
       <li><a href="battery.html">Magic Mouse battery percentage on Windows 11</a> &mdash; what actually reads the battery.</li>
       <li><a href="faq.html">Magic Mouse v3 Windows driver FAQ</a> &mdash; signing, Boot Camp, v1 and v2 support.</li>
-      <li><a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray (Windows app)</a> &mdash; installs this driver and shows battery percentage in the tray.</li>
+      <li><a href="https://magictray.app/">Magic Tray (Windows app)</a> &mdash; installs this driver and shows battery percentage in the tray.</li>
     </ul>
   </main>
   <footer>
@@ -218,7 +218,7 @@
       Maintained by Revive Business Solutions / Lesley Murfin.</p>
     <p><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver repo</a> ·
       <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a> ·
-      <a href="https://lesleymurfin.github.io/magic-tray/drivers.html">Which driver do I need</a> ·
+      <a href="https://magictray.app/drivers.html">Which driver do I need</a> ·
       <a href="llms.txt">llms.txt</a></p>
     <p>Not affiliated with Apple Inc. Apple, Magic Mouse, and Boot Camp are trademarks of Apple Inc.</p>
   </footer>
