@@ -9,11 +9,11 @@ A free, MIT-licensed **Magic Mouse v3 Windows driver** for the USB-C **Apple Mag
 [Magic Mouse battery percentage on Windows](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/battery.html) ·
 [Magic Mouse v3 driver FAQ](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/faq.html)
 
-**Battery percentage:** use [Magic Tray (Windows app)](https://github.com/LesleyMurfin/magic-tray) — a Windows system-tray utility (software, not a physical desk tray) that reads HID Input `0x90` COL02 and installs the KMDF package from this repo. Site: [Magic Tray (Windows app) home](https://lesleymurfin.github.io/magic-tray/).
+**Battery percentage:** use [Magic Tray (Windows app)](https://github.com/LesleyMurfin/magic-tray) — a Windows system-tray utility (software, not a physical desk tray) that reads HID Input `0x90` COL02 and installs the KMDF package from this repo. Site: [Magic Tray (Windows app) home](https://magictray.app/).
 
 **STATUS:** KMDF is what Magic Tray recommends. The v1 patched `applewirelessmouse.sys` is documented below as research; Magic Tray will not use it as a KMDF fallback.
 
-If this helped, **star this repo** and **[Magic Tray](https://github.com/LesleyMurfin/magic-tray)**. Signing goal (Stripe, not GitHub Sponsors): [funding](https://lesleymurfin.github.io/magic-tray/funding.html).
+If this helped, **star this repo** and **[Magic Tray](https://github.com/LesleyMurfin/magic-tray)**. Signing goal (Stripe, not GitHub Sponsors): [funding](https://magictray.app/funding.html).
 
 ## Contents
 
