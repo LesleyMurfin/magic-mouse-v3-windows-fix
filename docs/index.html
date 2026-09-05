@@ -126,14 +126,14 @@
     <a href="battery.html">Battery %</a>
     <a href="faq.html">FAQ</a>
     <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
-    <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray app</a>
+    <a href="https://magictray.app/">Magic Tray app</a>
   </nav>
     <h1>Magic Mouse 2024 (v3) Windows driver — scroll fix for PID 0323</h1>
-    <p class="lead">Apple ships no Windows driver for the 2024 USB-C Magic Mouse, Bluetooth <strong>PID 0323</strong> — that ID is absent from the Boot Camp INF. This project is a free, MIT-licensed KMDF filter driver that keeps two-finger scroll alive across Bluetooth reconnects on Windows 10 and <strong>Windows 11</strong>. It is the kernel half of the fix; the <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray (Windows app)</a> installs it and shows battery percentage in the tray.</p>
+    <p class="lead">Apple ships no Windows driver for the 2024 USB-C Magic Mouse, Bluetooth <strong>PID 0323</strong> — that ID is absent from the Boot Camp INF. This project is a free, MIT-licensed KMDF filter driver that keeps two-finger scroll alive across Bluetooth reconnects on Windows 10 and <strong>Windows 11</strong>. It is the kernel half of the fix; the <a href="https://magictray.app/">Magic Tray (Windows app)</a> installs it and shows battery percentage in the tray.</p>
     <p class="cta">
       <a class="primary" href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Download the driver on GitHub</a>
       <a class="ghost" href="install.html">Install on Windows 11</a>
-      <a class="ghost" href="https://lesleymurfin.github.io/magic-tray/">Magic Tray (Windows app)</a>
+      <a class="ghost" href="https://magictray.app/">Magic Tray (Windows app)</a>
     </p>
   </header>
   <main id="content">
@@ -165,7 +165,7 @@
     <h2 id="what-it-does">What does the Magic Mouse v3 Windows driver do?</h2>
     <p>It is a kernel-mode KMDF filter driver that sits on the mouse's HID stack and prevents the Mode B collapse, so scroll keeps working across Bluetooth reconnects. The repo holds two code paths:</p>
     <ul class="plain">
-      <li><strong>v2 KMDF filter driver</strong> (<code>v2-kmdf-driver/</code>) — the recommended path, targeting full prevention. This is the package the <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray (Windows app)</a> installs via <code>v2-kmdf-driver/Install-KMDF.cmd</code>.</li>
+      <li><strong>v2 KMDF filter driver</strong> (<code>v2-kmdf-driver/</code>) — the recommended path, targeting full prevention. This is the package the <a href="https://magictray.app/">Magic Tray (Windows app)</a> installs via <code>v2-kmdf-driver/Install-KMDF.cmd</code>.</li>
       <li><strong>v1 binary patch</strong> (<code>v1-binary-patch/</code>) — research history: a patched <code>applewirelessmouse.sys</code>, version 1.0.0. It measured a 3.1x improvement over the unpatched baseline and reduces, and may prevent, collection loss. Multi-day prevention was never characterised, and it is not Magic Tray's fallback. Keep it for the analysis, not for daily use.</li>
     </ul>
     <p class="note">The driver restores scroll. It does not change button mapping, gestures, or pointer acceleration.</p>
@@ -186,7 +186,7 @@
     <p>If your Hardware Ids show <code>PID_0269</code> or <code>PID_030D</code>, this repo will not help you — the catalog-signed Boot Camp path already supports those mice.</p>
 
     <h2 id="battery">How do I see Magic Mouse battery percentage on Windows?</h2>
-    <p>Use the Magic Tray app — this driver does not read battery. The 2024 Magic Mouse reports its charge on HID Input report <code>0x90</code>, collection <code>COL02</code>, and parsing that report is userspace work done by the <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray (Windows app)</a>, which puts the percentage in the Windows notification area. The driver's role is indirect but real: a healthy HID collection stack is what keeps that read reliable, because a Mode B device no longer exposes the collection the battery report lives in.</p>
+    <p>Use the Magic Tray app — this driver does not read battery. The 2024 Magic Mouse reports its charge on HID Input report <code>0x90</code>, collection <code>COL02</code>, and parsing that report is userspace work done by the <a href="https://magictray.app/">Magic Tray (Windows app)</a>, which puts the percentage in the Windows notification area. The driver's role is indirect but real: a healthy HID collection stack is what keeps that read reliable, because a Mode B device no longer exposes the collection the battery report lives in.</p>
     <p>Step-by-step: <a href="battery.html">check Magic Mouse battery percentage on Windows 11</a>.</p>
 
     <h2 id="install">How do I install the Magic Mouse 2024 (v3) Windows driver?</h2>
@@ -194,7 +194,7 @@
 
     <h2 id="price">Is this driver free, and how does it compare to Magic Utilities?</h2>
     <p>It is free and MIT licensed, with no subscription. Magic Utilities is paid software sold on a subscription; this project is not, and nothing here expires or stops scrolling when a licence lapses. It is maintained by Revive Business Solutions / Lesley Murfin and is not affiliated with Apple.</p>
-    <p>Signing is the one thing money buys: the driver is self-signed today and the goal is an EV certificate plus Microsoft attestation signing, funded through Stripe rather than GitHub Sponsors — see the <a href="https://lesleymurfin.github.io/magic-tray/funding.html">driver signing funding page</a>.</p>
+    <p>Signing is the one thing money buys: the driver is self-signed today and the goal is an EV certificate plus Microsoft attestation signing, funded through Stripe rather than GitHub Sponsors — see the <a href="https://magictray.app/funding.html">driver signing funding page</a>.</p>
 
     <h2 id="next">Where to next</h2>
     <div class="grid grid-3">
@@ -231,7 +231,7 @@
       Maintained by Revive Business Solutions / Lesley Murfin.</p>
     <p><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver repo</a> ·
       <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a> ·
-      <a href="https://lesleymurfin.github.io/magic-tray/drivers.html">Which driver do I need</a> ·
+      <a href="https://magictray.app/drivers.html">Which driver do I need</a> ·
       <a href="llms.txt">llms.txt</a></p>
     <p>Not affiliated with Apple Inc. Apple, Magic Mouse, and Boot Camp are trademarks of Apple Inc.</p>
   </footer>

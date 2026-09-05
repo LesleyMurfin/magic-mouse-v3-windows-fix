@@ -81,12 +81,12 @@
     <a href="battery.html" aria-current="page">Battery %</a>
     <a href="faq.html">FAQ</a>
     <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
-    <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray app</a>
+    <a href="https://magictray.app/">Magic Tray app</a>
   </nav>
     <h1>Magic Mouse battery percentage on Windows 11</h1>
-    <p class="lead">To see <strong>Magic Mouse battery percentage</strong> on <strong>Windows 11</strong>, use the free <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray (Windows app)</a>: it reads the mouse&rsquo;s HID Input report <code>0x90</code> on collection <strong>COL02</strong> and shows the percentage next to the Windows clock. The <strong>Magic Mouse 2024 (v3) Windows driver</strong> in this repo does not read battery at all &mdash; it is a kernel driver whose job is keeping scroll alive on <strong>PID 0323</strong>. The two are complementary: the driver keeps the HID collections healthy, and a healthy collection stack is what makes the battery read reliable.</p>
+    <p class="lead">To see <strong>Magic Mouse battery percentage</strong> on <strong>Windows 11</strong>, use the free <a href="https://magictray.app/">Magic Tray (Windows app)</a>: it reads the mouse&rsquo;s HID Input report <code>0x90</code> on collection <strong>COL02</strong> and shows the percentage next to the Windows clock. The <strong>Magic Mouse 2024 (v3) Windows driver</strong> in this repo does not read battery at all &mdash; it is a kernel driver whose job is keeping scroll alive on <strong>PID 0323</strong>. The two are complementary: the driver keeps the HID collections healthy, and a healthy collection stack is what makes the battery read reliable.</p>
     <p class="cta">
-      <a class="primary" href="https://lesleymurfin.github.io/magic-tray/">Get Magic Tray (Windows app)</a>
+      <a class="primary" href="https://magictray.app/">Get Magic Tray (Windows app)</a>
       <a class="ghost" href="install.html">Install the scroll driver</a>
     </p>
   </header>
@@ -109,7 +109,7 @@
     <p>No. This project is a kernel-mode KMDF filter driver and it does not read or report battery level. Anything that claims otherwise about this repo is wrong. Reading the battery is userspace work, and it is done by the Magic Tray app.</p>
 
     <h2>How do I check Magic Mouse battery on Windows?</h2>
-    <p>Install <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray (Windows app)</a> and look next to the Windows clock. Magic Tray opens the mouse&rsquo;s HID interface, reads Input report <code>0x90</code> from collection COL02, and renders the percentage in the notification area. Source: the <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo on GitHub</a>.</p>
+    <p>Install <a href="https://magictray.app/">Magic Tray (Windows app)</a> and look next to the Windows clock. Magic Tray opens the mouse&rsquo;s HID interface, reads Input report <code>0x90</code> from collection COL02, and renders the percentage in the notification area. Source: the <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo on GitHub</a>.</p>
     <p class="note">Magic Tray is Windows software &mdash; a system-tray utility for Apple mice on Windows. It is not a desk accessory, a keyboard stand, or a 3D-printed or wooden tray, despite what a shopping search suggests.</p>
 
     <h2>Why does Windows 11 not show the battery level itself?</h2>
@@ -126,14 +126,14 @@
     </ul>
 
     <h2>Does this work on Magic Mouse 1 or Magic Mouse 2?</h2>
-    <p>Battery reporting for older Apple mice is a Magic Tray question, not a question about this driver. This driver targets PID <code>0x0323</code> only; v1 (<code>0x030D</code>) and v2 (<code>0x0269</code>) are served by Apple&rsquo;s Boot Camp INF and the community fixes listed in the <a href="scroll-fix.html">scroll fix table</a>. For what Magic Tray supports, see <a href="https://lesleymurfin.github.io/magic-tray/">the Magic Tray (Windows app) site</a>.</p>
+    <p>Battery reporting for older Apple mice is a Magic Tray question, not a question about this driver. This driver targets PID <code>0x0323</code> only; v1 (<code>0x030D</code>) and v2 (<code>0x0269</code>) are served by Apple&rsquo;s Boot Camp INF and the community fixes listed in the <a href="scroll-fix.html">scroll fix table</a>. For what Magic Tray supports, see <a href="https://magictray.app/">the Magic Tray (Windows app) site</a>.</p>
   </main>
   <footer>
     <p><strong>Magic Mouse 2024 (v3) Windows driver</strong> — MIT licensed, free, no subscription.
       Maintained by Revive Business Solutions / Lesley Murfin.</p>
     <p><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver repo</a> ·
       <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a> ·
-      <a href="https://lesleymurfin.github.io/magic-tray/drivers.html">Which driver do I need</a> ·
+      <a href="https://magictray.app/drivers.html">Which driver do I need</a> ·
       <a href="llms.txt">llms.txt</a></p>
     <p>Not affiliated with Apple Inc. Apple, Magic Mouse, and Boot Camp are trademarks of Apple Inc.</p>
   </footer>
