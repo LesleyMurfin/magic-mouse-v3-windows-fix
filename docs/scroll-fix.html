@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Magic Mouse Scroll Not Working on Windows 11</title>
+  <meta name="description" content="Magic Mouse 2024 (v3) scroll stops on Windows 11 because a Bluetooth idle disconnect collapses the HID collections. The PID 0323 KMDF driver fixes it.">
+  <link rel="canonical" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html">
+  <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
+  <link rel="describedby" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/llms.txt">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Magic Mouse v3 Windows Driver">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:title" content="Magic Mouse 2024 (v3) scroll not working on Windows 11">
+  <meta property="og:description" content="Cursor moves, scroll is dead after an idle Bluetooth disconnect. Cause: HID collections collapse, Mode A to Mode B. Fix: the PID 0323 KMDF driver.">
+  <meta property="og:url" content="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html">
+  <meta property="og:image" content="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Magic Mouse 2024 (v3) Windows driver &mdash; scroll fix for PID 0323">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="site.css">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html#webpage",
+      "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html",
+      "name": "Magic Mouse 2024 (v3) scroll not working on Windows 11",
+      "description": "Magic Mouse 2024 (v3) scroll stops on Windows 11 because a Bluetooth idle disconnect collapses the HID collections. The PID 0323 KMDF driver fixes it.",
+      "isPartOf": {
+        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#website"
+      },
+      "about": {
+        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#software"
+      },
+      "primaryImageOfPage": {
+        "@type": "ImageObject",
+        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html#primaryimage",
+        "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/og.png",
+        "width": 1200,
+        "height": 630
+      },
+      "breadcrumb": {
+        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html#breadcrumb"
+      },
+      "datePublished": "2026-05-01",
+      "dateModified": "2026-09-04",
+      "inLanguage": "en"
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html#breadcrumb",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Windows driver",
+          "item": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Scroll fix",
+          "item": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html"
+        }
+      ]
+    }
+  ]
+}</script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <header>
+    <p class="kicker">Scroll fix &middot; Mode A &rarr; Mode B &middot; PID 0323</p>
+  <nav aria-label="Site">
+    <a href="./">Windows driver</a>
+    <a href="install.html">Install</a>
+    <a href="scroll-fix.html" aria-current="page">Scroll fix</a>
+    <a href="battery.html">Battery %</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
+    <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray app</a>
+  </nav>
+    <h1>Magic Mouse 2024 (v3) scroll not working on Windows 11</h1>
+    <p class="lead">If your <strong>Magic Mouse 2024 (v3)</strong> still moves the cursor on <strong>Windows 11</strong> but two-finger scroll is dead, Windows has collapsed the mouse&rsquo;s HID collections after a Bluetooth idle disconnect. It does not recover on its own. The fix for <strong>PID 0323</strong> is the KMDF filter driver in this project &mdash; the <strong>Magic Mouse v3 Windows driver</strong> &mdash; because Apple never shipped a Windows driver for this mouse.</p>
+    <p class="cta">
+      <a class="primary" href="install.html">Install the Magic Mouse v3 Windows driver</a>
+      <a class="ghost" href="#which-mouse">Which mouse do I have?</a>
+    </p>
+  </header>
+  <main id="content">
+    <h2>What are the symptoms?</h2>
+    <p>The cursor keeps working and clicks keep working; only scrolling stops. The pattern users report is consistent:</p>
+    <ul class="plain">
+      <li><strong>Cursor and buttons fine</strong> &mdash; the mouse is clearly still connected and still moving.</li>
+      <li><strong>Two-finger scroll completely dead</strong> &mdash; not slow, not jumpy, just nothing.</li>
+      <li><strong>Starts after the mouse sits idle</strong> &mdash; typically around 15 to 30 minutes, followed by a Bluetooth disconnect and reconnect.</li>
+      <li><strong>No self-recovery</strong> &mdash; waking the mouse, sleeping the PC, or toggling Bluetooth does not bring scroll back.</li>
+      <li><strong>Previously fixed only by re-pairing or reinstalling the driver</strong>, and then it came back.</li>
+    </ul>
+
+    <h2>Why does Magic Mouse scroll stop working on Windows 11?</h2>
+    <p>Because Windows rebuilds the device with the wrong shape. After a Bluetooth idle disconnect, DeviceSetupManager (DSM) runs property synchronization against the cached device state, and the HID collections the mouse exposes get collapsed &mdash; the project calls this <strong>Mode A &rarr; Mode B</strong>. Mode A exposes the separate collections that carry the touch-surface data; Mode B exposes a plain mouse. A plain mouse has a cursor and buttons and no scroll surface, which is exactly the symptom.</p>
+    <p>This is not a battery problem, not a Bluetooth range problem, and not a Windows setting you can toggle. Nothing in the Windows mouse settings can re-expose a collection that is no longer there.</p>
+    <p class="note">Common bad advice: &ldquo;just install the Apple driver.&rdquo; Apple&rsquo;s Boot Camp INF contains no <code>0323</code> entry, so for the 2024 Magic Mouse there is no Apple driver to install. That advice is correct for a v1 or v2 Magic Mouse and wrong for this one.</p>
+    <p>Full write-up in the repo: <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/bug-analysis.md">bug analysis of the DSM and BTHPORT path</a> and the <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/diagrams/diagram-mode-ab.md">Mode A / Mode B HID collection diagram</a>.</p>
+
+    <h2>Try this first</h2>
+    <p>Rule out the cheap causes before you install a kernel driver.</p>
+    <ol class="steps">
+      <li><strong>Re-pair the mouse.</strong> Remove the device in Bluetooth settings, then pair it again. If scroll comes back and then dies again after the next idle period, you have this bug.</li>
+      <li><strong>Confirm the PID.</strong> Device Manager &rarr; Human Interface Devices &rarr; Apple Magic Mouse &rarr; Properties &rarr; Details &rarr; Hardware Ids. Look for <code>PID_0323</code>.</li>
+      <li><strong>Confirm it is not a v1 or v2 mouse.</strong> <code>PID_030D</code> is the 2009 AA-battery Magic Mouse, <code>PID_0269</code> is Magic Mouse 2 with the Lightning port. Those are covered by Apple&rsquo;s Boot Camp INF and are out of scope here.</li>
+      <li><strong>Check you are not looking at a trackpad.</strong> Magic Trackpads report <code>030E</code>, <code>0265</code>, or <code>0324</code>; this driver does not target them.</li>
+      <li><strong>Then install the driver.</strong> Follow <a href="install.html">how to install the Magic Mouse 2024 (v3) Windows driver</a>. The KMDF filter keeps the HID collections intact across a Bluetooth reconnect, so scroll survives the idle cycle that used to break it.</li>
+    </ol>
+
+    <h2 id="which-mouse">Which mouse do I have, and what should I install?</h2>
+    <table>
+      <thead>
+        <tr><th>Your mouse</th><th>Bluetooth PID</th><th>What to install</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Magic Mouse 2024, USB-C (this project calls it v3)</td>
+          <td><code>0x0323</code></td>
+          <td>This KMDF driver &mdash; <a href="install.html">install guide</a></td>
+        </tr>
+        <tr>
+          <td>Magic Mouse 2, Lightning (v2)</td>
+          <td><code>0x0269</code></td>
+          <td>Apple&rsquo;s Boot Camp INF, or <a href="https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows">sbagirici&rsquo;s scroll fix</a> / <a href="https://github.com/tealtadpole/MagicMouse2DriversWin11x64">tealtadpole&rsquo;s Win11 x64 package</a></td>
+        </tr>
+        <tr>
+          <td>Magic Mouse, AA batteries, 2009 (v1)</td>
+          <td><code>0x030D</code></td>
+          <td>Apple&rsquo;s Boot Camp INF, or <a href="https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows">sbagirici</a> / <a href="https://github.com/tealtadpole/MagicMouse2DriversWin11x64">tealtadpole</a></td>
+        </tr>
+        <tr>
+          <td>Apple Wireless Mouse</td>
+          <td><code>0x0310</code></td>
+          <td>Treat it like v1: Boot Camp INF or the community v1 fixes</td>
+        </tr>
+        <tr>
+          <td>Magic Trackpad</td>
+          <td><code>030E</code>, <code>0265</code>, <code>0324</code></td>
+          <td>Not covered by this driver</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>Unsure after all that? The Magic Tray site keeps a decision page: <a href="https://lesleymurfin.github.io/magic-tray/drivers.html">which Apple mouse driver do I need on Windows</a>.</p>
+
+    <h2>Will this fix the battery percentage too?</h2>
+    <p>No. The driver restores scroll; it does not read battery. The free <a href="https://lesleymurfin.github.io/magic-tray/">Magic Tray (Windows app)</a> is what shows battery percentage next to the Windows clock, and a healthy HID collection stack is what keeps that read reliable. Details: <a href="battery.html">Magic Mouse battery percentage on Windows 11</a>. Magic Tray is Windows software &mdash; a system-tray utility &mdash; not a desk accessory, stand, or 3D-printed tray.</p>
+
+    <h2>Still stuck?</h2>
+    <ul class="plain">
+      <li><a href="faq.html">Magic Mouse v3 Windows driver FAQ</a> &mdash; Boot Camp, Test Mode, Windows 10, USB-C cable.</li>
+      <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver source and issues on GitHub</a> &mdash; MIT licensed, free.</li>
+    </ul>
+  </main>
+  <footer>
+    <p><strong>Magic Mouse 2024 (v3) Windows driver</strong> — MIT licensed, free, no subscription.
+      Maintained by Revive Business Solutions / Lesley Murfin.</p>
+    <p><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver repo</a> ·
+      <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a> ·
+      <a href="https://lesleymurfin.github.io/magic-tray/drivers.html">Which driver do I need</a> ·
+      <a href="llms.txt">llms.txt</a></p>
+    <p>Not affiliated with Apple Inc. Apple, Magic Mouse, and Boot Camp are trademarks of Apple Inc.</p>
+  </footer>
+</body>
+</html>

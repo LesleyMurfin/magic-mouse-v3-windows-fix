@@ -1,0 +1,68 @@
+# robots.txt — Magic Mouse 2024 (v3) Windows Driver
+# Canonical: https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/
+# Full site content is public. Search crawlers and AI/answer-engine crawlers
+# are all explicitly allowed to crawl, index, quote, and cite these pages.
+
+User-agent: *
+Allow: /
+
+# --- AI / answer-engine crawlers (explicit allow for AEO citation) ---
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+User-agent: meta-externalagent
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: YandexBot
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+Sitemap: https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/sitemap.xml
