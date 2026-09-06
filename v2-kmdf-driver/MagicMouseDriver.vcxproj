@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MagicMouseDriver.vcxproj — KMDF Kernel-Mode Driver Project
+  Build with EWDK (Enterprise WDK) standalone environment:
+
+    1. Mount EWDK ISO (no install needed)
+    2. Run: <ISO>\LaunchBuildEnv.cmd
+    3. In the EWDK shell: cd <this directory>
+    4. Build: msbuild MagicMouseDriver.vcxproj /p:Configuration=Debug /p:Platform=x64
+
+  If this .vcxproj does not work with your EWDK version, clone mac-precision-touchpad
+  (https://github.com/roblabla/MacTrackpad) and adapt its project files:
+    - Change TargetName to MagicMouseDriver
+    - Replace source files with Driver.c, HidDescriptor.c, InputHandler.c
+    - Update the INF reference to MagicMouseDriver.inf
+
+  Requires test signing for development:
+    bcdedit /set testsigning on  (run elevated, then reboot once)
+-->
+<Project DefaultTargets="Build" ToolsVersion="15.0"
+         xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</ProjectGuid>
+    <TargetName>MagicMouseDriver</TargetName>
+    <TargetExt>.sys</TargetExt>
+    <!-- KMDF version — update to match EWDK version (1.33 = Windows 11 22H2) -->
+    <DriverType>KMDF</DriverType>
+    <KmdfVersionMajor>1</KmdfVersionMajor>
+    <KmdfVersionMinor>33</KmdfVersionMinor>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Driver</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <TargetVersion>Windows10</TargetVersion>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+    <!-- NOTE: SIGNTASK (WDK inline C# task) calls signtool without /fd sha256.
+         Newer signtool requires /fd sha256 as mandatory and exits non-zero, so
+         SIGNTASK fails and the .sys is deleted. The BackupPreSign target below
+         hooks AfterTargets="Link" to copy the .sys to C:\mm3-presign\ before any
+         signing target runs. mm-dev.ps1 Build phase restores from C:\mm3-presign\
+         if the .sys is missing after msbuild exits. -->
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Driver</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <TargetVersion>Windows10</TargetVersion>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsError>true</TreatWarningAsError>
+    </ClCompile>
+    <Link>
+      <SubSystem>Native</SubSystem>
+      <Driver>WDM</Driver>
+      <AdditionalDependencies>wdmguid.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClCompile Include="Driver.c" />
+    <ClCompile Include="GestureEngine.c" />
+    <ClCompile Include="HidDescriptor.c" />
+    <ClCompile Include="InputHandler.c" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClInclude Include="Driver.h" />
+    <ClInclude Include="GestureEngine.h" />
+    <ClInclude Include="HidDescriptor.h" />
+    <ClInclude Include="InputHandler.h" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Inf Include="MagicMouseDriver.inf" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="$(WDKContentRoot)\build\WindowsDriver.targets"
+          Condition="Exists('$(WDKContentRoot)\build\WindowsDriver.targets')" />
+
+  <!-- Back up the linked .sys right after Link completes, before any WDK signing
+       target deletes it on failure (SIGNTASK /fd sha256 issue on newer signtool).
+       mm-dev.ps1 Build phase restores from C:\mm3-presign\ if .sys is missing. -->
+  <Target Name="BackupPreSign" AfterTargets="Link">
+    <MakeDir Directories="C:\mm3-presign" />
+    <Copy SourceFiles="$(OutDir)$(TargetFileName)"
+          DestinationFiles="C:\mm3-presign\$(TargetFileName)"
+          Condition="Exists('$(OutDir)$(TargetFileName)')" />
+    <Message Text="*** BackupPreSign: $(TargetFileName) → C:\mm3-presign\ ***" Importance="High" />
+  </Target>
+
+</Project>

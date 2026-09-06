@@ -1,0 +1,12 @@
+# .clang-format — M12 WDF-style preset
+# Place in driver/ (or repo root) so clang-format picks it up automatically.
+# Enforced by scripts/check-style.sh check #8.
+---
+BasedOnStyle: Microsoft
+IndentWidth: 4
+ColumnLimit: 100
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+DerivePointerAlignment: false
+PointerAlignment: Right
+SortIncludes: false

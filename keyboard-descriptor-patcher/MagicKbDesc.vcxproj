@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MagicKbDesc.vcxproj — KMDF lower filter for Apple keyboard descriptor patching.
+  Cloned from sibling driver/MagicMouseDriver.vcxproj 2026-05-08; same EWDK +
+  WDK target, just renamed and pointed at this directory's source files.
+-->
+<Project DefaultTargets="Build" ToolsVersion="15.0"
+         xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{B2C3D4E5-F607-8901-BCDE-F23456789012}</ProjectGuid>
+    <TargetName>MagicKbDesc</TargetName>
+    <TargetExt>.sys</TargetExt>
+    <DriverType>KMDF</DriverType>
+    <KmdfVersionMajor>1</KmdfVersionMajor>
+    <KmdfVersionMinor>33</KmdfVersionMinor>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Driver</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <TargetVersion>Windows10</TargetVersion>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Driver</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <TargetVersion>Windows10</TargetVersion>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsError>true</TreatWarningAsError>
+    </ClCompile>
+    <Link>
+      <SubSystem>Native</SubSystem>
+      <Driver>WDM</Driver>
+      <AdditionalDependencies>wdmguid.lib;hidclass.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClCompile Include="Driver.c" />
+    <ClCompile Include="Descriptor.c" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClInclude Include="MagicKbDesc.h" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Inf Include="MagicKbDesc.inx" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="$(WDKContentRoot)\build\WindowsDriver.targets"
+          Condition="Exists('$(WDKContentRoot)\build\WindowsDriver.targets')" />
+
+  <!-- Same SIGNTASK pre-backup workaround used by the M3 driver — see
+       sibling MagicMouseDriver.vcxproj for full rationale. -->
+  <Target Name="BackupPreSign" AfterTargets="Link">
+    <MakeDir Directories="C:\mm3-presign" />
+    <Copy SourceFiles="$(OutDir)$(TargetFileName)"
+          DestinationFiles="C:\mm3-presign\$(TargetFileName)"
+          Condition="Exists('$(OutDir)$(TargetFileName)')" />
+    <Message Text="*** BackupPreSign: $(TargetFileName) -&gt; C:\mm3-presign\ ***" Importance="High" />
+  </Target>
+
+</Project>
