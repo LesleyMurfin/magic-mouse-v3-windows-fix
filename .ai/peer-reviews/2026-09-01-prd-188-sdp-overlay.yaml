@@ -1,0 +1,72 @@
+session_id: 2026-09-01-prd-188-sdp-overlay
+timestamp: 2026-09-01T09:09:06-0600
+branch: ai/kmdf-204-unique-pkg-7748
+scope: "PRD-188 135-byte same-size SDP overlay BUILD (no Windows load)"
+apex_score: 8
+apex_floor: opus
+cra_tier: T2
+is_major_step: true
+signals: [kernel-filter, bluetooth-sdp, prior-0x50]
+docs_gathered:
+  internal:
+    - prd/188-m14-v3-gesture-engine-linux-mouse2-port.md
+    - specs/4-kmdf-204-unique-scroll.md
+    - v2-kmdf-driver/InputHandler.c
+    - v2-kmdf-driver/HidDescriptor.c
+    - v2-kmdf-driver/tests/test_sdp_overlay.py
+    - C:\mm-dev-queue\dump-18750.txt
+    - C:\mm-dev-queue\dump-17390.txt
+  external: []
+notebooklm:
+  notebook_id: e789e5e9-da23-4607-9a62-bbfd94bb789b
+  conversation_id: 8dfc914c-2b40-4ccf-bdb1-f6d582a08a25
+  synthesis: |
+    VERDICT: APPROVE
+    IR: IR-ALIGN
+    WEAKNESS: 11-byte SDP prefix assumed invariant across firmware/SDP changes; overlay silently no-ops if length fields shift.
+intent_revalidation:
+  is_major_step: true
+  ir: IR-ALIGN
+  battery:
+    Q1: { answer: Y, evidence: "v3 0323 pointer+scroll+battery is the PRD-188 non-negotiable" }
+    Q2: { answer: Y, evidence: "Personal Magic Mouse product path; named PRD-188 enabler" }
+    Q3: { answer: Y, evidence: "0323-only unique KMDF; not PATH-A; not v1 030D INF" }
+    Q4: { answer: N, evidence: "same-size overlay is smaller than SDP tree rewrite that 0x50'd" }
+    Q5: { answer: N, evidence: "Linux gates before WDK; no unjustified load" }
+    Q6: { answer: Y, evidence: "causal chain to working v3 scroll+battery without 0x50" }
+    Q7: { answer: N, evidence: "not factory self-care" }
+  business_md: null
+  skip_reason: null
+experts:
+  - name: ExpertSec
+    agent: security-reviewer
+    verdict: APPROVE
+    unsigned_load_bar: true
+    arbitrary_write_bar: true
+  - name: ExpertHid
+    agent: reviewer
+    verdict: CHANGES-NEEDED
+    finding: "HidDescriptor.c Wheel item inherits Report Count 2 from X/Y; GestureEngine writes vertical wheel at byte 7; first 0x0038 field is byte 6."
+review_model: notebooklm-prd-184 + ExpertHid + ExpertSec
+status: changes-needed
+outcome: |
+  NLM T2 APPROVE + IR-ALIGN.
+  ExpertSec APPROVE (no past-usedLen write; unique SCM; no PATH-A).
+  ExpertHid CHANGES-NEEDED: reset Report Count before Wheel Input or accept both extra bytes as Wheel.
+  Combined quality: CHANGES-NEEDED. Gate not cleared for pnputil.
+factory_gate_footer: |
+  <!-- factory-gate:v1 agent=peer-review -->
+  VERDICT: CHANGES-NEEDED
+  IR: IR-ALIGN
+  SCORE: 0.86
+  CRA_HINT: T2
+  SUMMARY: Overlay memcpy/0x50 attribution hold | Wheel Report Count 2 vs GestureEngine byte 7
+  IR_BATTERY:
+    Q1: Y — PRD-188 v3 scroll+battery
+    Q2: Y — personal mouse product
+    Q3: Y — 0323 unique KMDF in scope
+    Q4: N — overlay smaller than length-rewrite
+    Q5: N — no Windows load this slice
+    Q6: Y — scroll+battery without 0x50
+    Q7: N — not factory-only
+  <!-- /factory-gate:v1 -->

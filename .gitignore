@@ -35,13 +35,16 @@ Thumbs.db
 .DS_Store
 
 # Git-ignore driver binaries EXCEPT the labeled PATH-A ship-blocker (if present).
-# KMDF still *installs* as MagicMouseDriver.sys; PATH-A still *installs* as
-# applewirelessmouse.sys. Package / backup names must stay distinct.
+# KMDF 2.0.4 scroll dest is MagicMouseDriver-kmdf-204-scroll.sys.
+# MagicMouseDriver.sys is the Apr 30 restore name — never commit a second copy.
 *.sys
 !v1-binary-patch/applewirelessmouse-patched-pathA-SHIPBLOCKER.sys
 !v1-binary-patch/installer/applewirelessmouse-patched-pathA-SHIPBLOCKER.sys
 
-# Certificates EXCEPT release/
+# Catalogs are produced on Windows after human sign. Do not commit unsigned cats.
+*.cat
+
+# Certificates EXCEPT release/. Never commit PFX / private keys.
 *.cer
 *.pfx
 *.p12

@@ -4,16 +4,20 @@
 #include <ntddk.h>
 #include <wdf.h>
 
-// Scan an SDP attribute response for HIDDescriptorList (0x0206) and replace
-// the embedded report descriptor with g_HidDescriptor[].
+// Same-size SDP overlay. Find the native v3 HIDDescriptorList prefix
+//   09 02 06 35 8D 35 8B 08 22 25 87
+// and RtlCopyMemory g_HidDescriptor[0x87] over the TEXT_STRING body.
+// Never writes 0x35 / 0x36 / 0x25 / buf[4]. Δ = 0.
+// Fail-closed is no mutation (buffer unchanged).
 //
 // Returns:
-//   STATUS_SUCCESS                   — patched; *newLen = new byte count
-//   STATUS_NOT_FOUND                 — 0x0206 not present (normal)
-//   STATUS_MORE_PROCESSING_REQUIRED  — pattern found, patch rejected
-//   STATUS_INVALID_PARAMETER         — buf NULL or too small
+//   STATUS_SUCCESS           — overlaid; *newLen = usedLen
+//   STATUS_NOT_FOUND         — prefix not present (buffer unchanged)
+//   STATUS_BUFFER_TOO_SMALL  — prefix found; 135-byte body does not fit
+//   STATUS_INVALID_PARAMETER — buf NULL, allocLen < usedLen, or sizeof != 0x87
 NTSTATUS
 SdpRewrite_Process(
-    _Inout_updates_bytes_(bufSize) PUCHAR  buf,
-    _In_  ULONG  bufSize,
+    _Inout_updates_bytes_(allocLen) PUCHAR  buf,
+    _In_  ULONG  usedLen,
+    _In_  ULONG  allocLen,
     _Out_ PULONG newLen);

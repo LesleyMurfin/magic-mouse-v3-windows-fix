@@ -1,6 +1,7 @@
 @echo off
-REM One click. First time: accept the Administrator prompt (registers a SYSTEM task).
-REM Later clicks: no prompt — the task just runs.
+REM Signed pnputil /add-driver only. Requires unique INF + signed .cat/.sys.
+REM Does NOT copy onto System32\drivers or DriverStore.
+REM Does NOT run unsigned activate / pr3-activate-204.
 cd /d "%~dp0"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Install-KMDF.ps1"
 echo.

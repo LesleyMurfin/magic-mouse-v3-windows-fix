@@ -5,10 +5,11 @@
   Build (Windows + WDK or mounted EWDK):
     msbuild MagicMouseDriver.vcxproj /p:Configuration=Release /p:Platform=x64 /p:SignMode=Off
 
-  Or double-click Install-KMDF.cmd — it builds if a .sys is missing and EWDK/WDK exists.
+  Then run Freeze-KmdfArtifact.ps1 (names MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys).
+  Human signs with cert thumb 16940C0F. pnputil /add-driver the unique INF only.
 
-  Linux cannot produce a .sys. WDK output is MagicMouseDriver.sys (INF/service name).
-  Copy the artifact to MagicMouseDriver-kmdf-2.0.4-scroll.sys (FileVersion 2.0.4.0).
+  Linux cannot produce a .sys. WDK TargetName is MagicMouseDriver-kmdf-204-scroll
+  (INF dest). Never emit MagicMouseDriver.sys (Apr 30 restore name).
   Never name a KMDF build applewirelessmouse*.sys.
 -->
 <Project DefaultTargets="Build" ToolsVersion="15.0"
@@ -27,7 +28,7 @@
 
   <PropertyGroup Label="Globals">
     <ProjectGuid>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</ProjectGuid>
-    <TargetName>MagicMouseDriver</TargetName>
+    <TargetName>MagicMouseDriver-kmdf-204-scroll</TargetName>
     <TargetExt>.sys</TargetExt>
     <DriverType>KMDF</DriverType>
     <KmdfVersionMajor>1</KmdfVersionMajor>
@@ -52,6 +53,7 @@
     <TargetVersion>Windows10</TargetVersion>
     <DriverTargetPlatform>Universal</DriverTargetPlatform>
     <SignMode>Off</SignMode>
+    <StampInf>false</StampInf>
   </PropertyGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
@@ -86,7 +88,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Inf Include="MagicMouseDriver.inf" />
+    <Inf Include="MagicMouseDriver-kmdf-204-scroll.inf" />
     <ResourceCompile Include="MagicMouseDriver.rc" />
   </ItemGroup>
 
