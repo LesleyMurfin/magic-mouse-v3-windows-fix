@@ -33,8 +33,25 @@
 
 // Surface drag distance (touch units) per Wheel detent.
 // Hardware 2026-09-01: 224 (Linux default) produced zero wheel on live 0323.
-// Proven working detent is 8. Do not ship 224 without a new glass proof.
+// Proven working detent is 8 at constant (non-velocity-scaled) step - this
+// is the TWO_FINGER + SCROLL_STEP_8 baseline/floor. Do not ship 224
+// without a new glass proof.
 #define MM_SCROLL_STEP 8
+
+// 2026-09-08 prepare-only diff (NOT INSTALLED - see OVERNIGHT-2026-09-08.md,
+// needs a human touch test in the morning). Velocity-aware scaling: the
+// effective detent grows with how far the finger moved since the *previous*
+// HID report (not since the last notch), so a slow deliberate drag keeps
+// the proven MM_SCROLL_STEP feel while a fast flick requires proportionally
+// more raw distance per notch instead of flooding notches linearly.
+// GAIN and MAX below are unvalidated guesses (no data point between the
+// working 8 and the zero-output 224 has ever touched real hardware) -
+// chosen only so the curve is monotonic and never falls below the proven
+// floor or exceeds a bounded ceiling. GAIN=2 doubles the detent for every
+// unit of per-report velocity beyond the floor; MAX caps the detent at 3x
+// MM_SCROLL_STEP so fast flicks still eventually emit notches.
+#define MM_SCROLL_VELOCITY_GAIN 2
+#define MM_SCROLL_STEP_MAX      (MM_SCROLL_STEP * 3)
 
 #define SCROLL_HR_THRESHOLD 90
 

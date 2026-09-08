@@ -97,12 +97,19 @@ AccumulateSurfaceScroll(
             ctx->TouchAnchorX[id] = (INT16)x;
             ctx->TouchAnchorY[id] = (INT16)y;
             ctx->TouchAnchorValid[id] = TRUE;
+            ctx->TouchLastX[id] = (INT16)x;
+            ctx->TouchLastY[id] = (INT16)y;
+            ctx->TouchLastValid[id] = TRUE;
             continue;
         }
 
         if (state != TOUCH_STATE_DRAG || !ctx->TouchAnchorValid[id])
         {
-            if (state == 0x00) { ctx->TouchAnchorValid[id] = FALSE; }
+            if (state == 0x00)
+            {
+                ctx->TouchAnchorValid[id] = FALSE;
+                ctx->TouchLastValid[id] = FALSE;
+            }
             continue;
         }
 
@@ -112,15 +119,39 @@ AccumulateSurfaceScroll(
             continue;
         }
 
+        // 2026-09-08 prepare-only velocity-scaling diff (NOT INSTALLED):
+        // per-report speed (this sample vs the previous one, independent
+        // of the notch anchor) grows the effective detent so a fast flick
+        // needs more raw distance per notch than a slow deliberate drag.
+        // Floor is still exactly MM_SCROLL_STEP - a stationary/slow finger
+        // behaves identically to the proven 2026-09-01 constant-step code.
+        INT velY = 0;
+        INT velX = 0;
+        if (ctx->TouchLastValid[id])
+        {
+            velY = (INT)ctx->TouchLastY[id] - y;
+            if (velY < 0) { velY = -velY; }
+            velX = (INT)ctx->TouchLastX[id] - x;
+            if (velX < 0) { velX = -velX; }
+        }
+        ctx->TouchLastX[id] = (INT16)x;
+        ctx->TouchLastY[id] = (INT16)y;
+        ctx->TouchLastValid[id] = TRUE;
+
+        INT effStepY = MM_SCROLL_STEP + velY * MM_SCROLL_VELOCITY_GAIN;
+        if (effStepY > MM_SCROLL_STEP_MAX) { effStepY = MM_SCROLL_STEP_MAX; }
+        INT effStepX = MM_SCROLL_STEP + velX * MM_SCROLL_VELOCITY_GAIN;
+        if (effStepX > MM_SCROLL_STEP_MAX) { effStepX = MM_SCROLL_STEP_MAX; }
+
         INT stepY = (INT)ctx->TouchAnchorY[id] - y;
         INT stepX = (INT)ctx->TouchAnchorX[id] - x;
 
-        if (stepY >= MM_SCROLL_STEP || stepY <= -MM_SCROLL_STEP)
+        if (stepY >= effStepY || stepY <= -effStepY)
         {
             *outWheel += (stepY > 0) ? 1 : -1;
             ctx->TouchAnchorY[id] = (INT16)y;
         }
-        if (stepX >= MM_SCROLL_STEP || stepX <= -MM_SCROLL_STEP)
+        if (stepX >= effStepX || stepX <= -effStepX)
         {
             *outHWheel += (stepX > 0) ? -1 : 1;
             ctx->TouchAnchorX[id] = (INT16)x;
