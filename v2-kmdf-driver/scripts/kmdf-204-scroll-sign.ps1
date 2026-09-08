@@ -1,16 +1,19 @@
 # kmdf-204-scroll-sign.ps1
-# Sign unique 2.0.4.1 sys+cat with thumb 16940C0F. No MagicMouseDriver.sys. No PATH-A.
+# Sign unique 2.0.4.2 sys+cat with thumb 16940C0F. No MagicMouseDriver.sys. No PATH-A.
 $ErrorActionPreference = 'Stop'
 $Thumb = '16940C0F937D569363560D5FEC5CD8FA6D6D9BCE'
 $ForbidB902 = 'B902C2864315E2DE359450024768CE7D01715C38'
 $WdkTest = '609447610A54605BE39AB32CFADB661023FD3ED0'
-$SrcSys = 'C:\mm-dev-queue\kmdf-204-bld\x64\Release\MagicMouseDriver-kmdf-204-scroll.sys'
-$SrcInf = 'C:\mm-dev-queue\kmdf-204-bld\x64\Release\MagicMouseDriver-kmdf-204-scroll.inf'
-$Stage = 'C:\mm-dev-queue\kmdf-204-sign'
+$SrcSys = 'C:\mm-dev-queue\kmdf-204-bld-20260908\x64\Release\MagicMouseDriver-kmdf-204-scroll.sys'
+$SrcInf = 'C:\mm-dev-queue\kmdf-204-bld-20260908\x64\Release\MagicMouseDriver-kmdf-204-scroll.inf'
+# Separate stage from C:\mm-dev-queue\kmdf-204-sign\ - that path is the
+# known-good 2.0.4.1 restore copy (kmdf-204-pnputil-once.ps1 restore
+# source). Never overwrite it with an unverified build.
+$Stage = 'C:\mm-dev-queue\kmdf-204-sign-20260908'
 $Sys = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.sys'
 $Inf = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.inf'
 $Cat = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.cat'
-$Want = 'E73EC0A83BB01393C6ECD4359AAC6F52FAEE53C242B87ED2E49630F967375A55'
+$Want = '6DDD114B4FA21A728A965B06CA07ACB71440F5073524EBE0DC22BA06630B67BB'
 $Forbid = @(
     '845435CE','13BF983A','D3876B0A','A1289489','AD5D244B','559B136A',
     '370A5555','6DF8575B','9EF6C117','D22EB163','F02ECCED','B4582C50',
@@ -21,7 +24,7 @@ $Inf2Cat = 'C:\mm-dev-queue\wdk-packages\Microsoft.Windows.WDK.x64.10.0.26100.65
 
 function Fail([int]$c, [string]$m) { Write-Output $m; exit $c }
 
-Write-Output '===== unique 2.0.4.1 SIGN start ====='
+Write-Output '===== unique 2.0.4.2 SIGN start ====='
 if (-not (Test-Path -LiteralPath $SrcSys)) { Fail 2 ('missing sys ' + $SrcSys) }
 if (-not (Test-Path -LiteralPath $SrcInf)) { Fail 2 ('missing inf ' + $SrcInf) }
 if (-not (Test-Path -LiteralPath $SignTool)) { Fail 2 ('missing signtool ' + $SignTool) }
@@ -30,7 +33,7 @@ if ($SrcSys -match 'applewirelessmouse|MagicMouseDriver\.sys$') { Fail 3 'REFUSE
 
 $hash = (Get-FileHash -LiteralPath $SrcSys -Algorithm SHA256).Hash.ToUpperInvariant()
 Write-Output ('pre_sign_SHA256=' + $hash)
-if ($hash -ne $Want) { Fail 3 ('REFUSE hash not frozen 30F91397 got ' + $hash) }
+if ($hash -ne $Want) { Fail 3 ('REFUSE hash not frozen, want ' + $Want + ' got ' + $hash) }
 foreach ($p in $Forbid) {
     if ($hash.StartsWith($p)) { Fail 3 ('REFUSE forbidden hash ' + $hash) }
 }
@@ -80,5 +83,5 @@ $th = ''
 if ($sig.SignerCertificate) { $th = $sig.SignerCertificate.Thumbprint.ToUpperInvariant() }
 Write-Output ('signer_thumb=' + $th)
 if ($th -ne $Thumb) { Fail 3 ('REFUSE signer thumb ' + $th) }
-Write-Output '===== unique 2.0.4.1 SIGN done ====='
+Write-Output '===== unique 2.0.4.2 SIGN done ====='
 exit 0

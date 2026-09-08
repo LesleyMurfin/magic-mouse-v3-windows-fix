@@ -4,9 +4,55 @@
 #include "AclTranslate.h"
 #include <bthdef.h>
 #include <bthddi.h>
+#include <hidclass.h>
 
 // BRB fields from WDK bthddi.h (BrbHeader / BrbL2caAclTransfer).
 // Do not use 14393 byte offsets — layout drift writes HID into foreign pool.
+//
+// Local GUID copies for the kernel HID SetFeature-via-sibling-PDO path
+// (see Driver.h MM_HID_SYMLINK_MAX). Defined locally with initguid.h
+// instead of pulling hidclass.h's / wdmguid.h's own DEFINE_GUID copies,
+// so this file does not depend on how those headers' INITGUID gating
+// resolves in this project's link step. Values are the well-known
+// constants (GUID_DEVINTERFACE_HID matches scripts/mm-f1-once.ps1's own
+// $HID_GUID, proven live on this PC; GUID_DEVICE_INTERFACE_ARRIVAL is the
+// documented PnP manager constant from wdmguid.h).
+#include <initguid.h>
+DEFINE_GUID(MmGuidHidDeviceInterface,
+    0x4d1e55b2, 0xf16f, 0x11cf, 0x88, 0xcb, 0x00, 0x11, 0x11, 0x00, 0x00, 0x30);
+DEFINE_GUID(MmGuidDeviceInterfaceArrival,
+    0xcb3a4004, 0x46f0, 0x11d0, 0xb0, 0x8f, 0x00, 0x60, 0x97, 0x13, 0x05, 0x3f);
+
+// Case-insensitive ASCII-needle-in-UNICODE-haystack search, no CRT.
+// Used to match a device interface arrival's SymbolicLinkName against
+// this device's own hardware ID substrings (e.g. "PID&0323", "COL01") -
+// the same substrings scripts/mm-f1-once.ps1 already matches on the
+// live DevicePath string from SetupDiGetDeviceInterfaceDetail.
+static BOOLEAN
+ContainsAsciiCaseInsensitiveW(
+    _In_reads_(haystackChars) PCWSTR haystack,
+    _In_ ULONG haystackChars,
+    _In_ PCSTR needle)
+{
+    ULONG needleLen = 0;
+    while (needle[needleLen] != '\0') { needleLen++; }
+    if (needleLen == 0 || haystackChars < needleLen) { return FALSE; }
+
+    for (ULONG i = 0; i + needleLen <= haystackChars; i++)
+    {
+        ULONG j = 0;
+        for (; j < needleLen; j++)
+        {
+            WCHAR hc = haystack[i + j];
+            CHAR  nc = needle[j];
+            if (hc >= L'a' && hc <= L'z') { hc = (WCHAR)(hc - 32); }
+            if (nc >= 'a' && nc <= 'z')   { nc = (CHAR)(nc - 32); }
+            if (hc != (WCHAR)(UCHAR)nc) { break; }
+        }
+        if (j == needleLen) { return TRUE; }
+    }
+    return FALSE;
+}
 
 static VOID
 ForwardPassthrough(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target)
@@ -52,6 +98,12 @@ EvtDeviceAdd(_In_ WDFDRIVER Driver, _Inout_ PWDFDEVICE_INIT DeviceInit)
     UNREFERENCED_PARAMETER(Driver);
 
     WdfFdoInitSetFilter(DeviceInit);
+
+    WDF_PNPPOWER_EVENT_CALLBACKS pnpCallbacks;
+    WDF_PNPPOWER_EVENT_CALLBACKS_INIT(&pnpCallbacks);
+    pnpCallbacks.EvtDeviceSelfManagedIoInit    = MmSelfManagedIoInit;
+    pnpCallbacks.EvtDeviceSelfManagedIoCleanup = MmSelfManagedIoCleanup;
+    WdfDeviceInitSetPnpPowerEventCallbacks(DeviceInit, &pnpCallbacks);
 
     WDF_OBJECT_ATTRIBUTES reqAttr;
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&reqAttr, MM_REQUEST_CONTEXT);
@@ -149,6 +201,14 @@ EvtDeviceAdd(_In_ WDFDRIVER Driver, _Inout_ PWDFDEVICE_INIT DeviceInit)
     WDF_OBJECT_ATTRIBUTES_INIT(&wiAttr);
     wiAttr.ParentObject = device;
     status = WdfWorkItemCreate(&wiCfg, &wiAttr, &ctx->DiagWorkItem);
+    if (!NT_SUCCESS(status)) { return status; }
+
+    WDF_WORKITEM_CONFIG hidWiCfg;
+    WDF_WORKITEM_CONFIG_INIT(&hidWiCfg, MmHidSetFeatureWorkItemFunc);
+    WDF_OBJECT_ATTRIBUTES hidWiAttr;
+    WDF_OBJECT_ATTRIBUTES_INIT(&hidWiAttr);
+    hidWiAttr.ParentObject = device;
+    status = WdfWorkItemCreate(&hidWiCfg, &hidWiAttr, &ctx->HidSetFeatureWorkItem);
     if (!NT_SUCCESS(status)) { return status; }
 
     WdfTimerStart(ctx->DiagTimer, WDF_REL_TIMEOUT_IN_MS(1000));
@@ -842,6 +902,7 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
     ULONG ictlCount, scanHits, patchOk, lastSize, lastStatus;
     ULONG hidReads, rid12, aclN, aclX, lastAclR, lastAclC;
     ULONG mtStatus, mtTries, lastInLen, lastInFl, aclOut, lastOutSz, lastOutFl, lastOutHdr;
+    ULONG kF1Fires, kF1OpenSt, kF1IoctlSt;
     UCHAR lastBytes[64];
     UCHAR lastAclBytes[16];
 
@@ -865,6 +926,9 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
     lastOutSz  = ctx->LastOutBufferSize;
     lastOutFl  = ctx->LastOutFlags;
     lastOutHdr = ctx->LastOutHdr;
+    kF1Fires   = ctx->KernelHidF1FireCount;
+    kF1OpenSt  = ctx->KernelHidF1OpenStatus;
+    kF1IoctlSt = ctx->KernelHidF1IoctlStatus;
     mtStatus   = ctx->MtEnableStatus;
     mtTries    = ctx->MtEnableTries;
     RtlCopyMemory(lastBytes, ctx->LastSdpBytes, 64);
@@ -910,6 +974,9 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
     SET_DWORD(L"LastOutBufferSize",  lastOutSz);
     SET_DWORD(L"LastOutFlags",       lastOutFl);
     SET_DWORD(L"LastOutHdr",         lastOutHdr);
+    SET_DWORD(L"KernelHidF1FireCount",  kF1Fires);
+    SET_DWORD(L"KernelHidF1OpenStatus", kF1OpenSt);
+    SET_DWORD(L"KernelHidF1IoctlStatus",kF1IoctlSt);
 
 #undef SET_DWORD
 
@@ -918,5 +985,193 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
     RtlInitUnicodeString(&n, L"LastAclBytes");
     ZwSetValueKey(key, &n, 0, REG_BINARY, lastAclBytes, 16);
     ZwClose(key);
+}
+
+// --- Kernel HID SetFeature-via-sibling-PDO (2026-09-08 investigation) ---
+// See Driver.h MM_HID_SYMLINK_MAX and STATUS.md "Why the kernel doesn't
+// already auto-send F1" / "Real fix direction". This replaces the
+// always-failing MmSendMtEnable 66-byte forged BRB_L2CA_ACL_TRANSFER OUT
+// with a real IOCTL_HID_SET_FEATURE sent down the sibling COL01 HID PDO
+// that HidBth itself already creates and owns - HidBth does the actual
+// L2CAP wire framing, we do not guess it.
+//
+// NOT installed on the live PC as of this writing (see
+// OVERNIGHT-2026-09-08.md) - builds and passes the host gates, but the
+// PnP-notification trigger below is new, never run on real hardware, and
+// fires for every HID device interface arrival on the whole system, not
+// only this one. mm-auto-f1-watcher.ps1 (userspace, tested live tonight)
+// remains the active recovery path until a human verifies this kernel
+// path with the glass in front of them.
+
+NTSTATUS
+MmSelfManagedIoInit(_In_ WDFDEVICE Device)
+{
+    PDEVICE_CONTEXT ctx = GetDeviceContext(Device);
+    if (ctx == NULL) { return STATUS_SUCCESS; }
+
+    // Defense in depth: this INF binds 0323 only, but never chase HID
+    // interface arrivals for a foreign PID's siblings.
+    if (ctx->ProductId != 0 && ctx->ProductId != MM_PID_V3)
+    {
+        return STATUS_SUCCESS;
+    }
+
+    PDRIVER_OBJECT driverObject = WdfDriverWdmGetDriverObject(WdfDeviceGetDriver(Device));
+    NTSTATUS status = IoRegisterPlugPlayNotification(
+        EventCategoryDeviceInterfaceChange,
+        PNPNOTIFY_DEVICE_INTERFACE_INCLUDE_EXISTING_INTERFACES,
+        (PVOID)&MmGuidHidDeviceInterface,
+        driverObject,
+        MmHidInterfaceNotify,
+        ctx,
+        &ctx->HidPnpNotifyEntry);
+
+    DbgPrint("MM: MmSelfManagedIoInit IoRegisterPlugPlayNotification status=0x%08X\n",
+             (ULONG)status);
+
+    // Non-fatal: if registration fails, the driver still works exactly as
+    // it did before this change (mm-auto-f1-watcher.ps1 / manual
+    // mm-f1-once.ps1 remain the recovery path) - never fail device start
+    // over this.
+    return STATUS_SUCCESS;
+}
+
+VOID
+MmSelfManagedIoCleanup(_In_ WDFDEVICE Device)
+{
+    PDEVICE_CONTEXT ctx = GetDeviceContext(Device);
+    if (ctx != NULL && ctx->HidPnpNotifyEntry != NULL)
+    {
+        IoUnregisterPlugPlayNotificationEx(ctx->HidPnpNotifyEntry);
+        ctx->HidPnpNotifyEntry = NULL;
+    }
+}
+
+_Use_decl_annotations_
+NTSTATUS
+MmHidInterfaceNotify(PVOID NotificationStructure, PVOID Context)
+{
+    PDEVICE_INTERFACE_CHANGE_NOTIFICATION notif =
+        (PDEVICE_INTERFACE_CHANGE_NOTIFICATION)NotificationStructure;
+    PDEVICE_CONTEXT ctx = (PDEVICE_CONTEXT)Context;
+
+    if (notif == NULL || ctx == NULL || notif->SymbolicLinkName == NULL ||
+        notif->SymbolicLinkName->Buffer == NULL)
+    {
+        return STATUS_SUCCESS;
+    }
+    if (!RtlEqualMemory(&notif->Event, &MmGuidDeviceInterfaceArrival, sizeof(GUID)))
+    {
+        return STATUS_SUCCESS;
+    }
+
+    PCWSTR buf   = notif->SymbolicLinkName->Buffer;
+    ULONG  chars = notif->SymbolicLinkName->Length / sizeof(WCHAR);
+
+    BOOLEAN isOurPid =
+        ContainsAsciiCaseInsensitiveW(buf, chars, "PID&0323") ||
+        ContainsAsciiCaseInsensitiveW(buf, chars, "PID_0323");
+    BOOLEAN isCol01 = ContainsAsciiCaseInsensitiveW(buf, chars, "COL01");
+    if (!isOurPid || !isCol01)
+    {
+        return STATUS_SUCCESS;
+    }
+
+    WdfSpinLockAcquire(ctx->Lock);
+    ULONG copyChars = chars;
+    if (copyChars > MM_HID_SYMLINK_MAX - 1) { copyChars = MM_HID_SYMLINK_MAX - 1; }
+    RtlCopyMemory(ctx->PendingHidSymlink, buf, copyChars * sizeof(WCHAR));
+    ctx->PendingHidSymlink[copyChars] = L'\0';
+    ctx->PendingHidSymlinkChars = copyChars;
+    ctx->HidSetFeaturePending = TRUE;
+    ctx->KernelHidF1FireCount++;
+    WdfSpinLockRelease(ctx->Lock);
+
+    DbgPrint("MM: MmHidInterfaceNotify COL01 arrival matched, queuing kernel F1\n");
+
+    if (ctx->HidSetFeatureWorkItem != NULL)
+    {
+        WdfWorkItemEnqueue(ctx->HidSetFeatureWorkItem);
+    }
+
+    return STATUS_SUCCESS;
+}
+
+VOID
+MmHidSetFeatureWorkItemFunc(_In_ WDFWORKITEM WorkItem)
+{
+    WDFDEVICE       device = (WDFDEVICE)WdfWorkItemGetParentObject(WorkItem);
+    PDEVICE_CONTEXT ctx    = GetDeviceContext(device);
+    if (ctx == NULL) { return; }
+
+    WCHAR local[MM_HID_SYMLINK_MAX];
+    ULONG localChars;
+
+    WdfSpinLockAcquire(ctx->Lock);
+    localChars = ctx->PendingHidSymlinkChars;
+    if (localChars >= MM_HID_SYMLINK_MAX) { localChars = MM_HID_SYMLINK_MAX - 1; }
+    RtlCopyMemory(local, ctx->PendingHidSymlink, localChars * sizeof(WCHAR));
+    local[localChars] = L'\0';
+    ctx->HidSetFeaturePending = FALSE;
+    WdfSpinLockRelease(ctx->Lock);
+
+    if (localChars == 0) { return; }
+
+    UNICODE_STRING symlink;
+    symlink.Buffer        = local;
+    symlink.Length        = (USHORT)(localChars * sizeof(WCHAR));
+    symlink.MaximumLength = symlink.Length;
+
+    WDFIOTARGET ioTarget = NULL;
+    WDF_OBJECT_ATTRIBUTES targetAttr;
+    WDF_OBJECT_ATTRIBUTES_INIT(&targetAttr);
+    targetAttr.ParentObject = device;
+    NTSTATUS status = WdfIoTargetCreate(device, &targetAttr, &ioTarget);
+    if (!NT_SUCCESS(status))
+    {
+        WdfSpinLockAcquire(ctx->Lock);
+        ctx->KernelHidF1OpenStatus = (ULONG)status;
+        WdfSpinLockRelease(ctx->Lock);
+        DbgPrint("MM: MmHidSetFeatureWorkItemFunc WdfIoTargetCreate failed 0x%08X\n",
+                 (ULONG)status);
+        return;
+    }
+
+    WDF_IO_TARGET_OPEN_PARAMS openParams;
+    WDF_IO_TARGET_OPEN_PARAMS_INIT_OPEN_BY_NAME(&openParams, &symlink, STANDARD_RIGHTS_ALL);
+    status = WdfIoTargetOpen(ioTarget, &openParams);
+
+    WdfSpinLockAcquire(ctx->Lock);
+    ctx->KernelHidF1OpenStatus = (ULONG)status;
+    WdfSpinLockRelease(ctx->Lock);
+
+    if (!NT_SUCCESS(status))
+    {
+        DbgPrint("MM: MmHidSetFeatureWorkItemFunc WdfIoTargetOpen failed 0x%08X\n",
+                 (ULONG)status);
+        WdfObjectDelete(ioTarget);
+        return;
+    }
+
+    // Exact payload scripts/mm-f1-once.ps1 already proves works from
+    // userspace: HidD_SetFeature with report ID 0xF1 + 2 data bytes.
+    UCHAR pkt[MM_KERNEL_F1_PKT_LEN] = { 0xF1, 0x02, 0x01 };
+    WDF_MEMORY_DESCRIPTOR inputDesc;
+    WDF_MEMORY_DESCRIPTOR_INIT_BUFFER(&inputDesc, pkt, sizeof(pkt));
+
+    ULONG_PTR bytesReturned = 0;
+    status = WdfIoTargetSendIoctlSynchronously(
+        ioTarget, NULL, IOCTL_HID_SET_FEATURE,
+        &inputDesc, NULL, NULL, &bytesReturned);
+
+    WdfSpinLockAcquire(ctx->Lock);
+    ctx->KernelHidF1IoctlStatus = (ULONG)status;
+    WdfSpinLockRelease(ctx->Lock);
+
+    DbgPrint("MM: MmHidSetFeatureWorkItemFunc IOCTL_HID_SET_FEATURE status=0x%08X\n",
+             (ULONG)status);
+
+    WdfIoTargetClose(ioTarget);
+    WdfObjectDelete(ioTarget);
 }
 

@@ -1,10 +1,10 @@
 # kmdf-204-scroll-build.ps1
-# EWDK build of unique 2.0.4.1. Dest: MagicMouseDriver-kmdf-204-scroll.sys
+# EWDK build of unique 2.0.4.2. Dest: MagicMouseDriver-kmdf-204-scroll.sys
 # Do not emit MagicMouseDriver.sys. Do not copy into System32/DriverStore.
-# Mount-DiskImage can drop a staging dir — copy sources AFTER the mount,
+# Mount-DiskImage can drop a staging dir - copy sources AFTER the mount,
 # immediately before msbuild. New bld dir so prior FROZEN-UNSIGNED does not block.
 $ErrorActionPreference = 'Stop'
-$Work = 'C:\mm-dev-queue\kmdf-204-bld'
+$Work = 'C:\mm-dev-queue\kmdf-204-bld-20260908'
 $Src  = 'C:\mm-dev-queue\kmdf-204-src'
 $Iso  = 'D:\Users\Lesley\Downloads\EWDK_ge_release_svc_prod1_26100_250904-1728.iso'
 $Log  = 'C:\mm-dev-queue\kmdf-204-scroll-build.log'
@@ -21,13 +21,13 @@ function Log([string]$m) {
 }
 function Fail([int]$c, [string]$m) { Log "FAIL $c $m"; exit $c }
 
-Log '===== unique 2.0.4.1 BUILD start (queue SYNC dest) ====='
-if (-not (Test-Path -LiteralPath $Src)) { Fail 2 "missing source $Src — run KMDF-204-SYNC first" }
+Log '===== unique 2.0.4.2 BUILD start (queue SYNC dest) ====='
+if (-not (Test-Path -LiteralPath $Src)) { Fail 2 "missing source $Src - run KMDF-204-SYNC first" }
 if (-not (Test-Path -LiteralPath $Iso)) { Fail 2 "missing EWDK ISO $Iso" }
 
 $frozen = Join-Path $Work 'FROZEN-UNSIGNED.txt'
 if (Test-Path -LiteralPath $frozen) {
-    Fail 3 "FROZEN-UNSIGNED already exists — refuse second build."
+    Fail 3 "FROZEN-UNSIGNED already exists - refuse second build."
 }
 
 $outSys  = Join-Path $Work 'x64\Release\MagicMouseDriver-kmdf-204-scroll.sys'
@@ -57,7 +57,7 @@ foreach ($n in $names) {
     Copy-Item -LiteralPath $p -Destination (Join-Path $Work $n) -Force
 }
 $infText = Get-Content -LiteralPath (Join-Path $Work 'MagicMouseDriver-kmdf-204-scroll.inf') -Raw
-if ($infText -notmatch 'DriverVer\s*=\s*09/01/2026,2\.0\.4\.1') { Fail 3 'INF DriverVer is not 2.0.4.1' }
+if ($infText -notmatch 'DriverVer\s*=\s*09/08/2026,2\.0\.4\.2') { Fail 3 'INF DriverVer is not 2.0.4.2' }
 if ($infText -notmatch 'CatalogFile\s*=\s*MagicMouseDriver-kmdf-204-scroll\.cat') { Fail 3 'INF CatalogFile is not unique cat' }
 if ($infText -match 'AddService\s*=\s*MagicMouseDriver\s*,') { Fail 3 'INF AddService hijacks live MagicMouseDriver' }
 if ($infText -notmatch 'AddService\s*=\s*MagicMouseDriver204Scroll\s*,') { Fail 3 'INF AddService must be MagicMouseDriver204Scroll' }
@@ -67,6 +67,7 @@ if ($infText -match 'ServiceBinary\s*=\s*%12%\\MagicMouseDriver\.sys') { Fail 3 
 $drv = Get-Content -LiteralPath (Join-Path $Work 'Driver.c') -Raw
 if ($drv -notmatch 'sdpOk = \(ctx->SdpPatchSuccess != 0\)') { Fail 3 'Driver.c missing SdpPatchSuccess gate' }
 if ($drv -notmatch 'OnReadComplete') { Fail 3 'Driver.c missing OnReadComplete' }
+if ($drv -notmatch 'MmHidSetFeatureWorkItemFunc') { Fail 3 'Driver.c missing kernel HID SetFeature workitem' }
 $proj = Join-Path $Work 'MagicMouseDriver.vcxproj'
 if (-not (Test-Path -LiteralPath $proj)) { Fail 2 "vcxproj missing immediately before msbuild $Work" }
 Log ("staged immediately before msbuild: " + ((Get-ChildItem -LiteralPath $Work -File -Name | Sort-Object) -join ','))
@@ -128,13 +129,13 @@ $frozenLines = @(
     ('size={0}' -f $size),
     'dest=MagicMouseDriver-kmdf-204-scroll.sys',
     ('artifact={0}' -f $parkName),
-    'DriverVer=09/01/2026,2.0.4.1',
+    'DriverVer=09/08/2026,2.0.4.2',
     'AddService=MagicMouseDriver204Scroll',
-    'source=7087f4b'
+    'source=kernel-hid-setfeature-sibling-pdo-20260908'
 )
 Set-Content -LiteralPath $frozen -Encoding ASCII -Value $frozenLines
 Log ('FROZEN ' + $frozen)
 Log ('parked ' + $park1)
-Log '===== unique 2.0.4.1 BUILD done (unsigned) ====='
+Log '===== unique 2.0.4.2 BUILD done (unsigned) ====='
 Log 'DO NOT pnputil. DO NOT load. Human signs thumb 16940C0F first.'
 exit 0

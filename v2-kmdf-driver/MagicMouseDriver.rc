@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 //
-// FileVersion 2.0.4.1 — unique 2.0.4 scroll package (not the failed 2.0.4.0 oem26).
+// FileVersion 2.0.4.2 - adds kernel HID SetFeature-via-sibling-PDO path (not the failed 2.0.4.0 oem26).
 // Canonical artifact: MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys
 // INF dest / ServiceBinary: MagicMouseDriver-kmdf-204-scroll.sys
 // Never ship a second MagicMouseDriver.sys (that name is the Apr 30 restore file).
@@ -14,8 +14,8 @@
 #include <windows.h>
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION    2,0,4,1
- PRODUCTVERSION 2,0,4,1
+ FILEVERSION    2,0,4,2
+ PRODUCTVERSION 2,0,4,2
  FILEFLAGSMASK  0x3fL
 #ifdef _DEBUG
  FILEFLAGS      0x1L
@@ -31,13 +31,13 @@ BEGIN
         BLOCK "040904B0"
         BEGIN
             VALUE "CompanyName",      "Magic Mouse Driver KMDF 204 scroll"
-            VALUE "FileDescription",  "KMDF 2.0.4.1 scroll (PID 0323). Dest MagicMouseDriver-kmdf-204-scroll.sys."
-            VALUE "FileVersion",      "2.0.4.1"
+            VALUE "FileDescription",  "KMDF 2.0.4.2 scroll (PID 0323). Dest MagicMouseDriver-kmdf-204-scroll.sys."
+            VALUE "FileVersion",      "2.0.4.2"
             VALUE "InternalName",     "MagicMouseDriver-kmdf-204-scroll"
             VALUE "LegalCopyright",   "MIT"
             VALUE "OriginalFilename", "MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys"
             VALUE "ProductName",      "MagicMouseDriver KMDF 2.0.4 scroll"
-            VALUE "ProductVersion",   "2.0.4.1"
+            VALUE "ProductVersion",   "2.0.4.2"
         END
     END
     BLOCK "VarFileInfo"

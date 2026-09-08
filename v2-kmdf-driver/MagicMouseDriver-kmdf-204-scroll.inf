@@ -9,7 +9,7 @@
 ; Package identity (must stay distinct from every live DriverStore folder):
 ;   INF          = MagicMouseDriver-kmdf-204-scroll.inf
 ;   CatalogFile  = MagicMouseDriver-kmdf-204-scroll.cat
-;   DriverVer    = 09/01/2026,2.0.4.1
+;   DriverVer    = 09/08/2026,2.0.4.2
 ;   CopyFiles    = MagicMouseDriver-kmdf-204-scroll.sys
 ;   ServiceBinary= %12%\MagicMouseDriver-kmdf-204-scroll.sys
 ;
@@ -48,7 +48,7 @@ ClassGUID   = {745A17A0-74D3-11D0-B6FE-00A0C90F57DA}
 Provider    = %ManufacturerName%
 DriverPackageDisplayName = %DeviceDesc%
 DriverPackageType = PlugAndPlay
-DriverVer   = 09/01/2026,2.0.4.1
+DriverVer   = 09/08/2026,2.0.4.2
 CatalogFile = MagicMouseDriver-kmdf-204-scroll.cat
 PnpLockdown = 1
 

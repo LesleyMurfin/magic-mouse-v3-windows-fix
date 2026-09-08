@@ -24,10 +24,10 @@ if grep -q 'CatalogFile *= *MagicMouseDriver-kmdf-204-scroll.cat' "$INF"; then
 else
   bad "unique CatalogFile"
 fi
-if grep -q 'DriverVer *= *09/01/2026,2.0.4.1' "$INF"; then
-  ok "DriverVer 09/01/2026,2.0.4.1"
+if grep -q 'DriverVer *= *09/08/2026,2.0.4.2' "$INF"; then
+  ok "DriverVer 09/08/2026,2.0.4.2"
 else
-  bad "DriverVer 09/01/2026,2.0.4.1"
+  bad "DriverVer 09/08/2026,2.0.4.2"
 fi
 if grep -E '^DriverVer' "$INF" | grep -qE '08/30/2026,2\.0\.4\.0|08/31/2026,2\.0\.4\.0'; then
   bad "INF must not reuse failed 2.0.4 DriverVer"
@@ -234,7 +234,7 @@ else
 fi
 
 # --- versions / names ---
-grep -q 'FILEVERSION    2,0,4,1' "$ROOT/MagicMouseDriver.rc" && ok "FileVersion 2.0.4.1 in VERSIONINFO" || bad "FileVersion 2.0.4.1 in VERSIONINFO"
+grep -q 'FILEVERSION    2,0,4,2' "$ROOT/MagicMouseDriver.rc" && ok "FileVersion 2.0.4.2 in VERSIONINFO" || bad "FileVersion 2.0.4.2 in VERSIONINFO"
 if grep -q '<TargetName>MagicMouseDriver-kmdf-204-scroll</TargetName>' "$ROOT/MagicMouseDriver.vcxproj"; then
   ok "vcxproj TargetName is unique dest"
 else
