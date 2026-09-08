@@ -45,6 +45,7 @@ After install, wait a few seconds (the script sends Feature **F1**; timeout/erro
 2. **One finger** — rest or drag one finger on the glass. Must **not** scroll.
 3. **Two fingers** — swipe two fingers. Must scroll.
 4. **Reconnect** — turn the mouse off/on or unpair/pair. Repeat 1–3. If scroll dies until you re-run `scripts\mm-f1-once.ps1`, say so (that is a known gap).
+4b. **Magic Tray "Enabled on this PC" checkbox** — confirmed 2026-09-08: toggling it off then on kills 2-finger scroll (pointer keeps working) until `mm-f1-once.ps1` runs again. Not a corrupted install, no reinstall needed — just re-run the F1 script. Report it anyway so the tray gets fixed to do this automatically.
 5. **Reboot Windows** — repeat 1–3. Tell us if two-finger scroll survived without running anything.
 
 If 1-finger still scrolls, or 2-finger never scrolls, we need a Diag dump (below).
