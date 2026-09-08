@@ -62,6 +62,63 @@ already reads the Diag key. Both were deleted from the queue after the duplicati
 caught. Rule going forward: **check `/mnt/c/mm-dev-queue/*.ps1` for an existing script before
 writing a new one.**
 
+## Why the kernel doesn't already auto-send F1 (2026-09-08 analysis)
+
+`Driver.c:762-834` (`MmSendMtEnable`) already tries, automatically, every bind: a 1-second
+periodic timer (`Driver.c:139,714,848`, 3 retries) attempts to send the F1 enable itself.
+Two independent reasons it doesn't help here:
+
+1. It only fires if `ctx->MtControlHandle` was snooped from a `BRB_L2CA_OPEN_CHANNEL` passing
+   through the filter (`Driver.c:529-533`). This reconnect (tray disable/enable) apparently
+   didn't produce that BRB where the filter could see it — handle stayed `NULL`, so
+   `MmSendMtEnable` early-returned every time (`Driver.c:784-787`). Diag showed
+   `MtEnableStatus=0` (untouched default), not the usual `0xC0000206` — proof it never even
+   attempted, not that it attempted and failed.
+2. Even with a handle, the current code forges a raw **66-byte** `BRB_L2CA_ACL_TRANSFER`
+   (`MM_MT_OUT_LEN`, `Driver.c:726,814`) straight to the Bluetooth stack. Per
+   `CHECKPOINT-2026-09-01-SCROLL.md:177,152` this **always** returns `0xC0000206` — "ignore"
+   is the existing, deliberate stance. The working path (`HidD_SetFeature` from userspace)
+   is 4 bytes, but that number alone isn't the fix: it works because it goes through
+   HidBth's own SET_REPORT-to-wire translation (hidclass → HidBth → real L2CAP framing).
+   Our filter sits **below** HidBth (`LowerFilters` on the BTHENUM PDO) — it can only forge
+   raw ACL transfers to the Bluetooth transport by hand, it cannot ask HidBth to do the
+   translation for it. No buffer size we pick from this position reproduces HidBth's actual
+   wire format; every size has failed with the same status.
+   **Real fix direction:** don't forge ACL frames. From kernel, open a handle to the sibling
+   COL01 HID PDO (created by HidBth, same physical device) and issue a real
+   `IOCTL_HID_SET_FEATURE` down *that* stack — i.e. do in-kernel exactly what `HidD_SetFeature`
+   does in userspace, through the normal HID stack, not around it. Needs the COL01 device's
+   symbolic link/PDO reachable from our filter's context — unverified whether that's directly
+   obtainable from a BTHENUM-level lower filter; needs real investigation, not a guess flashed
+   onto the only mouse unattended.
+
+## Overnight task — 2026-09-08 night (user asleep, PC unattended)
+
+User asked for the F1-automation + investigation to be built and tested overnight. Hard
+constraint: **no physical two-finger touch is possible unattended**, so "tested" for anything
+touch-dependent means register-state proxies (`SdpPatchSuccess`, `MtEnableStatus`,
+`LastAclReceived` pattern), not a real scroll confirmation. Safety order, safest first:
+
+1. **Userspace auto-F1 watcher** — no kernel change, no `.sys` reinstall, cannot brick
+   anything. Bind to PID 0323 arrival (`RegisterDeviceNotification`/`WM_DEVICECHANGE` or a
+   Scheduled Task on Bluetooth device arrival), call the same `HidD_SetFeature([F1,02,01])`
+   `mm-f1-once.ps1` already uses. Deploy and test tonight: repeat the tray's
+   disable/enable pnputil cycle N times, confirm diag returns to healthy state automatically
+   with **no** manual script run.
+2. **`MmSendMtEnable` kernel fix** — investigate the COL01-handle approach above. Build, run
+   `specs/gate_4.py` + `v2-kmdf-driver/tests/validate-package.sh`, sign, freeze artifact.
+   **Do not `pnputil add-driver` this onto the live PC unless**, after install,
+   `Get-PnpDevice` shows COL01/COL02 `CM_PROB_NONE` and the service `Running` within 30s —
+   if not, immediately restore `C:\mm-dev-queue\kmdf-204-sign\` (known-good `9901390e…`,
+   thumb `16940C0F`) via `kmdf-204-pnputil-once.ps1` before ending the task. If genuinely
+   unverified, leave the current known-good driver running and hand off the built artifact
+   for a human-supervised install/test in the morning instead.
+3. **Scroll-speed tuning** (`GestureEngine.c:110-126`, `MM_SCROLL_STEP`) — prepare a reviewed
+   diff only. Do not flash overnight: only known data points are 8 (works, fast) and 224
+   (zero output); nothing in between has ever touched real hardware.
+4. Never touch oem16 / `MagicMouseDriver.sys`. Never delete oem16. Report exactly what was
+   built vs. installed vs. prepared-only, with diag evidence, in a dated report file.
+
 ## Not in this package
 
 Windows/macOS **gestures** (no PTP). v1 `0x030D` / v2 `0x0269`. PATH-A (`0xD1`).
