@@ -59,25 +59,27 @@ Get-EventSubscriber -SourceIdentifier 'MmAutoF1Watcher' -ErrorAction SilentlyCon
 # not run F1 several times in a row.
 $query = "SELECT * FROM __InstanceCreationEvent WITHIN 2 WHERE TargetInstance ISA 'Win32_PnPEntity' AND TargetInstance.PNPDeviceID LIKE '%PID_0323%'"
 
-$action = {
-    $now = Get-Date
-    $elapsed = ($now - $global:MmWatcherLastFire).TotalSeconds
-    if ($elapsed -lt $global:MmWatcherDebounceSeconds) {
-        Write-MmWatcherLog ('debounced, ' + [Math]::Round($elapsed, 1) + 's since last fire')
-        return
+function global:Invoke-MmF1 {
+    param(
+        [Parameter(Mandatory)][string]$Reason,
+        # Arrival-driven fires debounce against each other; the startup
+        # reconcile deliberately does NOT arm the debounce, so a genuine
+        # arrival landing seconds later still gets its own F1.
+        [switch]$UpdateDebounce
+    )
+    if ($UpdateDebounce) {
+        $now = Get-Date
+        $elapsed = ($now - $global:MmWatcherLastFire).TotalSeconds
+        if ($elapsed -lt $global:MmWatcherDebounceSeconds) {
+            Write-MmWatcherLog ('debounced, ' + [Math]::Round($elapsed, 1) + 's since last fire')
+            return
+        }
+        $global:MmWatcherLastFire = $now
     }
-    $global:MmWatcherLastFire = $now
 
-    $devId = 'unknown'
-    try { $devId = $Event.SourceEventArgs.NewEvent.TargetInstance.PNPDeviceID } catch {}
-    Write-MmWatcherLog ('PID_0323 PnP entity arrival: ' + $devId)
-
-    # Give HidBth a moment to finish re-creating COL01/COL02 before
-    # SetFeature - same 3s pause kmdf-204-pnputil-once.ps1 uses before F1.
-    Start-Sleep -Seconds 3
-
+    Write-MmWatcherLog ('F1 fire (' + $Reason + ')')
     try {
-        $out = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $global:MmWatcherF1Script 2>&1
+        $out  = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $global:MmWatcherF1Script 2>&1
         $exit = $LASTEXITCODE
         Write-MmWatcherLog ('F1 script exit=' + $exit)
         foreach ($ln in $out) { Write-MmWatcherLog ('F1: ' + $ln) }
@@ -86,9 +88,71 @@ $action = {
     }
 }
 
+# True when the COL01 HID collection - the one mm-f1-once.ps1 targets -
+# is actually enumerated right now.
+#
+# Matches PID[_&]0323 with a regex, NOT -like '*PID_0323*'. The real HID
+# child ID uses an ampersand:
+#   HID\{00001124-...-00805F9B34FB}_VID&0001004C_PID&0323&COL01\A&...&0000
+# $query above gets away with '%PID_0323%' because in WQL '_' is a
+# single-character wildcard; in PowerShell -like it is a literal, so the
+# same string silently matches nothing. That typo made the first version
+# of this reconcile report "COL01 not present" on a present device.
+function global:Test-MmCol01Present {
+    try {
+        $hit = @(Get-CimInstance -ClassName Win32_PnPEntity -ErrorAction Stop |
+            Where-Object {
+                $_.PNPDeviceID -match 'PID[_&]0323' -and
+                $_.PNPDeviceID -match 'COL01'
+            })
+        foreach ($h in $hit) {
+            Write-MmWatcherLog ('COL01 present: ' + $h.PNPDeviceID + ' status=' + $h.Status)
+        }
+        return ($hit.Count -gt 0)
+    } catch {
+        Write-MmWatcherLog ('COL01 presence probe failed: ' + $_)
+        return $false
+    }
+}
+
+$action = {
+    $devId = 'unknown'
+    try { $devId = $Event.SourceEventArgs.NewEvent.TargetInstance.PNPDeviceID } catch {}
+    Write-MmWatcherLog ('PID_0323 PnP entity arrival: ' + $devId)
+
+    # Give HidBth a moment to finish re-creating COL01/COL02 before
+    # SetFeature - same 3s pause kmdf-204-pnputil-once.ps1 uses before F1.
+    Start-Sleep -Seconds 3
+    Invoke-MmF1 -Reason ('arrival ' + $devId) -UpdateDebounce
+}
+
 $null = Register-WmiEvent -Query $query -SourceIdentifier 'MmAutoF1Watcher' -Action $action
 
 Write-MmWatcherLog 'WMI subscription registered, entering wait loop'
+
+# Startup reconcile - the reason a reboot silently killed scroll on
+# 2026-09-15 (STATUS.md). At boot the mouse is already paired and
+# enumerated before this task's WMI subscription exists, so NO arrival
+# event ever fires and MT stays in compact 9-byte mode until someone runs
+# mm-f1-once.ps1 by hand. Arrival events alone therefore cannot cover
+# boot; current state has to be reconciled once at startup.
+#
+# Deliberately unconditional when COL01 is present rather than gated on
+# the Diag LastAclReceived counter: that value is registry-persisted, so
+# it survives a reboot still reading the previous session's healthy 23
+# and would wrongly report MT as already live. HidD_SetFeature(F1) is
+# idempotent - re-arming an already-multitouch device just returns
+# ok=True - so firing unconditionally is the safe direction to be wrong in.
+#
+# If the Bluetooth link is not up yet at this point, COL01 does not exist,
+# no fire happens here, and the later connect raises a real arrival event
+# that the subscription above handles.
+# Registration happens before this probe so an arrival during the probe is queued, not lost.
+if (Test-MmCol01Present) {
+    Invoke-MmF1 -Reason 'startup reconcile, COL01 already present (boot/restart)'
+} else {
+    Write-MmWatcherLog 'startup reconcile: COL01 not present, waiting for arrival event'
+}
 
 while ($true) {
     $ev = Wait-Event -Timeout 300

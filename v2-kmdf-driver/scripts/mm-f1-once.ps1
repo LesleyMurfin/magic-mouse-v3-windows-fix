@@ -77,7 +77,14 @@ while ($true) {
 Write-Output "col01=$col01"
 if (-not $col01) { Write-Output 'NO_COL01'; exit 2 }
 
+# Signals success through $script:MmF1Ok, NOT a return value: every
+# Write-Output line below is part of this function's output stream, so
+# `if (Try-F1 0)` would test a non-empty string array and be true even on
+# failure. The log lines have to stay on stdout - the watcher captures them.
+$script:MmF1Ok = $false
+
 function Try-F1([uint32]$access) {
+    $script:MmF1Ok = $false
     Write-Output ("open_access=0x{0:X}" -f $access)
     $h = [MmF1]::CreateFile($col01, $access, 3, [IntPtr]::Zero, 3, 0, [IntPtr]::Zero)
     if ($h.IsInvalid) {
@@ -101,15 +108,42 @@ function Try-F1([uint32]$access) {
         $ok = [MmF1]::HidD_SetFeature($h, $buf, $buf.Length)
         $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
         Write-Output ("SetFeature ok=$ok err=$err len=$featLen")
+        $script:MmF1Ok = [bool]$ok
     } finally {
         $h.Dispose()
     }
 }
-# Attempt 1: zero access (share-mode-only handle) — succeeds on a healthy stack.
-# Attempt 2: GENERIC_READ|GENERIC_WRITE fallback for when attempt 1's SetFeature
-# fails (seen as err=121 ERROR_SEM_TIMEOUT on a contended control channel).
-# The `L` suffix is required: PowerShell parses bare 0xC0000000 as Int32
-# (-1073741824), which cannot bind to [uint32]$access.
-Try-F1 0
+
+# Zero-access (share-mode-only) open is the one Windows actually permits on a
+# system mouse HID collection, and the one that works on a healthy stack.
+#
+# Retry matters: 2026-09-08 10:40:44 this exact call returned
+# SetFeature ok=False err=121 (ERROR_SEM_TIMEOUT) on a contended control
+# channel, and the identical call 4s later returned ok=True. So the correct
+# response to failure is to re-try the SAME access after a short settle, not
+# to escalate access rights.
+#
+# Escalating does not work at all: GENERIC_READ|GENERIC_WRITE on this
+# collection is refused outright with CreateFile err=5 (ACCESS_DENIED) —
+# observed live 2026-09-15 17:36:03 — because Windows reserves R/W opens of
+# mouse/keyboard top-level collections. It is kept only as a last-ditch
+# attempt after the retries are exhausted, and is expected to fail.
+#
+# The `L` suffix on 0xC0000000 is required: PowerShell parses the bare
+# literal as Int32 (-1073741824), which cannot bind to [uint32]$access, and
+# every invocation before 2026-09-15 threw instead of running.
+$maxAttempts = 3
+$settleSeconds = 3
+for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+    Write-Output "attempt=$attempt/$maxAttempts"
+    Try-F1 0
+    if ($script:MmF1Ok) { Write-Output 'F1_OK'; exit 0 }
+    if ($attempt -lt $maxAttempts) { Start-Sleep -Seconds $settleSeconds }
+}
+
+Write-Output 'zero-access attempts exhausted, trying full-access (expected ACCESS_DENIED)'
 Try-F1 0xC0000000L
-exit 0
+if ($script:MmF1Ok) { Write-Output 'F1_OK'; exit 0 }
+
+Write-Output 'F1_FAILED'
+exit 3
