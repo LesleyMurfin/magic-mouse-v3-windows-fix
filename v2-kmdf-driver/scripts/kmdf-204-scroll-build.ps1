@@ -1,10 +1,22 @@
 # kmdf-204-scroll-build.ps1
-# EWDK build of unique 2.0.4.2. Dest: MagicMouseDriver-kmdf-204-scroll.sys
+# EWDK build of the unique KMDF package. Dest: MagicMouseDriver-kmdf-204-scroll.sys
 # Do not emit MagicMouseDriver.sys. Do not copy into System32/DriverStore.
 # Mount-DiskImage can drop a staging dir - copy sources AFTER the mount,
-# immediately before msbuild. New bld dir so prior FROZEN-UNSIGNED does not block.
+# immediately before msbuild.
+#
+# -Version / -DriverVerDate are the INF DriverVer this build REQUIRES: the
+# staged INF is checked against them and the build refuses to proceed on a
+# mismatch, so a stale sync can never be signed under a new version number.
+# Each version builds in its own Work dir, so the FROZEN-UNSIGNED one-shot
+# guard blocks rebuilding the SAME version without blocking the next one.
+[CmdletBinding()]
+param(
+    [string]$Version        = '2.0.4.3',
+    [string]$DriverVerDate  = '09/15/2026'
+)
+
 $ErrorActionPreference = 'Stop'
-$Work = 'C:\mm-dev-queue\kmdf-204-bld-20260908'
+$Work = 'C:\mm-dev-queue\kmdf-204-bld-' + ($Version -replace '\.', '')
 $Src  = 'C:\mm-dev-queue\kmdf-204-src'
 $Iso  = 'D:\Users\Lesley\Downloads\EWDK_ge_release_svc_prod1_26100_250904-1728.iso'
 $Log  = 'C:\mm-dev-queue\kmdf-204-scroll-build.log'
@@ -21,7 +33,7 @@ function Log([string]$m) {
 }
 function Fail([int]$c, [string]$m) { Log "FAIL $c $m"; exit $c }
 
-Log '===== unique 2.0.4.2 BUILD start (queue SYNC dest) ====='
+Log ("===== unique $Version BUILD start (queue SYNC dest) =====")
 if (-not (Test-Path -LiteralPath $Src)) { Fail 2 "missing source $Src - run KMDF-204-SYNC first" }
 if (-not (Test-Path -LiteralPath $Iso)) { Fail 2 "missing EWDK ISO $Iso" }
 
@@ -57,7 +69,10 @@ foreach ($n in $names) {
     Copy-Item -LiteralPath $p -Destination (Join-Path $Work $n) -Force
 }
 $infText = Get-Content -LiteralPath (Join-Path $Work 'MagicMouseDriver-kmdf-204-scroll.inf') -Raw
-if ($infText -notmatch 'DriverVer\s*=\s*09/08/2026,2\.0\.4\.2') { Fail 3 'INF DriverVer is not 2.0.4.2' }
+$wantDriverVer = [regex]::Escape($DriverVerDate) + ',' + [regex]::Escape($Version)
+if ($infText -notmatch ('DriverVer\s*=\s*' + $wantDriverVer)) {
+    Fail 3 "INF DriverVer is not $DriverVerDate,$Version"
+}
 if ($infText -notmatch 'CatalogFile\s*=\s*MagicMouseDriver-kmdf-204-scroll\.cat') { Fail 3 'INF CatalogFile is not unique cat' }
 if ($infText -match 'AddService\s*=\s*MagicMouseDriver\s*,') { Fail 3 'INF AddService hijacks live MagicMouseDriver' }
 if ($infText -notmatch 'AddService\s*=\s*MagicMouseDriver204Scroll\s*,') { Fail 3 'INF AddService must be MagicMouseDriver204Scroll' }
@@ -65,9 +80,30 @@ if ($infText -match 'LowerFilters.*,0x00010000,"MagicMouseDriver"(?!204Scroll)')
 if ($infText -notmatch 'LowerFilters.*,0x00010000,"MagicMouseDriver204Scroll"') { Fail 3 'INF LowerFilters must be MagicMouseDriver204Scroll' }
 if ($infText -match 'ServiceBinary\s*=\s*%12%\\MagicMouseDriver\.sys') { Fail 3 'INF ServiceBinary is live MagicMouseDriver.sys' }
 $drv = Get-Content -LiteralPath (Join-Path $Work 'Driver.c') -Raw
-if ($drv -notmatch 'sdpOk = \(ctx->SdpPatchSuccess != 0\)') { Fail 3 'Driver.c missing SdpPatchSuccess gate' }
-if ($drv -notmatch 'OnReadComplete') { Fail 3 'Driver.c missing OnReadComplete' }
-if ($drv -notmatch 'MmHidSetFeatureWorkItemFunc') { Fail 3 'Driver.c missing kernel HID SetFeature workitem' }
+
+# Comment-stripped view for gates that must judge CODE, not prose. The
+# incident write-up in Driver.c's own header names the removed APIs, and a
+# raw -match on that text fails the build on the documentation describing
+# why the code is gone. Same trick the host gates use (tests/_code()).
+$drvCode = [regex]::Replace($drv, '/\*.*?\*/', '', 'Singleline')
+$drvCode = [regex]::Replace($drvCode, '//[^\r\n]*', '')
+
+if ($drvCode -notmatch 'sdpOk = \(ctx->SdpPatchSuccess != 0\)') { Fail 3 'Driver.c missing SdpPatchSuccess gate' }
+if ($drvCode -notmatch 'OnReadComplete') { Fail 3 'Driver.c missing OnReadComplete' }
+
+# Refuse the parked kernel HID SetFeature-via-sibling-PDO path. It shipped as
+# 2.0.4.2, was installed live once, and killed pointer AND scroll: the
+# self-issued IOCTL_HID_SET_FEATURE contends with the Bluetooth control
+# channel this filter already owns state for (STATUS.md, 2026-09-08 incident).
+# MT recovery is userspace (scripts/mm-auto-f1-watcher.ps1). This gate makes
+# re-shipping it a build failure, not a judgement call at 3am.
+if ($drvCode -match 'MmHidSetFeatureWorkItemFunc|IoRegisterPlugPlayNotification') {
+    Fail 3 'Driver.c contains the parked kernel HID SetFeature path - see STATUS.md 2026-09-08 incident'
+}
+
+# The scroll detent must stay tunable and single-reference-finger. Both are
+# behavioral, so they are checked against stripped code.
+if ($drvCode -notmatch 'ScrollStep') { Fail 3 'Driver.c missing ScrollStep registry tunable' }
 $proj = Join-Path $Work 'MagicMouseDriver.vcxproj'
 if (-not (Test-Path -LiteralPath $proj)) { Fail 2 "vcxproj missing immediately before msbuild $Work" }
 Log ("staged immediately before msbuild: " + ((Get-ChildItem -LiteralPath $Work -File -Name | Sort-Object) -join ','))
@@ -129,13 +165,13 @@ $frozenLines = @(
     ('size={0}' -f $size),
     'dest=MagicMouseDriver-kmdf-204-scroll.sys',
     ('artifact={0}' -f $parkName),
-    'DriverVer=09/08/2026,2.0.4.2',
+    ('DriverVer={0},{1}' -f $DriverVerDate, $Version),
     'AddService=MagicMouseDriver204Scroll',
-    'source=kernel-hid-setfeature-sibling-pdo-20260908'
+    ('source=single-reference-finger-scroll-tunable-scrollstep-{0}' -f $Version)
 )
 Set-Content -LiteralPath $frozen -Encoding ASCII -Value $frozenLines
 Log ('FROZEN ' + $frozen)
 Log ('parked ' + $park1)
-Log '===== unique 2.0.4.2 BUILD done (unsigned) ====='
+Log ("===== unique $Version BUILD done (unsigned) =====")
 Log 'DO NOT pnputil. DO NOT load. Human signs thumb 16940C0F first.'
 exit 0

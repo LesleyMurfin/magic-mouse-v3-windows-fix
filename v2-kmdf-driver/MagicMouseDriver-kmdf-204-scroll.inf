@@ -48,7 +48,7 @@ ClassGUID   = {745A17A0-74D3-11D0-B6FE-00A0C90F57DA}
 Provider    = %ManufacturerName%
 DriverPackageDisplayName = %DeviceDesc%
 DriverPackageType = PlugAndPlay
-DriverVer   = 09/08/2026,2.0.4.2
+DriverVer   = 09/15/2026,2.0.4.3
 CatalogFile = MagicMouseDriver-kmdf-204-scroll.cat
 PnpLockdown = 1
 

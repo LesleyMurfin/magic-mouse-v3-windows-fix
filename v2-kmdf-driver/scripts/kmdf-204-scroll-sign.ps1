@@ -1,19 +1,47 @@
 # kmdf-204-scroll-sign.ps1
-# Sign unique 2.0.4.2 sys+cat with thumb 16940C0F. No MagicMouseDriver.sys. No PATH-A.
+# Sign the unique KMDF sys+cat with thumb 16940C0F. No MagicMouseDriver.sys.
+# No PATH-A.
+#
+# -Version selects the build dir and its own sign stage, so signing 2.0.4.3
+# cannot touch 2.0.4.2's artifacts. The expected pre-sign hash is read from
+# that build's FROZEN-UNSIGNED.txt instead of being pasted in here: the
+# freeze record written by kmdf-204-scroll-build.ps1 is the only thing that
+# knows what was actually built, and a hardcoded hash silently rots into
+# "REFUSE hash not frozen" on every new build.
+[CmdletBinding()]
+param(
+    [string]$Version = '2.0.4.3'
+)
+
 $ErrorActionPreference = 'Stop'
 $Thumb = '16940C0F937D569363560D5FEC5CD8FA6D6D9BCE'
 $ForbidB902 = 'B902C2864315E2DE359450024768CE7D01715C38'
 $WdkTest = '609447610A54605BE39AB32CFADB661023FD3ED0'
-$SrcSys = 'C:\mm-dev-queue\kmdf-204-bld-20260908\x64\Release\MagicMouseDriver-kmdf-204-scroll.sys'
-$SrcInf = 'C:\mm-dev-queue\kmdf-204-bld-20260908\x64\Release\MagicMouseDriver-kmdf-204-scroll.inf'
+$VerTag  = ($Version -replace '\.', '')
+$Work    = 'C:\mm-dev-queue\kmdf-204-bld-' + $VerTag
+$SrcSys = Join-Path $Work 'x64\Release\MagicMouseDriver-kmdf-204-scroll.sys'
+$SrcInf = Join-Path $Work 'x64\Release\MagicMouseDriver-kmdf-204-scroll.inf'
 # Separate stage from C:\mm-dev-queue\kmdf-204-sign\ - that path is the
 # known-good 2.0.4.1 restore copy (kmdf-204-pnputil-once.ps1 restore
 # source). Never overwrite it with an unverified build.
-$Stage = 'C:\mm-dev-queue\kmdf-204-sign-20260908'
+$Stage = 'C:\mm-dev-queue\kmdf-204-sign-' + $VerTag
 $Sys = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.sys'
 $Inf = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.inf'
 $Cat = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.cat'
-$Want = '6DDD114B4FA21A728A965B06CA07ACB71440F5073524EBE0DC22BA06630B67BB'
+
+$FrozenFile = Join-Path $Work 'FROZEN-UNSIGNED.txt'
+if (-not (Test-Path -LiteralPath $FrozenFile)) {
+    Write-Output ('missing freeze record ' + $FrozenFile + ' - run KMDF-204-BUILD first')
+    exit 2
+}
+$Want = ''
+foreach ($ln in (Get-Content -LiteralPath $FrozenFile)) {
+    if ($ln -match '^unsigned_sha256=([0-9A-Fa-f]{64})$') { $Want = $Matches[1].ToUpperInvariant() }
+}
+if (-not $Want) {
+    Write-Output ('no unsigned_sha256 in ' + $FrozenFile)
+    exit 2
+}
 $Forbid = @(
     '845435CE','13BF983A','D3876B0A','A1289489','AD5D244B','559B136A',
     '370A5555','6DF8575B','9EF6C117','D22EB163','F02ECCED','B4582C50',
@@ -24,7 +52,8 @@ $Inf2Cat = 'C:\mm-dev-queue\wdk-packages\Microsoft.Windows.WDK.x64.10.0.26100.65
 
 function Fail([int]$c, [string]$m) { Write-Output $m; exit $c }
 
-Write-Output '===== unique 2.0.4.2 SIGN start ====='
+Write-Output ("===== unique $Version SIGN start =====")
+Write-Output ('frozen_expects=' + $Want)
 if (-not (Test-Path -LiteralPath $SrcSys)) { Fail 2 ('missing sys ' + $SrcSys) }
 if (-not (Test-Path -LiteralPath $SrcInf)) { Fail 2 ('missing inf ' + $SrcInf) }
 if (-not (Test-Path -LiteralPath $SignTool)) { Fail 2 ('missing signtool ' + $SignTool) }
@@ -83,5 +112,5 @@ $th = ''
 if ($sig.SignerCertificate) { $th = $sig.SignerCertificate.Thumbprint.ToUpperInvariant() }
 Write-Output ('signer_thumb=' + $th)
 if ($th -ne $Thumb) { Fail 3 ('REFUSE signer thumb ' + $th) }
-Write-Output '===== unique 2.0.4.2 SIGN done ====='
+Write-Output ("===== unique $Version SIGN done =====")
 exit 0

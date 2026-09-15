@@ -1,15 +1,24 @@
 # kmdf-204-pnputil-once.ps1
-# pnputil /add-driver the signed unique package in C:\mm-dev-queue\kmdf-204-sign.
-# Never oem16, never MagicMouseDriver.sys, never PATH-A.
+# pnputil /add-driver a signed unique package. Never oem16, never
+# MagicMouseDriver.sys, never PATH-A.
+#
+# -Stage DEFAULTS to the known-good 2.0.4.1 restore copy, so running this
+# with no arguments is always the rollback. Installing anything newer is an
+# explicit act: pass the version's own sign stage, e.g.
+#   -Stage C:\mm-dev-queue\kmdf-204-sign-2043
+[CmdletBinding()]
+param(
+    [string]$Stage = 'C:\mm-dev-queue\kmdf-204-sign'
+)
+
 $ErrorActionPreference = 'Stop'
-$Stage = 'C:\mm-dev-queue\kmdf-204-sign'
 $Inf = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.inf'
 $Sys = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.sys'
 $Cat = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.cat'
 
 function Fail([int]$c, [string]$m) { Write-Output $m; exit $c }
 
-Write-Output '===== unique 2.0.4.1 PNPUTIL start ====='
+Write-Output ('===== PNPUTIL start stage=' + $Stage + ' =====')
 if (-not (Test-Path -LiteralPath $Inf)) { Fail 2 "missing $Inf" }
 if (-not (Test-Path -LiteralPath $Sys)) { Fail 2 "missing $Sys" }
 if (-not (Test-Path -LiteralPath $Cat)) { Fail 2 "missing $Cat" }
@@ -77,5 +86,12 @@ if (Test-Path -LiteralPath $oem16) {
     if (-not $h.StartsWith('AD5D244B')) { Fail 3 ('oem16 hash drifted ' + $h) }
 }
 
-Write-Output '===== unique 2.0.4.1 PNPUTIL done ====='
+Write-Output '=== loaded file version ==='
+$dest = 'C:\Windows\System32\drivers\MagicMouseDriver-kmdf-204-scroll.sys'
+if (Test-Path -LiteralPath $dest) {
+    Write-Output ('dest_sha256=' + (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash.ToUpperInvariant())
+    Write-Output ('dest_version=' + (Get-Item -LiteralPath $dest).VersionInfo.FileVersion)
+}
+
+Write-Output ('===== PNPUTIL done stage=' + $Stage + ' =====')
 exit 0

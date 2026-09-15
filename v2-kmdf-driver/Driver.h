@@ -65,24 +65,6 @@
 #define MM_TOUCH_SLOTS 16
 #define MM_ACL_MAX_PARSE (14 + 8 * MM_TOUCH_SLOTS)
 
-// Kernel MmSendMtEnable replacement (2026-09-08 investigation, STATUS.md
-// "Why the kernel doesn't already auto-send F1"): the 66-byte forged
-// BRB_L2CA_ACL_TRANSFER OUT from this filter (below HidBth) always fails
-// 0xC0000206 - we cannot reproduce HidBth's own wire framing by hand.
-// Instead: register for GUID_DEVINTERFACE_HID device-interface arrival
-// (IoRegisterPlugPlayNotification), match the arriving symbolic link
-// against this device's own PID_0323 + COL01 substrings (the symbolic
-// link text itself carries the instance path, e.g.
-// "...vid&0001004c_pid&0323&col01#..." - proven live by
-// scripts/mm-f1-once.ps1's own SetupDi enumeration), then open that
-// sibling COL01 HID PDO as a foreign WDFIOTARGET
-// (WdfIoTargetOpen + WDF_IO_TARGET_OPEN_PARAMS_INIT_OPEN_BY_NAME) and
-// send IOCTL_HID_SET_FEATURE with the exact 3-byte payload
-// {0xF1,0x02,0x01} HidD_SetFeature already sends from userspace. This
-// makes HidBth do the real wire translation instead of us forging it.
-#define MM_HID_SYMLINK_MAX     300
-#define MM_KERNEL_F1_PKT_LEN   3
-
 typedef struct _DEVICE_CONTEXT
 {
     WDFSPINLOCK Lock;
@@ -122,28 +104,15 @@ typedef struct _DEVICE_CONTEXT
     INT16   TouchAnchorY[MM_TOUCH_SLOTS];
     INT16   TouchAnchorX[MM_TOUCH_SLOTS];
     BOOLEAN TouchAnchorValid[MM_TOUCH_SLOTS];
-    // 2026-09-08 prepare-only velocity-scaling diff (NOT INSTALLED):
-    // previous-report position, separate from the notch anchor above, so
-    // instantaneous per-report speed can be measured independently of
-    // when the last notch fired. See GestureEngine.h MM_SCROLL_VELOCITY_GAIN.
-    INT16   TouchLastY[MM_TOUCH_SLOTS];
-    INT16   TouchLastX[MM_TOUCH_SLOTS];
-    BOOLEAN TouchLastValid[MM_TOUCH_SLOTS];
+    // Surface drag distance per Wheel detent, live-tunable via
+    // Services\MagicMouseDriver204Scroll\Parameters!ScrollStep (REG_DWORD).
+    // Clamped to [MM_SCROLL_STEP_MIN, MM_SCROLL_STEP_MAX]; defaults to
+    // MM_SCROLL_STEP. Higher = less sensitive. Read once in EvtDeviceAdd,
+    // so a change needs a device restart, not a driver reinstall.
+    ULONG   ScrollStep;
 
     WDFTIMER    DiagTimer;
     WDFWORKITEM DiagWorkItem;
-
-    // Kernel HID SetFeature-via-sibling-PDO (see MM_HID_SYMLINK_MAX above).
-    PVOID       HidPnpNotifyEntry;      // IoRegisterPlugPlayNotification handle
-    WDFWORKITEM HidSetFeatureWorkItem;
-    BOOLEAN     HidSetFeaturePending;
-    WCHAR       PendingHidSymlink[MM_HID_SYMLINK_MAX];
-    ULONG       PendingHidSymlinkChars;
-    ULONG       KernelHidF1FireCount;   // PID_0323 COL01 arrivals matched
-    ULONG       KernelHidF1OpenStatus;  // last WdfIoTargetOpen status
-    ULONG       KernelHidF1IoctlStatus; // last IOCTL_HID_SET_FEATURE status
-
-
 } DEVICE_CONTEXT, *PDEVICE_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_CONTEXT, GetDeviceContext)
@@ -173,7 +142,3 @@ EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnOpenChannelComplete;
 EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnAclOutComplete;
 EVT_WDF_TIMER                           MmDiagTimerFunc;
 EVT_WDF_WORKITEM                        MmDiagWorkItemFunc;
-EVT_WDF_DEVICE_SELF_MANAGED_IO_INIT     MmSelfManagedIoInit;
-EVT_WDF_DEVICE_SELF_MANAGED_IO_CLEANUP  MmSelfManagedIoCleanup;
-DRIVER_NOTIFICATION_CALLBACK_ROUTINE    MmHidInterfaceNotify;
-EVT_WDF_WORKITEM                        MmHidSetFeatureWorkItemFunc;

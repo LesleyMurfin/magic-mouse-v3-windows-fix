@@ -75,6 +75,41 @@ AccumulateSurfaceScroll(
 
     WdfSpinLockAcquire(ctx->Lock);
 
+    ULONG step = ctx->ScrollStep;
+    if (step < MM_SCROLL_STEP_MIN) { step = MM_SCROLL_STEP; }
+    if (step > MM_SCROLL_STEP_MAX) { step = MM_SCROLL_STEP_MAX; }
+
+    // Emit notches from ONE reference finger, not from every touch point.
+    //
+    // 2026-09-15: user reported scroll "too sensitive" all week. The loop
+    // below used to emit for each finger independently, so a normal
+    // two-finger drag produced ~2 notches per `step` of travel - the detent
+    // was effectively half its configured value, and a three-finger rest
+    // made it worse. `down < 2` only gates entry; it never stopped the
+    // double count. One finger drives the wheel; the others only keep their
+    // anchors current so handing over on lift-off is seamless.
+    //
+    // Reference = lowest active slot id in DRAG with a valid anchor. Ids are
+    // hardware-stable for the life of a contact, so this stays on the same
+    // physical finger for the whole gesture.
+    ULONG refId = MM_TOUCH_SLOTS;
+
+    for (ULONG i = 0; i < nTouches; i++)
+    {
+        ULONG off = MM2_HEADER_LEN + i * MM2_TOUCH_BYTES;
+        if (off + MM2_TOUCH_BYTES > inLen) { break; }
+
+        PUCHAR t = in + off;
+        ULONG id = ((ULONG)t[6] << 2 | ((ULONG)t[5] >> 6)) & 0xFu;
+        if (id >= MM_TOUCH_SLOTS) { continue; }
+
+        UCHAR st = (UCHAR)(t[7] & TOUCH_STATE_MASK);
+        if (st == TOUCH_STATE_DRAG && ctx->TouchAnchorValid[id] && id < refId)
+        {
+            refId = id;
+        }
+    }
+
     for (ULONG i = 0; i < nTouches; i++)
     {
         ULONG off = MM2_HEADER_LEN + i * MM2_TOUCH_BYTES;
@@ -97,9 +132,6 @@ AccumulateSurfaceScroll(
             ctx->TouchAnchorX[id] = (INT16)x;
             ctx->TouchAnchorY[id] = (INT16)y;
             ctx->TouchAnchorValid[id] = TRUE;
-            ctx->TouchLastX[id] = (INT16)x;
-            ctx->TouchLastY[id] = (INT16)y;
-            ctx->TouchLastValid[id] = TRUE;
             continue;
         }
 
@@ -108,7 +140,6 @@ AccumulateSurfaceScroll(
             if (state == 0x00)
             {
                 ctx->TouchAnchorValid[id] = FALSE;
-                ctx->TouchLastValid[id] = FALSE;
             }
             continue;
         }
@@ -119,41 +150,21 @@ AccumulateSurfaceScroll(
             continue;
         }
 
-        // 2026-09-08 prepare-only velocity-scaling diff (NOT INSTALLED):
-        // per-report speed (this sample vs the previous one, independent
-        // of the notch anchor) grows the effective detent so a fast flick
-        // needs more raw distance per notch than a slow deliberate drag.
-        // Floor is still exactly MM_SCROLL_STEP - a stationary/slow finger
-        // behaves identically to the proven 2026-09-01 constant-step code.
-        INT velY = 0;
-        INT velX = 0;
-        if (ctx->TouchLastValid[id])
-        {
-            velY = (INT)ctx->TouchLastY[id] - y;
-            if (velY < 0) { velY = -velY; }
-            velX = (INT)ctx->TouchLastX[id] - x;
-            if (velX < 0) { velX = -velX; }
-        }
-        ctx->TouchLastX[id] = (INT16)x;
-        ctx->TouchLastY[id] = (INT16)y;
-        ctx->TouchLastValid[id] = TRUE;
-
-        INT effStepY = MM_SCROLL_STEP + velY * MM_SCROLL_VELOCITY_GAIN;
-        if (effStepY > MM_SCROLL_STEP_MAX) { effStepY = MM_SCROLL_STEP_MAX; }
-        INT effStepX = MM_SCROLL_STEP + velX * MM_SCROLL_VELOCITY_GAIN;
-        if (effStepX > MM_SCROLL_STEP_MAX) { effStepX = MM_SCROLL_STEP_MAX; }
-
         INT stepY = (INT)ctx->TouchAnchorY[id] - y;
         INT stepX = (INT)ctx->TouchAnchorX[id] - x;
 
-        if (stepY >= effStepY || stepY <= -effStepY)
+        // Non-reference fingers: re-anchor on the same threshold the
+        // reference uses, so whichever finger takes over next starts from a
+        // fresh anchor instead of a stale one that would dump a burst of
+        // notches at hand-over.
+        if (stepY >= (INT)step || stepY <= -(INT)step)
         {
-            *outWheel += (stepY > 0) ? 1 : -1;
+            if (id == refId) { *outWheel += (stepY > 0) ? 1 : -1; }
             ctx->TouchAnchorY[id] = (INT16)y;
         }
-        if (stepX >= effStepX || stepX <= -effStepX)
+        if (stepX >= (INT)step || stepX <= -(INT)step)
         {
-            *outHWheel += (stepX > 0) ? -1 : 1;
+            if (id == refId) { *outHWheel += (stepX > 0) ? -1 : 1; }
             ctx->TouchAnchorX[id] = (INT16)x;
         }
     }
