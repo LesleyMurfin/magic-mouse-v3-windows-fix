@@ -167,6 +167,35 @@ against. The overnight agent's stated reason for withholding install (async fail
 no install-time check can prove it) was correct and should have been treated as a hold, not a
 condition to override once a human was present.
 
+## Verified 2026-09-15 (one week later, read-only checks only)
+
+Nothing was installed or restarted. Evidence:
+
+- Live `MagicMouseDriver-kmdf-204-scroll.sys` = `9901390ECA723517…` (2.0.4.1) and oem16
+  `MagicMouseDriver.sys` = `AD5D244B1767…`, both byte-identical to the 2026-09-08 rollback state.
+- `MmAutoF1Watcher` alive continuously since the rollback: `C:\ProgramData\MagicMouseDriver\auto-f1-watcher.log`
+  has unbroken 5-minute heartbeats 2026-09-08 → 2026-09-15, task re-armed 14:27/14:30 today,
+  single instance heartbeating after.
+- **No PID_0323 arrival and no F1 fire since `2026-09-08 10:40:48`** — the link has not
+  re-enumerated in a week, so leftover #2 (does MT survive a reboot without F1?) is still
+  unanswered: no reboot has happened to test it.
+
+### Fixed: `mm-f1-once.ps1` full-access fallback was dead code
+
+`Try-F1 0xC0000000` (line 109) threw `ParameterBindingArgumentTransformationException` on every
+single invocation — PowerShell parses bare `0xC0000000` as **Int32** (`-1073741824`), which cannot
+bind to `[uint32]$access`. Visible in every watcher log entry since the watcher shipped. Effect:
+attempt 2 (`GENERIC_READ|GENERIC_WRITE`) **never ran**, so whenever attempt 1's zero-access
+`HidD_SetFeature` failed — e.g. `SetFeature ok=False err=121` (`ERROR_SEM_TIMEOUT`) at
+`2026-09-08 10:40:44` — the recovery script silently had no retry left.
+
+Fix: `Try-F1 0xC0000000L` (Int64 literal, converts cleanly to UInt32). Verified on this host's
+PowerShell 5.1: bare literal is `Int32` and the binding fails, `0xC0000000L` binds as `0xC0000000`;
+`[Parser]::ParseFile` on the live `C:\mm-dev-queue\mm-f1-once.ps1` returns no errors. Repo copy and
+live queue copy are byte-identical. The fallback path itself was **not** exercised against the live
+device — forcing attempt 1 to fail means degrading a currently-working mouse; it stays untested
+until a real reconnect exercises it.
+
 ## Not in this package
 
 Windows/macOS **gestures** (no PTP). v1 `0x030D` / v2 `0x0269`. PATH-A (`0xD1`).
@@ -174,7 +203,10 @@ Windows/macOS **gestures** (no PTP). v1 `0x030D` / v2 `0x0269`. PATH-A (`0xD1`).
 ## Left to do
 
 1. Community **swap-test** (`SHIPPING.md`) — pnputil of self-signed package not run on this PC.
-2. **Reboot:** does MT survive without F1?
+2. **Reboot:** does MT survive without F1? **Still open as of 2026-09-15** — watcher heartbeats show
+   no reboot and no PID_0323 re-enumeration since the 09-08 rollback, so nothing has tested it.
+   Next real reboot answers it: check `auto-f1-watcher.log` for an arrival + F1 fire, and whether
+   2-finger scroll works *before* that F1 lands.
 3. **RESOLVED, do not repeat:** `DriverVer` bump was done for `2.0.4.2` — but see morning incident: that build is parked, not for live use, until the self-contention bug is fixed.
 4. **Tray/reconnect F1 — SOLVED for now.** `MmAutoF1Watcher` scheduled task (userspace, `v2-kmdf-driver/scripts/mm-auto-f1-watcher*.ps1`) auto-recovers MT on any PID_0323 reconnect, proven 2026-09-08 (3/3 overnight cycles + this morning's rollback reconnect). The in-kernel version (`MmHidSetFeatureWorkItemFunc`) is **parked** — self-contends with this filter's own BRB channel state, broke pointer+scroll live. Do not reinstall until redesigned to route through the existing `MtControlHandle` instead of an independent I/O target. `MagicMouseTray/DeviceEnable.cs` calling F1 directly is now optional belt-and-suspenders, not required.
 5. Virtual PTP (gestures) — new spec, not this overlay.

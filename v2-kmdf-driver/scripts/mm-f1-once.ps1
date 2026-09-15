@@ -105,6 +105,11 @@ function Try-F1([uint32]$access) {
         $h.Dispose()
     }
 }
+# Attempt 1: zero access (share-mode-only handle) — succeeds on a healthy stack.
+# Attempt 2: GENERIC_READ|GENERIC_WRITE fallback for when attempt 1's SetFeature
+# fails (seen as err=121 ERROR_SEM_TIMEOUT on a contended control channel).
+# The `L` suffix is required: PowerShell parses bare 0xC0000000 as Int32
+# (-1073741824), which cannot bind to [uint32]$access.
 Try-F1 0
-Try-F1 0xC0000000
+Try-F1 0xC0000000L
 exit 0
