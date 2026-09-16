@@ -2,12 +2,14 @@ name: PowerShell Lint
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, ai/magic-mouse-initial-release ]
     paths:
       - '**.ps1'
       - '.github/workflows/ps-lint.yml'
+  # No branch filter: the repository's default branch is
+  # ai/magic-mouse-initial-release, so a `branches: [main]` filter silenced this
+  # gate for every PR that did not target main. Lint every PR instead.
   pull_request:
-    branches: [ main ]
     paths:
       - '**.ps1'
       - '.github/workflows/ps-lint.yml'

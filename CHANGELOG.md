@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Apple's own `applewirelessmouse.sys`, **unmodified**, bundled at
+  `v1-binary-patch/apple-driver/applewirelessmouse.sys` (78,424 bytes, version 6.1.7700.0, SHA256
+  `08F33D7E3ECE2C73950A9706F1C4C9057894EAEAF1C4FB355F261F3C2333378F`, Apple signature with
+  Microsoft WHQL countersignature intact). No `.inf` and no `.cat`: the installer registers the
+  service itself, so nothing needs a re-signed catalog. Checksum in
+  `v1-binary-patch/installer/SHA256SUMS.txt`
+- One-click `v1-binary-patch/Install.cmd`: requests Administrator itself and runs the installer
+  against the bundled driver, so there is no PowerShell to open and no execution policy to change
+- Installer variant detection from the Authenticode signature: `AppleSigned` (Apple's unmodified
+  binary) versus the legacy `PatchedResigned` byte-patched copy. Test Mode, memory integrity
+  (HVCI) and certificate-trust requirements are now applied **only** to the legacy variant; a
+  binary that matches neither variant is refused. Running the Apple-signed route with Test Mode
+  off is expected to work because the binary is Microsoft-countersigned, but is **not yet
+  verified** — the development machine runs with `testsigning` on
+- Support for every Magic Mouse Bluetooth PID: `030D` (v1), `0269` and `0310` (v2), `0323`
+  (v3, 2024, USB-C), matched on the Bluetooth HID profile `00001124` under `BTHENUM`
+- `-DryRun`, which reports every action and changes nothing, and
+  `-TargetPid <030D|0310|0269|0323>`, which restricts the install to one mouse when several are
+  paired
+
+### Changed
+
+- `applewirelessmouse` is registered as a lower filter by writing `LowerFilters` (`REG_MULTI_SZ`)
+  on the selected device instance under `HKLM\SYSTEM\CurrentControlSet\Enum\`, preserving any
+  filters already present
+- Post-install verification now compares the installed file against the source actually installed
+  — hash, size, Authenticode status and the signer expected for the detected variant — and reads
+  back the `LowerFilters` value and the service key when a mouse was bound. Verification failure
+  exits non-zero and points at `Uninstall-MagicMousePatch.ps1`
+
+### Removed
+
+- The `pnputil` driver-package install route, and the switch that forced the installer past it.
+  There is now exactly one route: copy the `.sys` into `C:\Windows\System32\drivers\`, register
+  the kernel service, write `LowerFilters` on the chosen device instance
+
+### Fixed
+
+- The 1.0.0 entry below records "Certificate import to LocalMachine\TrustedPublisher and Root
+  stores". No `Root` import is performed, and none ever should be: `Root` would let anything
+  signed with that key load. The certificate — for the legacy variant only — goes to
+  `LocalMachine\TrustedPublisher` and nowhere else. Released history is left as published; this
+  entry is the correction
+
 ## [1.0.0] - 2026-05-18
 
 ### Added
