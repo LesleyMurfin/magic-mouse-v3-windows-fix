@@ -34,8 +34,11 @@ TestResults/
 Thumbs.db
 .DS_Store
 
-# Git-ignore driver binaries EXCEPT in release/
+# Git-ignore driver binaries EXCEPT the shipped Apple driver, which users need
+# in the download for a one-click install (see v1-binary-patch/README.md and
+# DMCA-NOTICE.md).
 *.sys
+!v1-binary-patch/apple-driver/applewirelessmouse.sys
 !v1-binary-patch/applewirelessmouse.sys
 !v1-binary-patch/installer/applewirelessmouse.sys
 
