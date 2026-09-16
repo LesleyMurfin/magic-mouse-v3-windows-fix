@@ -11,12 +11,15 @@ A free, MIT-licensed **Magic Mouse v3 Windows driver** for the USB-C **Apple Mag
 
 **Battery percentage:** use [Magic Tray (Windows app)](https://github.com/LesleyMurfin/magic-tray) — a Windows system-tray utility (software, not a physical desk tray) that reads HID Input `0x90` COL02 and installs the KMDF package from this repo. Site: [Magic Tray (Windows app) home](https://magictray.app/).
 
-**STATUS:** KMDF is what Magic Tray recommends. The v1 patched `applewirelessmouse.sys` is documented below as research; Magic Tray will not use it as a KMDF fallback.
+**This repo ships TWO separate, working drivers.** They are different drivers, built different ways, with different tradeoffs — pick one, do not install both. See [Which driver](#which-driver-two-good-options) below.
 
 If this helped, **star this repo** and **[Magic Tray](https://github.com/LesleyMurfin/magic-tray)**. Signing goal (Stripe, not GitHub Sponsors): [funding](https://magictray.app/funding.html).
 
 ## Contents
 
+- [Which driver](#which-driver-two-good-options)
+- [Driver 1 — patched Apple driver](#driver-1--patched-apple-driver-applewirelessmousesys)
+- [Driver 2 — KMDF driver](#driver-2--kmdf-driver-magicmousedriver-kmdf-204-scrollsys)
 - [What this fixes](#what-this-fixes)
 - [Supported hardware](#supported-hardware)
 - [Quick install](#quick-install-3-steps)
@@ -25,12 +28,83 @@ If this helped, **star this repo** and **[Magic Tray](https://github.com/LesleyM
 - [Contributing](#contributing)
 - [License](#license)
 
+## Which driver? Two good options
 
-A Windows kernel path that restores scroll on Magic Mouse v3 after Bluetooth reconnection.
+Both work. They are **independent** — separate binaries, separate installers, separate
+documentation. Install **one**, not both: they both attach to the same Bluetooth HID stack.
+
+| | **Driver 1 — patched Apple driver** | **Driver 2 — KMDF driver** |
+|---|---|---|
+| File | `applewirelessmouse.sys` (patched Apple binary) | `MagicMouseDriver-kmdf-204-scroll.sys` (written from scratch) |
+| Folder | [`v1-binary-patch/`](v1-binary-patch/) | [`v2-kmdf-driver/`](v2-kmdf-driver/) |
+| Install | Prebuilt binary + PowerShell installer, then reboot | `pnputil` a signed driver package |
+| Build needed | No — ships prebuilt | No for users; source + build scripts included |
+| Attaches as | Lower filter on the Bluetooth HID stack | Lower filter, as its **own** driver package beside Apple's |
+| Touches Apple's driver? | It **is** a patched copy of Apple's driver | No — Apple's `MagicMouseDriver.sys` is left untouched |
+| Two-finger scroll | Protects scroll from dying after Bluetooth idle disconnect | Generates scroll directly from the touch surface (Wheel + AC Pan) |
+| Scroll sensitivity | Fixed | Tunable, no reinstall (`ScrollStep`) |
+| Survives reconnect / reboot | Reboot required at install; filter persists | Yes — re-arms multitouch automatically on both |
+| Status | **v1.0.0, production ready** | **2.0.4.3, live and confirmed on hardware** |
+
+**Honest expectations, per driver:**
+
+- **Driver 1** is the simpler install and needs no kernel test mode. Its measured result in v1.0 is
+  a **3.1× reduction** in scroll loss versus unpatched; multi-day elimination is not characterised.
+- **Driver 2** does more (surface scroll generation, tunable detent, automatic multitouch recovery
+  after reconnect *and* after reboot, battery data for Magic Tray), but it is **self-signed**, so
+  until EV signing it needs Windows test signing enabled and Secure Boot / memory integrity off.
+
+If you just want scroll to stop breaking with the least system change: **Driver 1**.
+If you want full surface scroll, tunable sensitivity and automatic recovery: **Driver 2**.
+
+## Driver 1 — patched Apple driver (`applewirelessmouse.sys`)
+
+**Status: v1.0.0, production ready.** Full instructions: [`v1-binary-patch/README.md`](v1-binary-patch/README.md).
+
+A patched copy of Apple's own `applewirelessmouse.sys`, installed as a lower filter on the
+Bluetooth HID stack. It protects the HID collection structure during DeviceSetupManager
+initialisation, which is what tears scroll down after a Bluetooth idle disconnect.
+
+- **Ships prebuilt.** No build tools, no WDK. Verify the SHA256 in `v1-binary-patch/README.md`,
+  run `installer/Install-MagicMousePatch.ps1`, reboot.
+- **No kernel test mode needed.**
+- **What to expect:** v1.0 measured a **3.1× reduction** in scroll loss versus unpatched. It
+  substantially reduces the failure and may prevent it; multi-day elimination is not
+  characterised. Uninstaller included (`installer/Uninstall-MagicMousePatch.ps1`).
+- Credit: builds on [`sbagirici/apple-magic-mouse-scroll-fix-windows`](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows).
+
+## Driver 2 — KMDF driver (`MagicMouseDriver-kmdf-204-scroll.sys`)
+
+**Status: 2.0.4.3, live and user-confirmed on hardware.** Details: [`v2-kmdf-driver/README.md`](v2-kmdf-driver/README.md), current state in `v2-kmdf-driver/STATUS.md`.
+
+A KMDF lower-filter driver written from scratch. It installs as its **own** driver package
+alongside Apple's, and never overwrites `MagicMouseDriver.sys`. Instead of protecting Apple's
+scroll path, it reads the touch surface directly and generates scroll itself.
+
+- **Two-finger surface scroll** → HID Wheel + AC Pan. One finger resting or dragging on the glass
+  correctly does **not** scroll.
+- **Tunable sensitivity.** `ScrollStep` is a registry value: change it and restart the device, no
+  rebuild and no reinstall (`v2-kmdf-driver/scripts/mm-scroll-tune.ps1`).
+- **Automatic recovery.** Multitouch is re-armed after a Bluetooth reconnect *and* after a reboot,
+  both verified on hardware.
+- **Battery percentage** via HID Input `0x90` on COL02, surfaced by
+  [Magic Tray](https://github.com/LesleyMurfin/magic-tray).
+- **What to expect:** it is **self-signed**, so until EV signing it requires Windows test signing
+  enabled, with Secure Boot and memory integrity off. That is the real cost of this option.
+  Community testing on a second PC is still wanted — see `v2-kmdf-driver/COMMUNITY-TESTING.md`.
 
 ## What This Fixes
 
-Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after Bluetooth idle disconnect followed by DeviceSetupManager property synchronization. This patch significantly reduces occurrence of that loss (and may prevent it) by protecting the HID collection structure during DSM initialization. v1.0 empirical results show a 3.1× improvement over the unpatched baseline; long-term (multi-day) prevention is not yet characterized. The v2 KMDF rewrite targets full prevention.
+Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after a Bluetooth idle disconnect
+followed by DeviceSetupManager property synchronization. Apple ships no Windows driver for PID
+`0x0323` and its Boot Camp INF has no `0323` entry.
+
+Each driver in this repo addresses that differently, and they are not two stages of one thing:
+
+- **Driver 1** keeps Apple's scroll path from collapsing (protects the HID collection structure
+  during DSM init).
+- **Driver 2** does not rely on Apple's scroll path at all — it translates the raw touch reports
+  into scroll itself.
 
 **Affected hardware:**
 - Apple Magic Mouse v3 (2024), Bluetooth PID 0x0323
@@ -61,7 +135,11 @@ Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after Bluetooth id
 - Administrator account for installation
 - Reboot access
 
-## Quick Install (3 Steps)
+## Quick Install (3 Steps) — Driver 1, patched Apple driver
+
+> This section installs **Driver 1** only. For **Driver 2** (KMDF), follow
+> [`v2-kmdf-driver/README.md`](v2-kmdf-driver/README.md) instead — it is a `pnputil` driver-package
+> install, not this installer, and it needs test signing enabled. Do not run both.
 
 ### Step 1: Download & Verify
 
@@ -139,7 +217,10 @@ cd "C:\Program Files\MagicMousePatch\v1-binary-patch\installer"
 
 Uninstall restores the original driver and removes all Windows registry entries and certificates.
 
-## How It Works
+## How It Works — Driver 1 (patched Apple driver)
+
+> Driver 2's design is documented separately in [`v2-kmdf-driver/README.md`](v2-kmdf-driver/README.md)
+> and `v2-kmdf-driver/HID-CONTRACT.md`. The mechanism below is Driver 1's.
 
 ### The Problem: Mode A → Mode B Collapse
 
@@ -207,20 +288,22 @@ HKLM\SYSTEM\CurrentControlSet\Enum\BTHENUM\
 
 ## Roadmap
 
-**v1.0.0 (current):** Binary patch of Apple firmware via WDM lower filter.
-- Patched applewirelessmouse.sys (66 KB)
-- PowerShell installer + uninstaller
-- Registry-based LowerFilters registration
-- Requires certificate trust
+Both drivers are maintained. Neither is scheduled for removal, and Driver 2 is **not** a
+replacement for Driver 1 — they are different mechanisms with different requirements.
 
-**v2.0.0 (in progress):** KMDF filter driver rewrite.
-- From-scratch WDF source code
-- No Apple binary dependency
-- Cleaner driver signing process
-- Better Windows Defender SmartScreen integration
-- Windows 11 22H2+ target
+**Driver 1 — patched Apple driver (`v1.0.0`, production ready)**
+- Patched `applewirelessmouse.sys` (66 KB) as a WDM lower filter
+- PowerShell installer + uninstaller, registry `LowerFilters` registration
+- Requires certificate trust; no kernel test mode
+- Open: characterise multi-day behaviour beyond the measured 3.1× reduction
 
-See `/v2-kmdf-driver/README.md` for v2 status.
+**Driver 2 — KMDF driver (`2.0.4.3`, live and confirmed)**
+- From-scratch WDF source, no Apple binary dependency
+- Its own driver package; Apple's `MagicMouseDriver.sys` untouched
+- Two-finger surface scroll, tunable `ScrollStep`, automatic multitouch recovery on reconnect and reboot
+- Open: EV signing so test signing is no longer required; community swap-test on a second PC
+
+See [`v2-kmdf-driver/README.md`](v2-kmdf-driver/README.md) and `v2-kmdf-driver/STATUS.md` for Driver 2 status.
 
 ## Contributing
 
