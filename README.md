@@ -9,15 +9,16 @@ A free, MIT-licensed **Magic Mouse v3 Windows driver** for the USB-C **Apple Mag
 [Magic Mouse battery percentage on Windows](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/battery.html) ·
 [Magic Mouse v3 driver FAQ](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/faq.html)
 
-**Battery percentage:** use [Magic Tray (Windows app)](https://github.com/LesleyMurfin/magic-tray) — a Windows system-tray utility (software, not a physical desk tray) that reads HID Input `0x90` COL02 and installs the KMDF package from this repo. Site: [Magic Tray (Windows app) home](https://magictray.app/).
+**Start with Magic Tray:** [Magic Tray (Windows app)](https://github.com/LesleyMurfin/magic-tray) — a Windows system-tray utility (software, not a physical desk tray) that **detects which of the three driver states you are on** (Apple/Microsoft default, patched Apple driver, or KMDF), tells you whether pointer, scroll and battery are working, and reports battery in each. Site: [Magic Tray (Windows app) home](https://magictray.app/).
 
-**This repo ships TWO separate, working drivers.** They are different drivers, built different ways, with different tradeoffs — pick one, do not install both. See [Which driver](#which-driver-two-good-options) below.
+**This repo ships TWO separate, working drivers** — the patched Apple driver and the KMDF driver. Different drivers, built different ways, different tradeoffs: pick one, do not install both. See [Which driver](#which-driver-three-states-two-fixes) below.
 
 If this helped, **star this repo** and **[Magic Tray](https://github.com/LesleyMurfin/magic-tray)**. Signing goal (Stripe, not GitHub Sponsors): [funding](https://magictray.app/funding.html).
 
 ## Contents
 
-- [Which driver](#which-driver-two-good-options)
+- [Which driver — three states, two fixes](#which-driver-three-states-two-fixes)
+- [Magic Tray knows which state you are in](#magic-tray-knows-which-state-you-are-in)
 - [Driver 1 — patched Apple driver](#driver-1--patched-apple-driver-applewirelessmousesys)
 - [Driver 2 — KMDF driver](#driver-2--kmdf-driver-magicmousedriver-kmdf-204-scrollsys)
 - [What this fixes](#what-this-fixes)
@@ -28,26 +29,42 @@ If this helped, **star this repo** and **[Magic Tray](https://github.com/LesleyM
 - [Contributing](#contributing)
 - [License](#license)
 
-## Which driver? Two good options
+## Which driver? Three states, two fixes
 
-Both work. They are **independent** — separate binaries, separate installers, separate
-documentation. Install **one**, not both: they both attach to the same Bluetooth HID stack.
+Your mouse is always in **one of three driver states**. Two of them are fixes shipped here, and
+they are **independent** — separate binaries, separate installers, separate documentation. Install
+**one**, not both: they attach to the same Bluetooth HID stack.
 
-| | **Driver 1 — patched Apple driver** | **Driver 2 — KMDF driver** |
-|---|---|---|
-| File | `applewirelessmouse.sys` (patched Apple binary) | `MagicMouseDriver-kmdf-204-scroll.sys` (written from scratch) |
-| Folder | [`v1-binary-patch/`](v1-binary-patch/) | [`v2-kmdf-driver/`](v2-kmdf-driver/) |
-| Install | Prebuilt signed binary + PowerShell installer, then reboot | Self-sign script, then `pnputil` the driver package |
-| Build needed | No — ships prebuilt | Source + build scripts included; building needs the EWDK |
-| Signing | Prebuilt, signed by `MagicMouseFix.cer` (imported to `TrustedPublisher`) | You generate your own local cert — `Setup-Community.ps1` does it |
-| **Windows Test Mode** | **Required** — installer aborts if `testsigning` is off | **Required** — `Setup-Community.ps1` can enable it for you |
-| Secure Boot / memory integrity | Must be off | Must be off |
-| Attaches as | Lower filter on the Bluetooth HID stack | Lower filter, as its **own** driver package beside Apple's |
-| Touches Apple's driver? | It **is** a patched copy of Apple's driver | No — Apple's `MagicMouseDriver.sys` is left untouched |
-| Two-finger scroll | Protects scroll from dying after Bluetooth idle disconnect | Generates scroll directly from the touch surface (Wheel + AC Pan) |
-| Scroll sensitivity | Fixed | Tunable, no reinstall (`ScrollStep`) |
-| Survives reconnect / reboot | Reboot required at install; filter persists | Yes — re-arms multitouch automatically on both |
-| Status | **v1.0.0, production ready** | **2.0.4.3, live and confirmed on hardware** |
+| | **State 0 — Apple/Microsoft default** | **Driver 1 — patched Apple driver** | **Driver 2 — KMDF driver** |
+|---|---|---|---|
+| What it is | What Windows gives you with no fix installed | Patched copy of Apple's `applewirelessmouse.sys` | `MagicMouseDriver-kmdf-204-scroll.sys`, written from scratch |
+| Folder | — | [`v1-binary-patch/`](v1-binary-patch/) | [`v2-kmdf-driver/`](v2-kmdf-driver/) |
+| Pointer | Works | Works | Works |
+| Two-finger scroll | **Dies** after a Bluetooth idle disconnect | Protected — scroll stops being torn down | Generated directly from the touch surface (Wheel + AC Pan) |
+| Scroll sensitivity | n/a | Fixed | Tunable, no reinstall (`ScrollStep`) |
+| Battery in Magic Tray | Reported as-is | Read via a temporary **Mode A ⇄ Mode B flip**, then flipped back | Read directly from HID Input `0x90` on COL02 |
+| Install | Nothing to do | Prebuilt signed binary + PowerShell installer, then reboot | Self-sign script, then `pnputil` the driver package |
+| Build needed | — | No — ships prebuilt | Source + build scripts included; building needs the EWDK |
+| Signing | Microsoft-signed | This project's `MagicMouseFix.cer` (imported to `TrustedPublisher`) | A local cert you generate — `Setup-Community.ps1` does it |
+| **Windows Test Mode** | Not needed | **Required** — installer aborts if `testsigning` is off | **Required** — `Setup-Community.ps1` can enable it for you |
+| Secure Boot / memory integrity | Unchanged | Must be off | Must be off |
+| Touches Apple's driver? | — | It **is** a patched copy of Apple's driver | No — Apple's `MagicMouseDriver.sys` is left untouched |
+| Survives reconnect / reboot | Scroll does not | Reboot required at install; filter persists | Yes — re-arms multitouch automatically on both |
+| Status | Baseline (the problem) | **v1.0.0, production ready** | **2.0.4.3, live and confirmed on hardware** |
+
+### Magic Tray knows which state you are in
+
+[Magic Tray](https://github.com/LesleyMurfin/magic-tray) ([magictray.app](https://magictray.app/))
+is the companion Windows tray app, and it supports **all three states**. It detects which driver
+you are currently on — Apple/Microsoft default, patched Apple driver, or KMDF — and tells you
+whether **pointer, scroll and battery** are working in that state. Start there if you are not sure
+what you have.
+
+It also adapts how it reads battery to the state you are in:
+
+- **On the patched Apple driver** it performs a temporary **Mode A ⇄ Mode B flip** to obtain a
+  battery reading, then flips you back.
+- **On the KMDF driver** no flip is needed — battery comes straight from HID Input `0x90` on COL02.
 
 ### Test Mode: required by both, for the same reason
 
