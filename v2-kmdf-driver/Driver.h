@@ -34,7 +34,7 @@
 
 // FileVersion / package label. INF dest is unique so Apr 30 MagicMouseDriver.sys
 // (oem16 / AD5D244B) is not replaced or hardlinked.
-#define MM_FILE_VERSION_STR     "2.0.4.3"
+#define MM_FILE_VERSION_STR     "2.0.4.4"
 #define MM_ARTIFACT_SYS_PATTERN "MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys"
 #define MM_INF_SYS_NAME         "MagicMouseDriver-kmdf-204-scroll.sys"
 
@@ -123,6 +123,12 @@ typedef struct _MM_REQUEST_CONTEXT
     PVOID OrigBuffer;
     PMDL  OrigMdl;
     ULONG OrigBufferSize;
+    // BufferSize and RemainingBufferSize are two halves of one capacity
+    // (OnAclTransferComplete computes capacity = BufferSize +
+    // RemainingBufferSize). Diverting to the scratch buffer overwrites both,
+    // so both must be saved and restored or the profile driver sees a
+    // capacity that never belonged to its buffer.
+    ULONG OrigRemainingBufferSize;
     ULONG OrigFlags;
     BOOLEAN UsedScratch;
     UCHAR Scratch[MM_ACL_MAX_PARSE];

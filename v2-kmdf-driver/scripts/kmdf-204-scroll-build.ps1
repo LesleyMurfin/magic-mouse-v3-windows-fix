@@ -11,8 +11,8 @@
 # guard blocks rebuilding the SAME version without blocking the next one.
 [CmdletBinding()]
 param(
-    [string]$Version        = '2.0.4.3',
-    [string]$DriverVerDate  = '09/15/2026'
+    [string]$Version        = '2.0.4.4',
+    [string]$DriverVerDate  = '09/16/2026'
 )
 
 $ErrorActionPreference = 'Stop'
