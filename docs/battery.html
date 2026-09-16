@@ -84,7 +84,7 @@
     <a href="https://magictray.app/">Magic Tray app</a>
   </nav>
     <h1>Magic Mouse battery percentage on Windows 11</h1>
-    <p class="lead">To see <strong>Magic Mouse battery percentage</strong> on <strong>Windows 11</strong>, use the free <a href="https://magictray.app/">Magic Tray (Windows app)</a>: it puts the percentage next to the Windows clock. Neither driver in this repo reads battery itself, and <em>how</em> Magic Tray gets the number depends on which route you installed &mdash; with the <strong>KMDF driver</strong> it reads HID Input report <code>0x90</code> on collection <strong>COL02</strong> directly, and on the <strong>Apple-driver route</strong> it performs a brief, temporary Mode A to Mode B flip on the device and then flips it back. The drivers&rsquo; job is keeping scroll alive on <strong>PID 0323</strong>.</p>
+    <p class="lead">To see <strong>Magic Mouse battery percentage</strong> on <strong>Windows 11</strong>, use the free <a href="https://magictray.app/">Magic Tray (Windows app)</a>: it puts the percentage next to the Windows clock. The shipped Apple-driver route does not read battery itself; Magic Tray performs a brief, temporary Mode A to Mode B flip on the device and then flips it back. The KMDF route is development work only and is not shipped on this branch.</p>
     <p class="cta">
       <a class="primary" href="https://magictray.app/">Get Magic Tray (Windows app)</a>
       <a class="ghost" href="install.html#choose">Install the scroll driver</a>
@@ -95,10 +95,10 @@
     <dl class="faq">
       <dt>What shows the percentage</dt>
       <dd>Magic Tray, a free Windows system-tray app. Userspace, not a driver.</dd>
-      <dt>Where the number comes from, KMDF route</dt>
-      <dd>HID Input report <code>0x90</code> on collection COL02 of the Magic Mouse 2024 (PID <code>0x0323</code>), read directly. No mode flip needed.</dd>
-      <dt>Where the number comes from, Apple-driver route</dt>
+      <dt>Where the number comes from, shipped Apple-driver route</dt>
       <dd>Magic Tray flips the device briefly from Mode A to Mode B, reads the charge, and flips it back.</dd>
+      <dt>KMDF route</dt>
+      <dd>Development documentation only; no installable package is shipped on this branch.</dd>
       <dt>Magic Mouse v1, v2 and v2-alt</dt>
       <dd>Not yet characterised. Those models use different HID descriptor structures from the 2024 mouse, so the collection that carries report <code>0x90</code> on <code>0x0323</code> has not been mapped on them.</dd>
       <dt>What does not work</dt>
@@ -109,27 +109,27 @@
       <dd>Free. MIT licensed, no subscription.</dd>
     </dl>
 
-    <h2>Does the Magic Mouse v3 Windows driver show battery percentage?</h2>
-    <p>No. Both routes in this repo are kernel-mode lower filters and neither reads or reports battery level. Anything that claims otherwise about this repo is wrong. Reading the battery is userspace work, and it is done by the Magic Tray app.</p>
+    <h2>Does the shipped Apple-driver route show battery percentage?</h2>
+    <p>No. The shipped kernel filter does not read or report battery level. Reading the battery is userspace work, and it is done by the Magic Tray app. The unreleased KMDF route is not available from this branch.</p>
 
     <h2>How do I check Magic Mouse battery on Windows?</h2>
-    <p>Install <a href="https://magictray.app/">Magic Tray (Windows app)</a> and look next to the Windows clock. Magic Tray detects which of three states the machine is in &mdash; no fix installed, the Apple-driver route, or the KMDF driver &mdash; and reports whether pointer, scroll and battery are working in each. Source: the <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo on GitHub</a>.</p>
+    <p>Install the shipped <a href="https://magictray.app/">Magic Tray (Windows app)</a> and look next to the Windows clock. It reports battery for the Apple-driver route. Source: the <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo on GitHub</a>.</p>
     <p class="note">Magic Tray is Windows software &mdash; a system-tray utility for Apple mice on Windows. It is not a desk accessory, a keyboard stand, or a 3D-printed or wooden tray, despite what a shopping search suggests.</p>
 
-    <h2 id="two-routes">How the battery read differs between the two routes</h2>
+    <h2 id="two-routes">How does the shipped route read the battery?</h2>
     <table>
-      <caption>Where the battery percentage comes from on each route</caption>
+      <caption>Where the battery percentage comes from</caption>
       <thead>
         <tr><th scope="col">Route</th><th scope="col">How Magic Tray reads the charge</th></tr>
       </thead>
       <tbody>
         <tr>
-          <td><strong>KMDF driver</strong> (<code>v2-kmdf-driver/</code>, PID <code>0x0323</code>)</td>
-          <td>Straight from HID Input report <code>0x90</code> on collection COL02. No mode flip is needed, because the collection carrying the report stays exposed.</td>
-        </tr>
-        <tr>
           <td><strong>Apple-driver route</strong> (<code>v1-binary-patch/</code>)</td>
           <td>Magic Tray flips the device briefly from Mode A to Mode B, takes the reading, and flips it back. The flip is temporary by design.</td>
+        </tr>
+        <tr>
+          <td><strong>KMDF route</strong></td>
+          <td>Development documentation only. No installable package is shipped on this branch, so there is no current battery path to document.</td>
         </tr>
         <tr>
           <td><strong>Magic Mouse v1 <code>0x030D</code>, v2 <code>0x0269</code> and v2-alt <code>0x0310</code></strong></td>
@@ -137,17 +137,17 @@
         </tr>
       </tbody>
     </table>
-    <p>Which route you have is a choice made at install time: <a href="install.html#choose">which route should I install</a>.</p>
+    <p>The shipped route and rollback steps are in <a href="install.html#apple-route">the Apple-driver install guide</a>.</p>
 
     <h2>Why does Windows 11 not show the battery level itself?</h2>
     <p>Because the paths Windows normally uses are not dependable for this mouse. Windows Settings and WMI are not reliable sources for Magic Mouse 2024 battery state, and Feature report <code>0x47</code> is not where the level lives. The number is in an Input report the mouse sends on a specific collection, so something has to be listening on that collection and decoding it &mdash; which is what Magic Tray does.</p>
 
     <h2>Why does the scroll driver matter for a battery read?</h2>
     <p>Because the battery report arrives on a HID collection, and this mouse can lose its collections. After a Bluetooth idle disconnect, DeviceSetupManager property synchronization can collapse the mouse&rsquo;s HID collections &mdash; Mode A &rarr; Mode B &mdash; leaving a plain mouse with a working cursor and no touch surface. When the collection layout collapses, the collection carrying report <code>0x90</code> is not there to read either, so a battery reading can go stale or stop along with scroll.</p>
-    <p>Keeping the stack healthy is exactly what the kernel drivers are for:</p>
+    <p>Keeping the shipped Apple-driver route healthy is what the kernel filter is for:</p>
     <ul class="plain">
       <li><a href="scroll-fix.html">Magic Mouse 2024 (v3) scroll not working on Windows 11</a> &mdash; the symptom, the cause, and the PID table.</li>
-      <li><a href="install.html#choose">How to install the Magic Mouse 2024 (v3) Windows driver</a> &mdash; both routes, Test Mode, and rollback.</li>
+      <li><a href="install.html#apple-route">How to install the shipped Apple-driver route</a> &mdash; steps and rollback.</li>
       <li><a href="faq.html">Magic Mouse v3 Windows driver FAQ</a> &mdash; Boot Camp, signing, v1 and v2.</li>
       <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/hid-research.md">HID research notes, including Input report 0x90</a>.</li>
     </ul>
