@@ -1,0 +1,25 @@
+session_id: 2026-09-01-scroll-threshold
+timestamp: 2026-09-01T15:40:00-0600
+branch: ai/kmdf-204-unique-pkg-7748
+scope: "0323 scroll quality — Linux MM_SCROLL_STEP 224, do not ship TWO_FINGER"
+apex_score: 8
+experts:
+  - name: ExpertHid-2
+    agent: reviewer
+    verdict: APPROVE
+    finding: "TWO_FINGER is trackpad/PTP-only. Linux mouse emit_touch has no ntouches gate. SCROLL_STEP 224 = (64-32)*7. 90 is HR-only. PTP cannot fit 135-byte overlay. PidInfo is the v1/v2 extension."
+  - name: ExpertSec-2
+    agent: security-reviewer
+    verdict: CHANGES-NEEDED
+    finding: "At review time gate_4 still required TWO_FINGER so rebuild would pnputil the uncommitted down<2 kernel. Also MmSendMtEnable 66-byte ACL OUT remains (0xC0000206)."
+status: addressed-for-load
+outcome: |
+  ThresholdGate removed check_two_finger. ThresholdKernel removed down<2, MM_SCROLL_STEP 224.
+  Host: gate_4 / test_scroll_threshold / overlay / hid_acl / bsod / validate-package all exit 0.
+  Unique package rebuilt unsigned 1979B284, signed 16940C0F, oem50 replaced. oem16 AD5D244B intact.
+  ExpertSec ACL-OUT MmSendMtEnable not in this slice.
+  Gestures / PidInfo v1/v2 documented, not built.
+factory_gate_footer: |
+  VERDICT: APPROVE for 224 detent load
+  IR: IR-ALIGN
+  SUMMARY: TWO_FINGER not shipped | Linux 224 detent loaded oem50 | oem16 AD5D244B
