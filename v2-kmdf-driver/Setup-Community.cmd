@@ -33,9 +33,15 @@ REM     30  declined by the user (includes a dismissed UAC prompt)
 REM     40  hard error
 REM
 REM  Elevation model copied from v1-binary-patch\Install.cmd. Arguments are
-REM  passed straight through to the wizard (for example -DryRun). Note: an
-REM  argument that itself contains a double quote cannot survive the UAC
-REM  re-launch; run this file from an already-elevated prompt for that.
+REM  passed straight through to the wizard. Known switches:
+REM     -Yes          answer the confirmations up front
+REM     -DryRun       say what would happen and change nothing (no UAC needed)
+REM     -Status       print the current phase from the state file and stop
+REM     -Phase <1-7>  run one phase only
+REM     -NoElevate    do not self-elevate
+REM  The read-only switches above skip the UAC prompt. Note: an argument that
+REM  itself contains a double quote cannot survive the UAC re-launch; run this
+REM  file from an already-elevated prompt for that.
 REM ===========================================================================
 
 setlocal EnableExtensions
@@ -43,13 +49,18 @@ set "HERE=%~dp0"
 set "PS1=%HERE%Setup-Community.ps1"
 set "STATEDIR=C:\ProgramData\MagicMouseDriver"
 
-REM --- Separate our own re-launch marker from the user's real arguments. ---
+REM --- Separate our own re-launch marker from the user's real arguments, and
+REM     notice the switches that need no Administrator rights at all.
 REM     %ARGS% keeps the original quoting because it is built from %1, not %~1.
 set "ELEVATED="
+set "NOELEV="
 set "ARGS="
 :parse_args
 if "%~1"=="" goto args_done
 if /i "%~1"=="--mm-elevated" (set "ELEVATED=1") else (set "ARGS=%ARGS% %1")
+if /i "%~1"=="-DryRun"    set "NOELEV=1"
+if /i "%~1"=="-Status"    set "NOELEV=1"
+if /i "%~1"=="-NoElevate" set "NOELEV=1"
 shift
 goto parse_args
 :args_done
@@ -72,6 +83,7 @@ REM --- Re-launch elevated if we are not Administrator yet. -------------------
 REM     -ExecutionPolicy Bypass is deliberate and is not a weakening: the
 REM     script being run ships in this same folder, the user launched it, and
 REM     the policy applies to this one child process only.
+if defined NOELEV goto run
 net session >nul 2>&1
 if not errorlevel 1 goto run
 

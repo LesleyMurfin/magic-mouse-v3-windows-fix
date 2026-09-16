@@ -59,6 +59,9 @@ page.
 
 Progress lives in `C:\ProgramData\MagicMouseDriver\community-setup-state.json`
 (`phase` = the last phase that **completed**) with a detailed log in `install.log` beside it.
+Setup stages and signs in `C:\ProgramData\MagicMouseDriver\package` — it never writes into the
+folder you extracted the ZIP to, so your download stays byte-for-byte what `SHA256SUMS.txt`
+describes and you can always re-run it from a clean copy.
 
 ### Exit codes
 
@@ -72,6 +75,22 @@ Progress lives in `C:\ProgramData\MagicMouseDriver\community-setup-state.json`
 
 `Setup-Community.cmd` translates all of these into plain English on screen and pauses, so a
 double-click user never has to know the numbers.
+
+### Switches, if you want them
+
+Not needed for a normal install — double-clicking passes none of these.
+
+| Switch | Effect |
+|--------|--------|
+| `-DryRun` | Say what would happen and change nothing. No Administrator rights needed, so no UAC prompt. |
+| `-Status` | Print the phase reached so far from the state file and stop. No UAC prompt. |
+| `-Yes` | Answer the confirmations up front instead of being asked. |
+| `-Phase <1-7>` | Run one phase only, by the numbers in the table above. |
+| `-NoElevate` | Do not self-elevate; fail instead if not already Administrator. |
+
+They work either way round: `Setup-Community.cmd -Status` or
+`powershell -ExecutionPolicy Bypass -File Setup-Community.ps1 -Status`. The `.cmd` passes
+everything straight through and only skips the UAC prompt for the read-only switches.
 
 ## 3. What to test, and what we need back
 

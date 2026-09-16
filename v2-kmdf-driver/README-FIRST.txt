@@ -68,6 +68,10 @@ WHAT TO RUN - THERE IS ONLY ONE THING
   DOUBLE-CLICK Setup-Community.cmd AGAIN. It remembers what it already did and
   carries on from there.
 
+  Setup copies what it needs into C:\ProgramData\MagicMouseDriver and signs it
+  there. It never writes into this folder, so your download stays exactly as
+  downloaded and you can re-run it from a fresh copy at any time.
+
 
 THE SEVEN PHASES, SO YOU CAN SEE WHERE YOU ARE
 
