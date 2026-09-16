@@ -1,0 +1,143 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to publish (e.g. v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+# Never cancel a half-published release: a cancelled run can leave a tag with
+# a release but no assets.
+concurrency:
+  group: release-${{ github.workflow }}-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: package and publish
+    # Windows on purpose: this ships a Windows installer kit and must be built
+    # with Windows path and Compress-Archive semantics.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        shell: pwsh
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          $tag = if (-not [string]::IsNullOrWhiteSpace($env:INPUT_TAG)) { $env:INPUT_TAG } else { $env:GITHUB_REF_NAME }
+          if ($tag -notmatch '^v') {
+            Write-Host "::error::Release tag must start with 'v'. Got '$tag'."
+            exit 1
+          }
+          Write-Host "Release tag: $tag"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "RELEASE_TAG=$tag"
+
+      - name: Package installer kit
+        id: package
+        shell: pwsh
+        run: ./scripts/package-release.ps1 -Tag $env:RELEASE_TAG -OutDir dist
+
+      - name: Verify release asset
+        shell: pwsh
+        env:
+          ZIP_PATH: ${{ steps.package.outputs.zip }}
+        run: ./scripts/verify-release.ps1 -ZipPath $env:ZIP_PATH -Tag $env:RELEASE_TAG
+
+      - name: Compose release notes
+        shell: pwsh
+        env:
+          ZIP_NAME: ${{ steps.package.outputs.zip_name }}
+          ZIP_SHA256: ${{ steps.package.outputs.zip_sha256 }}
+          BINARY_INCLUDED: ${{ steps.package.outputs.binary_included }}
+        run: |
+          $notes = @(
+            "Magic Mouse v3 Windows scroll fix $env:RELEASE_TAG"
+            ''
+            "Asset:  $env:ZIP_NAME"
+            "SHA256: $env:ZIP_SHA256"
+            ''
+            'Verify the download before running anything:'
+            ''
+            '    certutil -hashfile ' + $env:ZIP_NAME + ' SHA256'
+            ''
+            '## Prerequisites'
+            ''
+            'Install-MagicMousePatch.ps1 enforces these and refuses to run otherwise:'
+            ''
+            '- Windows 10 build 14393 (1607) or later, x64, elevated PowerShell 5.0+.'
+            '- Test Signing ON. The driver is self-signed:'
+            '  `bcdedit /set testsigning on`, then reboot.'
+            '- Fast Startup OFF (`HiberbootEnabled` must be 0):'
+            '  `powercfg /h off`, then reboot. With Fast Startup on the install'
+            '  silently fails.'
+            '- HVCI / Memory Integrity is a warning, not a block. Windows 11 22H2+'
+            '  refuses to load self-signed kernel drivers while it is enabled:'
+            '  Windows Security -> Device Security -> Core isolation ->'
+            '  Memory Integrity: OFF, then reboot.'
+            ''
+            '## Install'
+            ''
+            '1. Extract the ZIP.'
+            '2. Verify `SHA256SUMS` against the extracted files.'
+            '3. Run `Install-MagicMousePatch.ps1` from an elevated prompt.'
+            '4. Reboot.'
+            ''
+            'Rollback: `Uninstall-MagicMousePatch.ps1`, elevated, then reboot.'
+            ''
+            '## Driver binary'
+            ''
+          )
+
+          if ($env:BINARY_INCLUDED -eq 'true') {
+            $notes += @(
+              'This asset includes the signed `applewirelessmouse.sys` and'
+              '`MagicMouseFix.cer`. Packaging verified the driver SHA256 and byte'
+              'length against the constants in `Install-MagicMousePatch.ps1`; the'
+              'release fails rather than publish a binary that disagrees with them.'
+            )
+          } else {
+            $notes += @(
+              'This asset is the scripts-only kit. The signed `applewirelessmouse.sys`'
+              'and `MagicMouseFix.cer` are NOT redistributed in it (see'
+              '`DMCA-NOTICE.md`). Obtain the binary as described in the bundled'
+              '`README.txt` (`v1-binary-patch/README.md`). The installer verifies'
+              'SHA256, byte length, Authenticode signature and signer thumbprint'
+              'before it touches the system, so a substituted binary is rejected.'
+            )
+          }
+
+          $notesPath = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          Set-Content -LiteralPath $notesPath -Value $notes -Encoding utf8
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "RELEASE_NOTES=$notesPath"
+          Get-Content -LiteralPath $notesPath | Out-Host
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZIP_PATH: ${{ steps.package.outputs.zip }}
+        run: |
+          gh release create $env:RELEASE_TAG `
+            "$env:ZIP_PATH" `
+            "$env:ZIP_PATH.sha256" `
+            --title $env:RELEASE_TAG `
+            --notes-file $env:RELEASE_NOTES `
+            --generate-notes
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::gh release create failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }

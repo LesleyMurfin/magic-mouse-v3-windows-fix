@@ -1,0 +1,9 @@
+# CODEOWNERS only auto-requests review; it does not enforce approval without branch protection.
+
+* @LesleyMurfin
+
+# Security-critical surfaces: installer, CI, and disclosure policy.
+/v1-binary-patch/installer/ @LesleyMurfin
+/.github/workflows/ @LesleyMurfin
+SECURITY.md @LesleyMurfin
+DMCA-NOTICE.md @LesleyMurfin

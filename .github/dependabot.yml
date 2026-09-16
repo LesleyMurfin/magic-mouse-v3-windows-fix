@@ -1,0 +1,23 @@
+# Dependabot configuration.
+#
+# Only the GitHub Actions ecosystem is tracked: this repository contains
+# PowerShell scripts, documentation, and a static Pages site. There are no
+# package manifests for any other ecosystem.
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+    # Wait for a release to settle before proposing it.
+    cooldown:
+      default-days: 5
+    # Batch every action bump into a single pull request.
+    groups:
+      github-actions:
+        patterns:
+          - "*"

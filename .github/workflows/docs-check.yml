@@ -1,0 +1,71 @@
+name: Docs
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docs/**'
+      - '**.md'
+      - 'scripts/Test-SiteLink.ps1'
+      - '.github/workflows/docs-check.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'docs/**'
+      - '**.md'
+      - 'scripts/Test-SiteLink.ps1'
+      - '.github/workflows/docs-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  links:
+    name: Internal links and sitemap
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate internal links, sitemap, canonicals
+        shell: pwsh
+        run: |
+          $Output = & pwsh -NoProfile -File scripts/Test-SiteLink.ps1 2>&1
+          $Code = $LASTEXITCODE
+
+          $Output | ForEach-Object { Write-Host $_ }
+
+          "## Docs link check" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          ($Output | Out-String).TrimEnd() | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+          exit $Code
+
+  external-links:
+    name: External links (advisory)
+    runs-on: ubuntu-latest
+    # Advisory only. Third-party host availability is not this repository's correctness:
+    # a rate-limited or briefly-down external site must never block a merge. Read the
+    # job summary when this job reports a failure; the `links` job is the real gate.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check external URLs
+        # lycheeverse/lychee-action v2.9.0
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8
+        with:
+          args: >-
+            --no-progress
+            --accept 200,206,429
+            --exclude-path docs/research
+            '**/*.md'
+            'docs/**/*.html'
+          fail: true
