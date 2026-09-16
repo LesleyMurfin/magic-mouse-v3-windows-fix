@@ -1,7 +1,35 @@
-# SHA256 checksums for Magic Mouse v3 Windows Fix v1.0.0
+# SHA256 checksums — Apple driver route (v1-binary-patch)
 # Verify with: certutil -hashfile <file> SHA256  (Windows)
 #              sha256sum <file>                   (Linux/macOS)
+#
+# ---------------------------------------------------------------------------
+# SHIPPED: Apple's applewirelessmouse.sys, UNMODIFIED, in ../apple-driver/
+#
+# Authenticode: Valid
+#   signer  CN=Microsoft Windows Hardware Compatibility Publisher
+#   issuer  CN=Microsoft Windows Third Party Component CA 2012
+#   6.1.7700.0, 78,424 bytes
+#
+# Only the .sys is shipped. No .inf and no .cat: a driver *package* must carry
+# a catalog Windows already trusts, and re-signing that catalog with a project
+# certificate would turn the whole install into a self-signed one — the exact
+# Test Mode dependency this route avoids. The installer therefore copies the
+# .sys and registers the service + LowerFilters directly, so the only thing
+# Windows has to trust is Apple's own Microsoft-countersigned binary.
+# ---------------------------------------------------------------------------
+08f33d7e3ece2c73950a9706f1c4c9057894eaeaf1c4fb355f261f3c2333378f  apple-driver/applewirelessmouse.sys
 
-370a5555aebf673c3156ea5b5fbabd8030f2ee7a3a6bd0fcb1b4b6c93fa56a03  applewirelessmouse.sys
-# MagicMouseFix.cer checksum — fill in after cert export
-# <sha256>  MagicMouseFix.cer
+# ---------------------------------------------------------------------------
+# LEGACY: byte-patched copy re-signed as CN=MagicMouseFix. Patching breaks
+# Apple's Microsoft countersignature, so this variant REQUIRES Test Mode with
+# Secure Boot and Memory Integrity off. Not shipped; listed so an existing
+# copy can be identified.
+# ---------------------------------------------------------------------------
+370a5555aebf673c3156ea5b5fbabd8030f2ee7a3a6bd0fcb1b4b6c93fa56a03  applewirelessmouse.sys  (legacy, patched + re-signed)
+
+# ---------------------------------------------------------------------------
+# KNOWN BAD — do not install. Patched but never re-signed: Authenticode
+# reports HashMismatch against Microsoft's countersignature. The installer
+# refuses it.
+# ---------------------------------------------------------------------------
+d22eb163d03a0830ee4ed9c9265044cdd4099974412fa62f4c249bef971129ec  (rejected: tampered, signature invalid)

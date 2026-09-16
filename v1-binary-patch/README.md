@@ -7,28 +7,68 @@ bind it to the mouse. It is one of the two drivers in this repo; the other is th
 driver in [`../v2-kmdf-driver/`](../v2-kmdf-driver/). Install one, not both — they attach to the
 same Bluetooth HID stack.
 
-## Two variants — know which one you are installing
+## What this actually is
 
-### Recommended: Apple's unmodified driver (no signing, no Test Mode)
+**Installing Apple's Boot Camp software does not give you scroll.** Apple's driver is the piece
+that translates the multi-touch surface into scroll events, but on a non-Mac PC it never gets
+wired up to the mouse: Apple's installer refuses to run on non-Apple hardware, and even with the
+driver present Windows will not attach it unless something registers it as a **lower filter** on
+the device. That registration is the fix — for **v1, v2 and v3 alike**.
 
-Apple's `applewirelessmouse.sys` from Boot Camp Support Software, used **byte-for-byte as shipped**.
-Apple's INF has no entry for this mouse's Bluetooth PID (`0323`), so the driver is registered
-manually instead: copy the `.sys`, create the kernel service, add `applewirelessmouse` to the
-device's `LowerFilters`, restart the Bluetooth HID device.
+This is the approach proven on Magic Mouse v1/v2 by
+[`sbagirici/apple-magic-mouse-scroll-fix-windows`](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows),
+which this route is built on.
 
-Because nothing in the binary changes, **Apple's signature and Microsoft's WHQL countersignature
-stay valid**:
+So the installer does three things Windows will not do for you:
 
-- **No Test Mode.** No `bcdedit /set testsigning on`, no desktop watermark.
-- **Secure Boot and memory integrity can stay ON.**
-- Nothing to build, no certificate to generate or trust.
+1. copy `applewirelessmouse.sys` into `System32\drivers`
+2. create the `applewirelessmouse` kernel service
+3. add `applewirelessmouse` to the mouse's `LowerFilters`, then restart the device
 
-Verified with `Get-AuthenticodeSignature`: status **Valid**, signer
-`CN=Microsoft Windows Hardware Compatibility Publisher`, issuer
-`CN=Microsoft Windows Third Party Component CA 2012` (78,424 bytes, v6.1.7700.0).
+## What is shipped, and why only the .sys
 
-This is the route proven on Magic Mouse v1/v2 by
-[`sbagirici/apple-magic-mouse-scroll-fix-windows`](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows).
+`apple-driver/applewirelessmouse.sys` is Apple's binary, **unmodified**:
+
+```
+Authenticode : Valid
+Signer       : CN=Microsoft Windows Hardware Compatibility Publisher
+Issuer       : CN=Microsoft Windows Third Party Component CA 2012
+Version      : 6.1.7700.0   (78,424 bytes)
+SHA256       : 08F33D7E3ECE2C73950A9706F1C4C9057894EAEAF1C4FB355F261F3C2333378F
+```
+
+No `.inf` and no `.cat` are shipped, deliberately. Installing a driver *package* with `pnputil`
+requires a catalog Windows already trusts; re-signing that catalog with a project certificate
+would make the whole install self-signed, which is the Test Mode dependency this route exists to
+avoid. Registering the service directly means the only thing Windows must trust is Apple's own
+Microsoft-countersigned `.sys`.
+
+Because nothing is patched, that signature stays intact — so this route is expected to work with
+**Secure Boot and memory integrity on, and no Test Mode**. See the caveat under
+"Verification status" below.
+
+### Supported hardware
+
+| Model | Bluetooth PID | Installer flag |
+|---|---|---|
+| Magic Mouse v1 | `030D` | `-TargetPid 030D` |
+| Magic Mouse v2 | `0269` | `-TargetPid 0269` |
+| Magic Mouse v2 (alt) | `0310` | `-TargetPid 0310` |
+| Magic Mouse v3 (2024) | `0323` | `-TargetPid 0323` |
+
+`-TargetPid` is optional; without it the first Magic Mouse found is used. Pass it when more than
+one is paired — the installer warns and lists the others.
+
+### Verification status — read this
+
+- **Detection and route selection:** verified against real hardware (a paired v1 `030D` and a
+  paired v3 `0323` on the same PC), plus all four PIDs in a harness.
+- **Binary identification:** verified — Apple's unmodified `.sys` is accepted, the legacy patched
+  copy is accepted as such, and a patched-but-unsigned copy (`HashMismatch`) is **refused**.
+- **Running with Test Mode off:** **not yet verified.** The development PC has `testsigning Yes`
+  (it also runs the self-signed KMDF driver), so it cannot demonstrate the difference. The
+  expectation rests on the `.sys` being Microsoft-countersigned and no catalog being installed. If
+  you run this on a machine with Secure Boot on and Test Mode off, please report the result.
 
 ### Legacy: byte-patched + re-signed variant (requires Test Mode)
 
@@ -44,28 +84,38 @@ Editing the file breaks Apple's Microsoft countersignature, and a self-signed ce
 
 Prefer the unmodified driver above unless you specifically need this variant's behaviour.
 
-### How to install each variant
+### Install it
 
-The installer **auto-detects** which binary you gave it, from the Authenticode signature, and
-applies the Test Mode / certificate requirements only where they actually apply. A binary whose
-signature does not verify — a patch that was never re-signed, or a corrupted download — is
-**refused**.
+**Easiest — double-click `Install.cmd`.** It asks for Administrator itself, uses the bundled
+Apple driver, and there is no PowerShell to open and no execution policy to change. Reboot when
+it finishes.
+
+That is the whole install. Everything below is for people who want control.
 
 ```powershell
-# Apple's driver already on this PC (Apple Software Update / Boot Camp installed it)
-.\Install-MagicMousePatch.ps1 -FromDriverStore
+# Bundled Apple driver (what Install.cmd does)
+.\installer\Install-MagicMousePatch.ps1 -DriverPath .\apple-driver\applewirelessmouse.sys
 
-# Apple's driver you extracted yourself from Boot Camp Support Software
-.\Install-MagicMousePatch.ps1 -DriverPath D:\bootcamp\applewirelessmouse.sys
+# Only touch one mouse, when several Magic Mice are paired
+.\installer\Install-MagicMousePatch.ps1 -DriverPath .\apple-driver\applewirelessmouse.sys -TargetPid 030D
 
-# Whatever applewirelessmouse.sys sits beside the installer; falls back to the
-# DriverStore copy if there is none
-.\Install-MagicMousePatch.ps1
+# Show what would happen and change nothing
+.\installer\Install-MagicMousePatch.ps1 -DriverPath .\apple-driver\applewirelessmouse.sys -DryRun
+
+# Use Apple's copy already in this PC's DriverStore instead of the bundled one
+.\installer\Install-MagicMousePatch.ps1 -FromDriverStore
+
+# Never install a driver package, only bind this one device instance
+.\installer\Install-MagicMousePatch.ps1 -DriverPath .\apple-driver\applewirelessmouse.sys -ForceManual -TargetPid 030D
 ```
 
-To get Apple's driver if it is not already on the machine, see **Driver Source** below (Apple
-Software Update, Brigadier, or extracting `AppleWirelessMouse64.exe` from Boot Camp Support
-Software).
+The installer auto-detects which binary it was given from the Authenticode signature and applies
+Test Mode / certificate requirements **only** where they actually apply. A binary whose signature
+does not verify — patched but never re-signed, or a corrupted download — is **refused**.
+
+> **If you already run the KMDF driver on a v3 mouse**, use `-ForceManual -TargetPid <PID>`. Only
+> the device instance you name is touched, so the v3 binding is left alone. Installing a full
+> driver package can make Windows re-evaluate which driver owns the v3 mouse.
 
 ### What you get with this driver
 
