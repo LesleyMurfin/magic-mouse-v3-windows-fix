@@ -38,12 +38,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — hash, size, Authenticode status and the signer expected for the detected variant — and reads
   back the `LowerFilters` value and the service key when a mouse was bound. Verification failure
   exits non-zero and points at `Uninstall-MagicMousePatch.ps1`
+- The device is disabled and re-enabled with `Disable-PnpDevice` / `Enable-PnpDevice` from the
+  `PnpDevice` module rather than `pnputil /disable-device` and `/enable-device`. Those pnputil
+  verbs only exist from Windows 10 version 2004 (build 19041), while this installer supports
+  build 14393 and up, so on 1607-1909 they could not work at all. Disabling is now treated as
+  the optimisation it is: when it cannot be done the copy is still attempted and nothing is
+  re-enabled afterwards, and a device that *was* disabled is re-enabled even if the copy fails
 
 ### Removed
 
 - The `pnputil` driver-package install route, and the switch that forced the installer past it.
   There is now exactly one route: copy the `.sys` into `C:\Windows\System32\drivers\`, register
-  the kernel service, write `LowerFilters` on the chosen device instance
+  the kernel service, write `LowerFilters` on the chosen device instance. That route was also the
+  only way to reach a `-DryRun` that printed an installation-complete banner. No `pnputil` call
+  remains on the Driver 1 path
 
 ### Fixed
 
@@ -52,6 +60,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signed with that key load. The certificate — for the legacy variant only — goes to
   `LocalMachine\TrustedPublisher` and nowhere else. Released history is left as published; this
   entry is the correction
+- Writing `LowerFilters` is refused on a machine that keeps the stock ACL on
+  `HKLM\SYSTEM\CurrentControlSet\Enum`, which grants Full Control to `SYSTEM` and read-only to
+  `Administrators`. That surfaced as a stack trace after the driver had already been copied and
+  the service registered. The installer and uninstaller now name the condition and the two ways
+  out — run in a SYSTEM context, or grant write access to that one device-instance key — and do
+  not report success
+- Driver 1 was documented as v3-only in the root README and in the Driver 1 Quick Start, which
+  told v1 and v2 owners the fix would not help them. It supports all four PIDs
 
 ## [1.0.0] - 2026-05-18
 

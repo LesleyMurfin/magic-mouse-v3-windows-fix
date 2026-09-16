@@ -111,6 +111,14 @@ it finishes, then confirm the driver loaded with `sc query applewirelessmouse` �
 
 That is the whole install. Everything below is for people who want control.
 
+> **Elevation:** run it as Administrator. The installer writes `LowerFilters` under
+> `HKLM\SYSTEM\CurrentControlSet\Enum\<InstanceId>`, a tree Windows reserves for the PnP manager
+> and which on some machines grants write access only to `SYSTEM`. If that write is refused the
+> installer names the condition rather than failing obscurely, and does not report success; the two
+> ways forward are to run it in a SYSTEM context (for example `psexec -s -i`), or to grant your
+> account write access to that one device-instance key. The uninstaller reports the same condition
+> the same way.
+
 ```powershell
 # Bundled Apple driver (what Install.cmd does)
 .\installer\Install-MagicMousePatch.ps1 -DriverPath .\apple-driver\applewirelessmouse.sys
@@ -182,7 +190,10 @@ Open Device Manager and locate your Magic Mouse:
    ```text
    BTHENUM\{00001124-0000-1000-8000-00805f9b34fb}_VID&0001004C_PID&0323\6&11223344_0
    ```
-   **Look for `PID&0323`** — if you don't see this, you don't have Magic Mouse v3 (2024), and this patch won't help.
+   **Read the `PID&` segment.** `030D` is Magic Mouse v1, `0269` and `0310` are v2, `0323` is
+   v3 (2024) — all four are supported by this route, as listed under "Supported hardware" above.
+   If more than one Magic Mouse is paired, note the PID of the one you want and pass it as
+   `-TargetPid <PID>`.
 
 ### 2. Download & Verify
 
