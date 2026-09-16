@@ -34,4 +34,16 @@ Run the procedures in CONTRIBUTING.md ("Test Procedures") first, then fill this 
 **Test 5 (Device Rescan):** PASS / FAIL
 - Rescan result: [scroll persists / scroll stopped]
 
-**Event logs attached:** [pnp-config.evtx, dsm-admin.evtx]
+**Event logs:** issue attachments are public and permanently visible. Raw .evtx files
+embed your Bluetooth MAC address, device instance ID, hostname, and user name. .evtx is
+binary, so convert it to text and redact there before attaching:
+
+```powershell
+(wevtutil qe "Microsoft-Windows-Kernel-PnP/Configuration" /f:text) -replace '(?<=&0&)[0-9A-Fa-f]{12}', 'REDACTEDMAC' -replace '([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}', 'XX:XX:XX:XX:XX:XX' | Set-Content C:\pnp-config.txt
+```
+
+Repeat with "Microsoft-Windows-DeviceSetupManager/Admin" for dsm-admin.txt, then replace
+any remaining hostname or user name by hand. Attach the redacted .txt files, not the raw
+.evtx. If a log cannot be safely redacted, email it to riley@revivebusiness.ca instead.
+
+**Event logs attached:** [pnp-config.txt, dsm-admin.txt - redacted]
