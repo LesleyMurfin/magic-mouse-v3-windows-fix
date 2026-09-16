@@ -45,11 +45,11 @@
 | Magic Trackpads | `0x030E`, `0x0265`, `0x0324` | Not here. No trackpad support |
 ## Pages
 
-- https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/ - what the project is, quick facts, PID 0323, and the shipped Apple-driver route.
-- https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html - the shipped Apple-driver install route and KMDF development status.
-- https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html - why scroll stops on Windows 11, and the shipped fix.
-- https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/battery.html - battery percentage on Windows via Magic Tray.
-- https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/faq.html - direct answers to common questions.
+- https://drivers.magictray.app/ - what the project is, quick facts, PID 0323, and the shipped Apple-driver route.
+- https://drivers.magictray.app/install.html - the shipped Apple-driver install route and KMDF development status.
+- https://drivers.magictray.app/scroll-fix.html - why scroll stops on Windows 11, and the shipped fix.
+- https://drivers.magictray.app/battery.html - battery percentage on Windows via Magic Tray.
+- https://drivers.magictray.app/faq.html - direct answers to common questions.
 
 ## Source and research
 
