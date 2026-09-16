@@ -18,8 +18,9 @@ If this helped, **star this repo** and **[Magic Tray](https://github.com/LesleyM
 ## Contents
 
 - [Which driver — three states, two fixes](#which-driver-three-states-two-fixes)
-- [Magic Tray knows which state you are in](#magic-tray-knows-which-state-you-are-in)
-- [Driver 1 — patched Apple driver](#driver-1--patched-apple-driver-applewirelessmousesys)
+- [What you actually get: scroll and battery](#what-you-actually-get-scroll-and-battery)
+- [Magic Tray works with all three states](#magic-tray-works-with-all-three-states)
+- [Driver 1 — Apple driver, registry-bound](#driver-1--apple-driver-registry-bound-applewirelessmousesys)
 - [Driver 2 — KMDF driver](#driver-2--kmdf-driver-magicmousedriver-kmdf-204-scrollsys)
 - [What this fixes](#what-this-fixes)
 - [Supported hardware](#supported-hardware)
@@ -60,19 +61,45 @@ memory integrity on, no Test Mode watermark. Verified on this machine:
 `Get-AuthenticodeSignature` returns **Valid**, signer `CN=Microsoft Windows Hardware Compatibility
 Publisher`.
 
-### Magic Tray knows which state you are in
+### What you actually get: scroll and battery
+
+These are the two things people care about, so here they are side by side.
+
+| | **State 0 — default** | **Driver 1 — Apple driver** | **Driver 2 — KMDF driver** |
+|---|---|---|---|
+| **Pointer** | ✅ works | ✅ works | ✅ works |
+| **Two-finger scroll** | ❌ none | ✅ Apple's own multi-touch translation | ✅ generated from the touch surface (HID Wheel + AC Pan) |
+| Scroll direction / feel | — | Apple's, Mac-style | Windows-style, **sensitivity tunable** via `ScrollStep` |
+| One finger resting on glass | — | Apple's behaviour | ✅ deliberately does **not** scroll |
+| Scroll after Bluetooth reconnect | ❌ | Filter stays bound | ✅ multitouch re-armed automatically |
+| Scroll after reboot | ❌ | Filter stays bound | ✅ multitouch re-armed automatically |
+| **Battery %** | Via Magic Tray | Via Magic Tray, using a brief **Mode A ⇄ B flip** | Via Magic Tray, **direct read** of HID Input `0x90` on COL02 |
+| Battery needs a mode flip? | — | Yes — momentary | No |
+
+Neither driver puts a battery percentage in Windows itself — Windows has no UI for it on this
+mouse. Battery always comes from **Magic Tray**; what changes between the drivers is *how* Magic
+Tray has to get it.
+
+### Magic Tray works with all three states
 
 [Magic Tray](https://github.com/LesleyMurfin/magic-tray) ([magictray.app](https://magictray.app/))
 is the companion Windows tray app, and it supports **all three states**. It detects which driver
-you are currently on — Apple/Microsoft default, patched Apple driver, or KMDF — and tells you
-whether **pointer, scroll and battery** are working in that state. Start there if you are not sure
-what you have.
+you are currently on — Apple/Microsoft default, Apple driver, or KMDF — and tells you whether
+**pointer, scroll and battery** are working in that state. Start there if you are not sure what you
+have: you do not need to read registry keys or check signatures yourself.
 
-It also adapts how it reads battery to the state you are in:
+It adapts how it reads battery to the state you are in:
 
-- **On the patched Apple driver** it performs a temporary **Mode A ⇄ Mode B flip** to obtain a
-  battery reading, then flips you back.
-- **On the KMDF driver** no flip is needed — battery comes straight from HID Input `0x90` on COL02.
+- **On the Apple driver** the battery report is not directly readable while the stack is in the
+  mode that serves scroll, so Magic Tray performs a temporary **Mode A ⇄ Mode B flip**, takes the
+  reading, and **flips you back**. Momentary, and you keep scroll.
+- **On the KMDF driver** no flip is needed — the driver keeps the multitouch collection alive, so
+  battery comes straight from HID Input `0x90` on COL02.
+- **On the Apple/Microsoft default** it still reports what the stack exposes, and tells you scroll
+  is missing plus which of the two drivers to install.
+
+You do not have to pick a driver to use Magic Tray, and installing either driver does not stop
+Magic Tray from working.
 
 ### Test Mode: only Driver 2 needs it
 

@@ -44,6 +44,43 @@ Editing the file breaks Apple's Microsoft countersignature, and a self-signed ce
 
 Prefer the unmodified driver above unless you specifically need this variant's behaviour.
 
+### How to install each variant
+
+The installer **auto-detects** which binary you gave it, from the Authenticode signature, and
+applies the Test Mode / certificate requirements only where they actually apply. A binary whose
+signature does not verify — a patch that was never re-signed, or a corrupted download — is
+**refused**.
+
+```powershell
+# Apple's driver already on this PC (Apple Software Update / Boot Camp installed it)
+.\Install-MagicMousePatch.ps1 -FromDriverStore
+
+# Apple's driver you extracted yourself from Boot Camp Support Software
+.\Install-MagicMousePatch.ps1 -DriverPath D:\bootcamp\applewirelessmouse.sys
+
+# Whatever applewirelessmouse.sys sits beside the installer; falls back to the
+# DriverStore copy if there is none
+.\Install-MagicMousePatch.ps1
+```
+
+To get Apple's driver if it is not already on the machine, see **Driver Source** below (Apple
+Software Update, Brigadier, or extracting `AppleWirelessMouse64.exe` from Boot Camp Support
+Software).
+
+### What you get with this driver
+
+| | This driver | The KMDF driver |
+|---|---|---|
+| Pointer | works | works |
+| Two-finger scroll | Apple's own multi-touch translation, Mac-style direction | generated from the touch surface, **sensitivity tunable** |
+| Battery % | via **Magic Tray**, which briefly flips **Mode A ⇄ B** to read it and flips back | via **Magic Tray**, direct read of HID Input `0x90` on COL02 |
+| Test Mode | **not needed** | required (self-signed) |
+| Secure Boot / memory integrity | can stay **ON** | must be off |
+
+Battery percentage comes from [Magic Tray](https://magictray.app/) in both cases — Windows itself
+has no battery UI for this mouse. Magic Tray detects which driver you are on and adjusts how it
+reads the level.
+
 > The hash-verification steps below refer to whichever `.sys` you are installing. Check it against
 > `installer/SHA256SUMS.txt` for the variant you have, and confirm the Authenticode signer matches
 > the variant you intend: Microsoft WHQL for Apple's unmodified driver, `CN=MagicMouseFix` for the
