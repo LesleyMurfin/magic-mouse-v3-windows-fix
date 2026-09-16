@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Magic Mouse Scroll Not Working on Windows 11</title>
-  <meta name="description" content="Magic Mouse 2024 (v3) scroll stops on Windows 11 because a Bluetooth idle disconnect collapses the HID collections. Two fixes now: Apple's own driver registered as a filter, or the PID 0323 KMDF driver.">
+  <meta name="description" content="Magic Mouse 2024 (v3) scroll stops on Windows 11 because a Bluetooth idle disconnect collapses the HID collections. The shipped Apple-driver route registers Apple's own driver; the KMDF route is development work only and is not shipped on this branch.">
   <link rel="canonical" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html">
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
   <link rel="describedby" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/llms.txt">
@@ -12,7 +12,7 @@
   <meta property="og:site_name" content="Magic Mouse v3 Windows Driver">
   <meta property="og:locale" content="en_US">
   <meta property="og:title" content="Magic Mouse 2024 (v3) scroll not working on Windows 11">
-  <meta property="og:description" content="Cursor moves, scroll is dead after an idle Bluetooth disconnect. Cause: HID collections collapse, Mode A to Mode B. Two fixes: the Apple-driver route, or the PID 0323 KMDF driver.">
+  <meta property="og:description" content="Cursor moves, scroll is dead after an idle Bluetooth disconnect. Cause: HID collections collapse, Mode A to Mode B. The shipped Apple-driver route is the available fix; KMDF work is not shipped on this branch.">
   <meta property="og:url" content="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html">
   <meta property="og:image" content="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/og.png">
   <meta property="og:image:width" content="1200">
@@ -28,7 +28,7 @@
       "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html#webpage",
       "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html",
       "name": "Magic Mouse 2024 (v3) scroll not working on Windows 11",
-      "description": "Magic Mouse 2024 (v3) scroll stops on Windows 11 because a Bluetooth idle disconnect collapses the HID collections. Two fixes now: Apple's own driver registered as a filter, or the PID 0323 KMDF driver.",
+      "description": "Magic Mouse 2024 (v3) scroll stops on Windows 11 because a Bluetooth idle disconnect collapses the HID collections. The shipped Apple-driver route registers Apple's own driver; the KMDF route is development work only and is not shipped on this branch.",
       "isPartOf": {
         "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#website"
       },
@@ -84,9 +84,9 @@
     <a href="https://magictray.app/">Magic Tray app</a>
   </nav>
     <h1>Magic Mouse 2024 (v3) scroll not working on Windows 11</h1>
-    <p class="lead">If your <strong>Magic Mouse 2024 (v3)</strong> still moves the cursor on <strong>Windows 11</strong> but two-finger scroll is dead, Windows has collapsed the mouse&rsquo;s HID collections after a Bluetooth idle disconnect. It does not recover on its own, because Apple never shipped a Windows driver for this mouse. There are now <strong>two fixes</strong> in this project for <strong>PID 0323</strong>, and you install one of them: register Apple&rsquo;s own unmodified signed driver as a lower filter, or install this project&rsquo;s KMDF filter driver &mdash; the <strong>Magic Mouse v3 Windows driver</strong>.</p>
+    <p class="lead">If your <strong>Magic Mouse 2024 (v3)</strong> still moves the cursor on <strong>Windows 11</strong> but two-finger scroll is dead, Windows has collapsed the mouse&rsquo;s HID collections after a Bluetooth idle disconnect. The shipped <strong>Apple-driver route</strong> registers Apple&rsquo;s own unmodified signed driver as a lower filter. The KMDF route is development documentation only and is not shipped on this branch.</p>
     <p class="cta">
-      <a class="primary" href="install.html#choose">Compare the two fixes and install</a>
+      <a class="primary" href="install.html#apple-route">Install the shipped fix</a>
       <a class="ghost" href="#which-mouse">Which mouse do I have?</a>
     </p>
   </header>
@@ -112,9 +112,9 @@
     <ol class="steps">
       <li><strong>Re-pair the mouse.</strong> Remove the device in Bluetooth settings, then pair it again. If scroll comes back and then dies again after the next idle period, you have this bug.</li>
       <li><strong>Confirm the PID.</strong> Device Manager &rarr; Human Interface Devices &rarr; Apple Magic Mouse &rarr; Properties &rarr; Details &rarr; Hardware Ids. Look for <code>PID_0323</code>.</li>
-      <li><strong>Check whether it is a v1, v2 or v2-alt mouse.</strong> <code>PID_030D</code> is the 2009 AA-battery Magic Mouse, <code>PID_0269</code> is Magic Mouse 2 with the Lightning port, and <code>PID_0310</code> is the v2-alt identifier. The KMDF driver does not bind to those, but the <a href="install.html#apple-route">Apple-driver route</a> supports all of them.</li>
-      <li><strong>Check you are not looking at a trackpad.</strong> Magic Trackpads report <code>030E</code>, <code>0265</code>, or <code>0324</code>; neither route targets them.</li>
-      <li><strong>Then install one of the two fixes.</strong> Follow <a href="install.html#choose">how to install the Magic Mouse 2024 (v3) Windows driver</a>. The Apple-driver route needs no Windows Test Mode and covers v1, v2, v2-alt and v3; the KMDF filter driver covers <code>0x0323</code> only, offers tunable scroll and automatic recovery after a reconnect, and does require Test Mode. Install one, not both.</li>
+      <li><strong>Check whether it is a v1, v2 or v2-alt mouse.</strong> <code>PID_030D</code> is the 2009 AA-battery Magic Mouse, <code>PID_0269</code> is Magic Mouse 2 with the Lightning port, and <code>PID_0310</code> is the v2-alt identifier. The shipped Apple-driver route supports all of them.</li>
+      <li><strong>Check you are not looking at a trackpad.</strong> Magic Trackpads report <code>030E</code>, <code>0265</code>, or <code>0324</code>; the shipped route does not target them.</li>
+      <li><strong>Then install the shipped fix.</strong> Follow <a href="install.html#apple-route">the Apple-driver install guide</a>. It needs no Windows Test Mode and covers v1, v2, v2-alt and v3. The KMDF route is development work only on this branch; do not try to install it.</li>
     </ol>
 
     <h2 id="which-mouse">Which mouse do I have, and what should I install?</h2>
@@ -126,7 +126,7 @@
         <tr>
           <td>Magic Mouse 2024, USB-C (this project calls it v3)</td>
           <td><code>0x0323</code></td>
-          <td>Either route &mdash; <a href="install.html#choose">compare and install</a></td>
+          <td>Shipped Apple-driver route &mdash; <a href="install.html#apple-route">install</a></td>
         </tr>
         <tr>
           <td>Magic Mouse 2, Lightning (v2)</td>
@@ -146,18 +146,18 @@
         <tr>
           <td>Magic Trackpad</td>
           <td><code>0x030E</code>, <code>0x0265</code>, <code>0x0324</code></td>
-          <td>Not covered by either route</td>
+          <td>Not covered by the shipped route</td>
         </tr>
       </tbody>
     </table>
     <p>Unsure after all that? The Magic Tray site keeps a decision page: <a href="https://magictray.app/drivers.html">which Apple mouse driver do I need on Windows</a>.</p>
 
     <h2>Will this fix the battery percentage too?</h2>
-    <p>No. Both routes restore scroll; neither reads battery. The free <a href="https://magictray.app/">Magic Tray (Windows app)</a> is what shows battery percentage next to the Windows clock &mdash; reading HID Input report <code>0x90</code> directly on the KMDF route, or with a brief temporary mode flip on the Apple-driver route. Details, including why v1 and v2 battery is not yet characterised: <a href="battery.html">Magic Mouse battery percentage on Windows 11</a>. Magic Tray is Windows software &mdash; a system-tray utility &mdash; not a desk accessory, stand, or 3D-printed tray.</p>
+    <p>No. The shipped Apple-driver route restores scroll but does not read battery. The free <a href="https://magictray.app/">Magic Tray (Windows app)</a> shows battery percentage with a brief temporary mode flip. The KMDF route is not shipped on this branch. Details, including why v1 and v2 battery is not yet characterised: <a href="battery.html">Magic Mouse battery percentage on Windows 11</a>.</p>
 
     <h2>Still stuck?</h2>
     <ul class="plain">
-      <li><a href="faq.html">Magic Mouse v3 Windows driver FAQ</a> &mdash; Boot Camp, which route needs Test Mode, v1 and v2 support, Windows 10, USB-C cable.</li>
+      <li><a href="faq.html">Magic Mouse v3 Windows driver FAQ</a> &mdash; Boot Camp, signing, v1 and v2 support.</li>
       <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver source and issues on GitHub</a> &mdash; MIT licensed, free.</li>
     </ul>
   </main>
