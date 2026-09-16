@@ -5,12 +5,22 @@ on:
     branches: [ main ]
     paths:
       - '**.ps1'
+      - 'PSScriptAnalyzerSettings.psd1'
       - '.github/workflows/ps-lint.yml'
   pull_request:
     branches: [ main ]
     paths:
       - '**.ps1'
+      - 'PSScriptAnalyzerSettings.psd1'
       - '.github/workflows/ps-lint.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
@@ -19,42 +29,129 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install PSScriptAnalyzer
-      run: |
-        Set-PSRepository PSGallery -InstallationPolicy Trusted
-        Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+    - name: Parse all PowerShell scripts
       shell: pwsh
-
-    - name: Run PSScriptAnalyzer
       run: |
-        $Scripts = Get-ChildItem -Path "." -Filter "*.ps1" -Recurse | Where-Object { $_.FullName -notmatch "\\\.git\\" }
+        $ErrorActionPreference = 'Stop'
 
-        Write-Host "Found $($Scripts.Count) PowerShell files to analyze" -ForegroundColor Cyan
+        $Root = (Resolve-Path -LiteralPath $env:GITHUB_WORKSPACE).Path.TrimEnd('\', '/')
+        $Scripts = @(Get-ChildItem -LiteralPath $Root -Filter '*.ps1' -Recurse -File |
+          Where-Object { $_.FullName -notmatch '[\\/]\.git[\\/]' } |
+          Sort-Object FullName)
 
-        $Results = @()
+        Write-Host "Parsing $($Scripts.Count) PowerShell script(s)"
+
+        $Failures = 0
+        $Summary = [System.Collections.Generic.List[string]]::new()
+        $Summary.Add('## Parse check')
+        $Summary.Add('')
+
         foreach ($Script in $Scripts) {
-          Write-Host "Analyzing: $($Script.FullName)" -ForegroundColor Gray
-          $AnalysisResults = Invoke-ScriptAnalyzer -Path $Script.FullName -Settings "$env:GITHUB_WORKSPACE\PSScriptAnalyzerSettings.psd1" -Severity Warning, Error
+          $Relative = $Script.FullName
+          if ($Relative.StartsWith($Root, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $Relative = $Relative.Substring($Root.Length)
+          }
+          $Relative = $Relative.TrimStart('\', '/').Replace('\', '/')
 
-          if ($AnalysisResults) {
-            $Results += $AnalysisResults
+          $ParseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            $Script.FullName, [ref] $null, [ref] $ParseErrors) | Out-Null
+          $ParseErrors = @($ParseErrors)
+
+          if ($ParseErrors.Count -gt 0) {
+            $Failures += $ParseErrors.Count
+            foreach ($ParseError in $ParseErrors) {
+              $Message = $ParseError.Message.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+              Write-Host "::error file=$Relative,line=$($ParseError.Extent.StartLineNumber),col=$($ParseError.Extent.StartColumnNumber),title=ParseError::$Message"
+            }
+            $Summary.Add("- FAIL ``$Relative`` - $($ParseErrors.Count) parse error(s)")
+          } else {
+            Write-Host "  ok $Relative"
+            $Summary.Add("- ok ``$Relative``")
           }
         }
 
-        if ($Results.Count -gt 0) {
-          Write-Host ""
-          Write-Host "PSScriptAnalyzer found issues:" -ForegroundColor Red
-          $Results | Format-Table -Property RuleName, Severity, Line, Message | Out-Host
-
-          Write-Host ""
-          Write-Host "Summary:" -ForegroundColor Red
-          Write-Host "  Errors: $($Results | Where-Object { $_.Severity -eq 'Error' } | Measure-Object | Select-Object -ExpandProperty Count)" -ForegroundColor Red
-          Write-Host "  Warnings: $($Results | Where-Object { $_.Severity -eq 'Warning' } | Measure-Object | Select-Object -ExpandProperty Count)" -ForegroundColor Yellow
-
-          exit 1
+        $Summary.Add('')
+        if ($Failures -gt 0) {
+          $Summary.Add("**$Failures parse error(s).** The shipped scripts are not loadable.")
         } else {
-          Write-Host ""
-          Write-Host "All PowerShell scripts passed analysis!" -ForegroundColor Green
-          exit 0
+          $Summary.Add("All $($Scripts.Count) script(s) parsed cleanly.")
         }
+        Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $Summary -Encoding utf8
+
+        if ($Failures -gt 0) {
+          Write-Host "Parse check failed with $Failures error(s)."
+          exit 1
+        }
+
+    - name: Install PSScriptAnalyzer
       shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+        Install-Module -Name PSScriptAnalyzer -RequiredVersion 1.25.0 -Repository PSGallery -Scope CurrentUser -Force
+        Import-Module -Name PSScriptAnalyzer -RequiredVersion 1.25.0
+        Write-Host "PSScriptAnalyzer $((Get-Module PSScriptAnalyzer).Version)"
+
+    - name: Run PSScriptAnalyzer
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        $Root = (Resolve-Path -LiteralPath $env:GITHUB_WORKSPACE).Path.TrimEnd('\', '/')
+        $Settings = Join-Path -Path $Root -ChildPath 'PSScriptAnalyzerSettings.psd1'
+
+        # One analyzer pass over the whole tree: .ps1, .psm1 and .psd1 alike. Nothing is
+        # carved out. PSScriptAnalyzerSettings.psd1 is deliberately pure ASCII so it does
+        # not trip PSUseBOMForUnicodeEncodedFile; a non-ASCII .psd1 added later without a
+        # BOM decodes wrong under Windows PowerShell 5.1, and this gate should say so.
+        $Results = @(Invoke-ScriptAnalyzer -Path $Root -Recurse -Settings $Settings -Severity Warning, Error)
+
+        $ErrorCount = @($Results | Where-Object { $_.Severity -eq 'Error' }).Count
+        $WarningCount = @($Results | Where-Object { $_.Severity -eq 'Warning' }).Count
+
+        $Summary = [System.Collections.Generic.List[string]]::new()
+        $Summary.Add('## PSScriptAnalyzer')
+        $Summary.Add('')
+        $Summary.Add("Errors: $ErrorCount / Warnings: $WarningCount")
+        $Summary.Add('')
+
+        if ($Results.Count -gt 0) {
+          $Summary.Add('| Severity | Rule | File | Line | Message |')
+          $Summary.Add('| --- | --- | --- | --- | --- |')
+        }
+
+        foreach ($Result in $Results) {
+          $Relative = [string] $Result.ScriptPath
+          if ($Relative.StartsWith($Root, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $Relative = $Relative.Substring($Root.Length)
+          }
+          $Relative = $Relative.TrimStart('\', '/').Replace('\', '/')
+
+          # GitHub drops an annotation whose line/col is empty, so never emit a blank one.
+          $Line = if ($Result.Line) { [int] $Result.Line } else { 1 }
+          $Column = if ($Result.Column) { [int] $Result.Column } else { 1 }
+
+          $Message = $Result.Message.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+          Write-Host "::error file=$Relative,line=$Line,col=$Column,title=$($Result.RuleName)::$Message"
+
+          $Cell = $Result.Message.Replace('|', '\|').Replace("`r", ' ').Replace("`n", ' ')
+          $Summary.Add("| $($Result.Severity) | $($Result.RuleName) | ``$Relative`` | $Line | $Cell |")
+        }
+
+        $Summary.Add('')
+        if ($Results.Count -eq 0) {
+          $Summary.Add('All PowerShell scripts passed analysis.')
+        }
+        Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $Summary -Encoding utf8
+
+        Write-Host ''
+        Write-Host 'Summary:'
+        Write-Host "  Errors: $ErrorCount"
+        Write-Host "  Warnings: $WarningCount"
+
+        if ($Results.Count -gt 0) {
+          exit 1
+        }
+
+        Write-Host 'All PowerShell scripts passed analysis.'

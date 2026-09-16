@@ -1,0 +1,52 @@
+name: Provenance
+
+# The driver provenance triple (SHA256, byte size, cert thumbprint) is hand-copied into
+# nine files. No paths filter here on purpose: a docs-only edit that changes a published
+# hash is exactly the failure this guard exists to catch.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  provenance:
+    name: Driver provenance invariant
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify driver provenance
+        shell: bash
+        run: |
+          set -o pipefail
+          pwsh -NoLogo -NoProfile -File scripts/Test-ReleaseProvenance.ps1 2>&1 \
+            | tee "$RUNNER_TEMP/provenance.log"
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Driver provenance'
+            echo
+            echo 'Source of truth: `v1-binary-patch/installer/Install-MagicMousePatch.ps1`'
+            echo
+            echo '```text'
+            if [ -f "$RUNNER_TEMP/provenance.log" ]; then
+              cat "$RUNNER_TEMP/provenance.log"
+            else
+              echo 'Provenance check produced no output.'
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
