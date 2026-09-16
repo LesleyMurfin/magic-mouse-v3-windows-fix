@@ -393,15 +393,15 @@ v2.0.0 will rewrite as native KMDF source code for transparency and long-term ma
 
 ### Microsoft Documentation
 
-- [WDM Filter Drivers](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/wdm-filter-drivers)
-- [IRP Data Structures](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/irp-data-structures)
-- [Device Installation Registry](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/registry-entries-for-devices-and-drivers)
-- [PnP Device Initialization](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/pnp-device-initialization)
+- [Filter Drivers](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/filter-drivers)
+- [Handling IRPs](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/handling-irps)
+- [Overview of Registry Trees and Keys](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/overview-of-registry-trees-and-keys)
+- [Initializing a Device Object](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/initializing-a-device-object)
 
 ### Related Implementations
 
-- [HID Class Driver Source](https://github.com/microsoft/Windows-driver-samples/tree/master/input/hid)
-- [WDM Filter Driver Sample](https://github.com/microsoft/Windows-driver-samples/tree/master/general/filter)
+- [HID Driver Samples](https://github.com/microsoft/Windows-driver-samples/tree/main/hid)
+- [Mouse Filter Driver Sample (moufiltr)](https://github.com/microsoft/Windows-driver-samples/tree/main/input/moufiltr)
 
 ---
 

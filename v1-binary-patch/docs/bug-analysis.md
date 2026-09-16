@@ -368,9 +368,9 @@ v2 will address these limitations with a from-scratch WDF driver implementation.
 
 ### Windows DDK Documentation
 
-- [WDM Filter Drivers](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/wdm-filter-drivers)
+- [Filter Drivers](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/filter-drivers)
 - [HID Class Driver](https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/)
-- [PnP Device Registration](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/plug-and-play)
+- [Introduction to Plug and Play](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/introduction-to-plug-and-play)
 
 ### Bluetooth Specification
 
@@ -378,7 +378,8 @@ v2 will address these limitations with a from-scratch WDF driver implementation.
 
 ### Apple Magic Mouse
 
-- [Magic Mouse 2 (2015) Tech Specs](https://support.apple.com/en-us/HT204830)
+- [Magic Mouse (USB-C, 2024) Tech Specs](https://support.apple.com/en-us/121931) - the v3 hardware this repo targets
+- [Magic Mouse - Tech Specs](https://support.apple.com/en-us/111885) - the Lightning predecessor (Magic Mouse 2)
 - Firmware update history (device descriptor changes over versions)
 
 ### Baseline / Prior Work

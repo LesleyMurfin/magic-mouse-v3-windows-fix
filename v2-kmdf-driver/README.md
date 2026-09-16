@@ -275,8 +275,8 @@ When v2 becomes available, you can optionally upgrade by:
 
 ### Related Projects
 
-- [WDF Filter Driver Sample](https://github.com/microsoft/Windows-driver-samples/tree/master/general/filter)
-- [HID Class Driver](https://github.com/microsoft/Windows-driver-samples/tree/master/input/hid)
+- [Mouse Filter Driver Sample (moufiltr)](https://github.com/microsoft/Windows-driver-samples/tree/main/input/moufiltr)
+- [HID Minidriver Sample (vhidmini2)](https://github.com/microsoft/Windows-driver-samples/tree/main/hid/vhidmini2)
 
 ---
 

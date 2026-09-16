@@ -27,7 +27,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Parse all PowerShell scripts
       shell: pwsh
