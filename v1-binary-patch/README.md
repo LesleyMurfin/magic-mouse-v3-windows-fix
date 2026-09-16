@@ -1,33 +1,53 @@
-# v1.0.0 — Binary Patch Installer
+# Apple driver route — `applewirelessmouse.sys`
 
 **STATUS: Production Ready**
 
-This directory contains the patched-Apple-driver approach: a pre-built, patched
-`applewirelessmouse.sys` kernel driver and PowerShell installer/uninstaller. It is one of the two
-drivers in this repo; the other is the from-scratch KMDF driver in [`../v2-kmdf-driver/`](../v2-kmdf-driver/).
-Install one, not both — they attach to the same Bluetooth HID stack.
+This directory covers the **Apple driver** route: install Apple's own multi-touch filter driver and
+bind it to the mouse. It is one of the two drivers in this repo; the other is the from-scratch KMDF
+driver in [`../v2-kmdf-driver/`](../v2-kmdf-driver/). Install one, not both — they attach to the
+same Bluetooth HID stack.
 
-## Before you start — Windows Test Mode is required
+## Two variants — know which one you are installing
 
-This driver is signed by this project's own certificate (`MagicMouseFix.cer`), not by Microsoft, so
-Windows will not load it unless Test Mode is on. `Install-MagicMousePatch.ps1` **checks this and
-stops** if it is off.
+### Recommended: Apple's unmodified driver (no signing, no Test Mode)
 
-```powershell
-# Admin PowerShell, then reboot
-bcdedit /set testsigning on
-```
+Apple's `applewirelessmouse.sys` from Boot Camp Support Software, used **byte-for-byte as shipped**.
+Apple's INF has no entry for this mouse's Bluetooth PID (`0323`), so the driver is registered
+manually instead: copy the `.sys`, create the kernel service, add `applewirelessmouse` to the
+device's `LowerFilters`, restart the Bluetooth HID device.
 
-Also required: **Secure Boot off** and **memory integrity (HVCI) off** — the installer verifies
-both. A "Test Mode" watermark will appear on the desktop; that is expected.
+Because nothing in the binary changes, **Apple's signature and Microsoft's WHQL countersignature
+stay valid**:
 
-The installer imports the certificate into `LocalMachine\TrustedPublisher` only, **not** `Root`:
-putting it in `Root` would let anything signed with that key load on your machine. Because the
-certificate is not a trusted root, it cannot satisfy kernel code integrity by itself, which is why
-Test Mode is needed. Patching the binary also invalidates Apple's original Microsoft signature.
+- **No Test Mode.** No `bcdedit /set testsigning on`, no desktop watermark.
+- **Secure Boot and memory integrity can stay ON.**
+- Nothing to build, no certificate to generate or trust.
 
-Removing this requirement needs paid Microsoft driver signing (EV certificate + Partner Center
-attestation, renewed annually) — see [funding](https://magictray.app/funding.html).
+Verified with `Get-AuthenticodeSignature`: status **Valid**, signer
+`CN=Microsoft Windows Hardware Compatibility Publisher`, issuer
+`CN=Microsoft Windows Third Party Component CA 2012` (78,424 bytes, v6.1.7700.0).
+
+This is the route proven on Magic Mouse v1/v2 by
+[`sbagirici/apple-magic-mouse-scroll-fix-windows`](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows).
+
+### Legacy: byte-patched + re-signed variant (requires Test Mode)
+
+Earlier work here produced a **modified** `applewirelessmouse.sys` (66,288 bytes, SHA256
+`370A5555…`) re-signed with this project's own certificate `CN=MagicMouseFix`, which the installer
+imports into `LocalMachine\TrustedPublisher` (deliberately **not** `Root` — `Root` would let
+anything signed with that key load).
+
+Editing the file breaks Apple's Microsoft countersignature, and a self-signed certificate outside
+`Root` cannot satisfy kernel code integrity on its own. So this variant **does** require
+`bcdedit /set testsigning on`, with Secure Boot and memory integrity off —
+`Install-MagicMousePatch.ps1` checks and refuses to continue otherwise.
+
+Prefer the unmodified driver above unless you specifically need this variant's behaviour.
+
+> The hash-verification steps below refer to whichever `.sys` you are installing. Check it against
+> `installer/SHA256SUMS.txt` for the variant you have, and confirm the Authenticode signer matches
+> the variant you intend: Microsoft WHQL for Apple's unmodified driver, `CN=MagicMouseFix` for the
+> patched one.
 
 ## Quick Start
 
