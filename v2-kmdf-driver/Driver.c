@@ -367,8 +367,21 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
             ctx->LastInFlags = pBrb->BrbL2caAclTransfer.TransferFlags;
             WdfSpinLockRelease(ctx->Lock);
 
+            // Divert to the scratch buffer only when the caller's buffer is a
+            // whole input report. HidBth reads the HID control channel
+            // header-first - BufferSize 1 for the 0xA1 DATA byte - so a
+            // scratch read of MM_ACL_MAX_PARSE with ACL_SHORT_TRANSFER_OK
+            // consumes the entire GET_REPORT response while only 1 byte can
+            // be copied back to the caller. That is why Input 0x90 on COL02
+            // returned 90 00 00 with STATUS_SUCCESS: the percent arrived off
+            // the air and was discarded here. Interrupt-channel reports are
+            // posted with a 9-byte buffer, so the multitouch read this filter
+            // exists for is still diverted and translated, and
+            // OnAclTransferComplete already refuses to translate below
+            // origCap >= MM_MOUSE_REPORT_LEN - a shorter diversion could only
+            // ever swallow data, never produce a wheel report.
             if (sdpOk &&
-                pBrb->BrbL2caAclTransfer.BufferSize > 0 &&
+                pBrb->BrbL2caAclTransfer.BufferSize >= MM_MOUSE_REPORT_LEN &&
                 pBrb->BrbL2caAclTransfer.BufferSize < MM_ACL_MAX_PARSE)
             {
                 reqCtx->OrigBuffer = pBrb->BrbL2caAclTransfer.Buffer;
