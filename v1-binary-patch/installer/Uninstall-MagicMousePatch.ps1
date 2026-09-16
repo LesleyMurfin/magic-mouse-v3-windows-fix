@@ -302,37 +302,52 @@ function Remove-MagicMouseFilterBinding {
         Write-Status "No Magic Mouse paired -- no LowerFilters to clean" "OK"
         return $true
     }
+    $allClean = $true
     foreach ($d in $found) {
         $model = Get-MagicMouseModel -InstanceId $d.InstanceId
         $name  = if ($model) { $model.Name } else { 'unrecognised PID' }
         Write-Host "  $name" -ForegroundColor Gray
-        Remove-LowerFiltersEntry -InstanceId $d.InstanceId
+        if (-not (Remove-LowerFiltersEntry -InstanceId $d.InstanceId)) { $allClean = $false }
     }
-    return $true
+    if (-not $allClean) {
+        Write-Host "  At least one instance could not be confirmed unbound, so the service and" -ForegroundColor Yellow
+        Write-Host "  the driver are being left in place. Fix the errors above and re-run." -ForegroundColor Yellow
+    }
+    return $allClean
 }
 
-# One device instance. An instance that never listed our filter is reported and left
-# alone, which is a normal outcome and not a failure.
+# One device instance. Returns $true only when 'applewirelessmouse' is positively known to
+# be absent from that instance afterwards - either it was never listed, or the rewrite was
+# read back and confirmed. Anything unverifiable returns $false, because the caller uses
+# this to decide whether the shared service key and driver file may be deleted.
 function Remove-LowerFiltersEntry {
     param([string]$InstanceId)
     $instancePath = Get-MagicMouseInstanceRegPath -InstanceId $InstanceId
-    if (-not (Test-Path $instancePath)) {
-        Write-Status "Instance key not found: $instancePath" "OK"
-        return
+    # A key that genuinely does not exist cannot hold a LowerFilters value, so absence is
+    # established. A key that exists but cannot be read is a different thing entirely, and
+    # Test-Path flattens both into $false - hence Get-Item, which distinguishes them.
+    try {
+        Get-Item -LiteralPath $instancePath -ErrorAction Stop | Out-Null
+    } catch [System.Management.Automation.ItemNotFoundException] {
+        Write-Status "Instance key not found, so nothing is bound there: $instancePath" "OK"
+        return $true
+    } catch {
+        Write-Failure "Cannot read $instancePath ($($_.Exception.Message)); unable to confirm the filter is gone"
+        return $false
     }
     Write-Host "  Instance key: $instancePath" -ForegroundColor Gray
 
     $cur = (Get-ItemProperty -Path $instancePath -Name 'LowerFilters' -ErrorAction SilentlyContinue).LowerFilters
     if (-not $cur) {
         Write-Status "No LowerFilters value present" "OK"
-        return
+        return $true
     }
     # Piping through Where-Object normalises REG_MULTI_SZ (string[]), a single
     # string and a $null into a real array, so .Count is always meaningful.
     $entries = @($cur | Where-Object { $_ })
     if ($entries -notcontains $ServiceName) {
         Write-Status "LowerFilters does not list $ServiceName; left untouched" "OK"
-        return
+        return $true
     }
 
     # Preserve every other filter that was there. New-ItemProperty -Force overwrites the
@@ -358,23 +373,28 @@ function Remove-LowerFiltersEntry {
         Write-Host "       psexec -s -i powershell.exe -File .\Uninstall-MagicMousePatch.ps1" -ForegroundColor Yellow
         Write-Host "    2. Grant your account write access to that one device-instance key:" -ForegroundColor Yellow
         Write-Host "       HKLM\SYSTEM\CurrentControlSet\Enum\$InstanceId" -ForegroundColor Yellow
-        return
+        return $false
     } catch {
         Write-Failure "Could not re-write LowerFilters at ${instancePath}: $($_.Exception.Message)"
-        return
+        return $false
     }
 
     $after = (Get-ItemProperty -Path $instancePath -Name 'LowerFilters' -ErrorAction SilentlyContinue).LowerFilters
     $afterList = @($after | Where-Object { $_ })
     if ($afterList -contains $ServiceName) {
         Write-Failure "LowerFilters still lists $ServiceName at $instancePath"
-    } elseif ($kept.Count -ne $afterList.Count) {
+        return $false
+    }
+    if ($kept.Count -ne $afterList.Count) {
         Write-Failure "LowerFilters re-write lost entries; expected [$([string]::Join(', ', $kept))], found [$([string]::Join(', ', $afterList))]"
-    } elseif ($afterList.Count -gt 0) {
+        return $false
+    }
+    if ($afterList.Count -gt 0) {
         Write-Status "Re-wrote LowerFilters without ${ServiceName}: [$([string]::Join(', ', $afterList))]" "OK"
     } else {
         Write-Status "Removed LowerFilters entirely (no remaining entries)" "OK"
     }
+    return $true
 }
 
 function Remove-MagicMouseService {
