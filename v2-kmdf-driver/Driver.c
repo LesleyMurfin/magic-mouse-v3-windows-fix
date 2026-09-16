@@ -353,6 +353,7 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
             reqCtx->OrigBuffer = NULL;
             reqCtx->OrigMdl = NULL;
             reqCtx->OrigBufferSize = 0;
+            reqCtx->OrigRemainingBufferSize = 0;
             reqCtx->OrigFlags = 0;
 
             BOOLEAN sdpOk = FALSE;
@@ -387,6 +388,8 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
                 reqCtx->OrigBuffer = pBrb->BrbL2caAclTransfer.Buffer;
                 reqCtx->OrigMdl = pBrb->BrbL2caAclTransfer.BufferMDL;
                 reqCtx->OrigBufferSize = pBrb->BrbL2caAclTransfer.BufferSize;
+                reqCtx->OrigRemainingBufferSize =
+                    pBrb->BrbL2caAclTransfer.RemainingBufferSize;
                 reqCtx->OrigFlags = pBrb->BrbL2caAclTransfer.TransferFlags;
                 reqCtx->UsedScratch = TRUE;
                 pBrb->BrbL2caAclTransfer.Buffer = reqCtx->Scratch;
@@ -404,6 +407,8 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
                     pBrb->BrbL2caAclTransfer.Buffer = reqCtx->OrigBuffer;
                     pBrb->BrbL2caAclTransfer.BufferMDL = reqCtx->OrigMdl;
                     pBrb->BrbL2caAclTransfer.BufferSize = reqCtx->OrigBufferSize;
+                    pBrb->BrbL2caAclTransfer.RemainingBufferSize =
+                        reqCtx->OrigRemainingBufferSize;
                     pBrb->BrbL2caAclTransfer.TransferFlags = reqCtx->OrigFlags;
                     reqCtx->UsedScratch = FALSE;
                 }
@@ -481,6 +486,7 @@ OnAclTransferComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
         pBrb->BrbL2caAclTransfer.BufferMDL = reqCtx->OrigMdl;
         pBrb->BrbL2caAclTransfer.TransferFlags = reqCtx->OrigFlags;
         pBrb->BrbL2caAclTransfer.BufferSize = reqCtx->OrigBufferSize;
+        pBrb->BrbL2caAclTransfer.RemainingBufferSize = reqCtx->OrigRemainingBufferSize;
         reqCtx->UsedScratch = FALSE;
 
         ULONG origCap = reqCtx->OrigBufferSize;

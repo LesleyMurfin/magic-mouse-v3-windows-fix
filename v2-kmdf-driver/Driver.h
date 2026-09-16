@@ -123,6 +123,12 @@ typedef struct _MM_REQUEST_CONTEXT
     PVOID OrigBuffer;
     PMDL  OrigMdl;
     ULONG OrigBufferSize;
+    // BufferSize and RemainingBufferSize are two halves of one capacity
+    // (OnAclTransferComplete computes capacity = BufferSize +
+    // RemainingBufferSize). Diverting to the scratch buffer overwrites both,
+    // so both must be saved and restored or the profile driver sees a
+    // capacity that never belonged to its buffer.
+    ULONG OrigRemainingBufferSize;
     ULONG OrigFlags;
     BOOLEAN UsedScratch;
     UCHAR Scratch[MM_ACL_MAX_PARSE];
