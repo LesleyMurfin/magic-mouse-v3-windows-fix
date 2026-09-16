@@ -468,6 +468,77 @@ def test_c_source_acl_contract(run: _Run) -> None:
     )
 
 
+def test_c_source_control_channel_gate(run: _Run) -> None:
+    """Fail-closed vs Driver.c: the IN scratch diversion must not eat short reads.
+
+    HidBth reads the HID control channel header-first (BufferSize 1 for the
+    0xA1 DATA byte). A `BufferSize > 0` diversion gate hands that 1-byte read
+    a MM_ACL_MAX_PARSE scratch with ACL_SHORT_TRANSFER_OK, swallows the whole
+    GET_REPORT(Input, 0x90) response and copies back min(received, origCap) = 1
+    byte, so COL02 battery returns 90 00 00 / STATUS_SUCCESS. Reintroducing
+    that gate, dropping the MM_MOUSE_REPORT_LEN floor, deleting the
+    MM_ACL_MAX_PARSE upper bound or the sdpOk conjunct, or lowering the
+    OnAclTransferComplete origCap floor must turn this red.
+    """
+    if not DRV_C.is_file():
+        run.check("C_SOURCE_CONTROL_CHANNEL_GATE", False, f"missing {DRV_C}")
+        return
+
+    drv = DRV_C.read_text(encoding="utf-8")
+
+    # Diversion floor: a whole report, never a header-first 1-byte read.
+    has_floor = (
+        re.search(
+            r"BrbL2caAclTransfer\.BufferSize\s*>=\s*MM_MOUSE_REPORT_LEN",
+            drv,
+        )
+        is not None
+    )
+    # No `BufferSize > 0` gate anywhere; `>= 0` / `> 1` / `> 0x10` must not hit.
+    has_gt_zero = (
+        re.search(
+            r"BrbL2caAclTransfer\.BufferSize\s*>(?!=)\s*0(?![\dxX])",
+            drv,
+        )
+        is not None
+    )
+    # Upper bound kept: the gate cannot be "fixed" by deleting it outright.
+    has_upper = (
+        re.search(
+            r"BrbL2caAclTransfer\.BufferSize\s*<(?!=)\s*MM_ACL_MAX_PARSE",
+            drv,
+        )
+        is not None
+    )
+    has_sdp_conjunct = (
+        re.search(
+            r"sdpOk\s*&&[\s\S]{0,200}?"
+            r"BrbL2caAclTransfer\.BufferSize\s*>=\s*MM_MOUSE_REPORT_LEN",
+            drv,
+        )
+        is not None
+    )
+    # OnAclTransferComplete still refuses to translate below a whole report.
+    has_orig_cap = (
+        re.search(r"origCap\s*>=\s*MM_MOUSE_REPORT_LEN", drv) is not None
+    )
+
+    ok = (
+        has_floor
+        and not has_gt_zero
+        and has_upper
+        and has_sdp_conjunct
+        and has_orig_cap
+    )
+    run.check(
+        "C_SOURCE_CONTROL_CHANNEL_GATE",
+        ok,
+        f"BufferSize>=MM_MOUSE_REPORT_LEN={has_floor} BufferSize>0={has_gt_zero}; "
+        f"BufferSize<MM_ACL_MAX_PARSE={has_upper} sdpOk&&gate={has_sdp_conjunct}; "
+        f"origCap>=MM_MOUSE_REPORT_LEN={has_orig_cap}",
+    )
+
+
 def main() -> int:
     run = _Run()
     test_battery_passthrough(run)
@@ -478,6 +549,7 @@ def main() -> int:
     test_no_feature_47(run)
     test_unique_scm(run)
     test_c_source_acl_contract(run)
+    test_c_source_control_channel_gate(run)
     return 1 if run.failed else 0
 
 
