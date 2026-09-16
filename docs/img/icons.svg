@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="download" viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="terminal" viewBox="0 0 24 24"><path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m7 9 3 3-3 3M13 15h4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="restart" viewBox="0 0 24 24"><path d="M4 4v6h6M20 20v-6h-6M4.5 15a8 8 0 0 0 14.5 3M19.5 9A8 8 0 0 0 5 6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 5-5.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="warning-triangle" viewBox="0 0 24 24"><path d="M12 3.5 2.5 20h19L12 3.5Z" stroke-linejoin="round"/><path d="M12 10v4.5M12 17.2v.1" stroke-linecap="round"/></symbol>
+  <symbol id="shield-check" viewBox="0 0 24 24"><path d="M12 3.5 4.5 6.5v5.2c0 4.8 3.1 7.6 7.5 8.8 4.4-1.2 7.5-4 7.5-8.8V6.5L12 3.5Z" stroke-linejoin="round"/><path d="m8.7 12.2 2.3 2.3 4.3-4.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="battery" viewBox="0 0 24 24"><rect x="2.5" y="8" width="16" height="8" rx="1.6"/><path d="M21 10.5v3" stroke-linecap="round"/><rect x="5" y="10.2" width="8" height="4.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="mouse" viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 3v6" stroke-linecap="round"/></symbol>
+  <symbol id="bluetooth" viewBox="0 0 24 24"><path d="M8 7.5 16 15l-4 4V5l4 4-8 7.5" stroke-linejoin="round"/></symbol>
+  <symbol id="github" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-3.16 19.5c.5.1.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.11-1.47-1.11-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.6 9.6 0 0 1 5 0c1.9-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.35 4.68-4.58 4.93.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></symbol>
+  <symbol id="chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.5l3.5 2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="usb" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="6" rx="2"/><path d="M8 13h.01M12 13h.01M16 13h.01" stroke-linecap="round"/></symbol>
+  <symbol id="scroll" viewBox="0 0 24 24"><path d="M9 3h9a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H9M9 3a2 2 0 0 0-2 2v1M9 3a2 2 0 0 1 2 2v1M5 8h4M5 12h4m-4 4h4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="lock-open" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-1.9" stroke-linecap="round"/></symbol>
+  <symbol id="wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5l-6 6 2.4 2.4 6-6a4 4 0 0 0 5-5.4l-2.7 2.7-2-2 2.7-2.7Z" stroke-linejoin="round"/></symbol>
+</svg>
