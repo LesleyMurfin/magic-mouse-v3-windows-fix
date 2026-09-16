@@ -527,10 +527,10 @@ function Set-LowerFiltersMultiSz {
     if ($existing -notcontains $ServiceName) {
         $existing = @($ServiceName) + $existing
     }
-    # Remove first, so PropertyType is honoured even if the value already exists.
-    if (Get-ItemProperty -LiteralPath $instancePath -Name 'LowerFilters' -ErrorAction SilentlyContinue) {
-        Remove-ItemProperty -LiteralPath $instancePath -Name 'LowerFilters' -Force -ErrorAction SilentlyContinue
-    }
+    # New-ItemProperty -Force overwrites an existing value in place and honours
+    # -PropertyType, so the value is never removed first: a write that is then refused
+    # must not be able to destroy filters belonging to other software.
+    #
     # The Enum tree belongs to the PnP manager, and its default ACL gives SYSTEM Full
     # Control and Administrators read-only. This project's own hardware testing shows the
     # write going through under elevation, but on a machine that keeps the stock ACL it is
