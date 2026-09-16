@@ -7,9 +7,9 @@ on an Apple Magic Mouse paired over Bluetooth.
 
 .DESCRIPTION
 Windows ships no multi-touch filter for the Magic Mouse, so the touch surface produces
-no scroll. Apple's own Boot Camp driver does that translation, but Apple's INF has no
-entry for the Bluetooth PID the 2024 mouse reports (0x0323), so the driver is registered
-manually as a LowerFilter on the device instead.
+no scroll. Apple's own Boot Camp driver does that translation, but its INF does not
+create a Bluetooth binding for the 2024 mouse, so the driver is registered manually as
+a LowerFilter on the device instance instead.
 
 There is exactly ONE install route: copy the .sys into C:\Windows\System32\drivers\,
 register the kernel service, and prepend 'applewirelessmouse' to the LowerFilters value
@@ -64,7 +64,7 @@ Apple Software Update / Boot Camp support software was ever installed) and use t
 
 .PARAMETER DryRun
 Report what would happen and change nothing: no file copies, no registry writes, no
-pnputil calls.
+device disable/enable.
 
 .PARAMETER TargetPid
 Restrict to one model, e.g. -TargetPid 030D. Use this when several Magic Mice are
@@ -129,8 +129,8 @@ $CertThumbprint = "16940C0F937D569363560D5FEC5CD8FA6D6D9BCE"
 $AppleSignerPattern    = '^CN=(Microsoft Windows Hardware Compatibility Publisher|Apple Inc)'
 $AppleOriginalFilename = 'AppleWirelessMouse.sys'
 
-# Every Magic Mouse this driver serves, taken from Apple's own
-# AppleWirelessMouse.inf [Apple.NTamd64] section.
+# Bluetooth PIDs of the Magic Mouse models this filter serves. The PID is the one the
+# mouse reports in its BTHENUM InstanceId; -TargetPid selects a single model.
 $MagicMouseModels = @(
     [pscustomobject]@{ Pid = '0323'; Name = 'Magic Mouse v3 (2024, USB-C)' }
     [pscustomobject]@{ Pid = '0269'; Name = 'Magic Mouse v2'              }
@@ -531,7 +531,23 @@ function Set-LowerFiltersMultiSz {
     if (Get-ItemProperty -LiteralPath $instancePath -Name 'LowerFilters' -ErrorAction SilentlyContinue) {
         Remove-ItemProperty -LiteralPath $instancePath -Name 'LowerFilters' -Force -ErrorAction SilentlyContinue
     }
-    New-ItemProperty -LiteralPath $instancePath -Name 'LowerFilters' -Value $existing -PropertyType MultiString -Force | Out-Null
+    # The Enum tree belongs to the PnP manager, and its default ACL gives SYSTEM Full
+    # Control and Administrators read-only. This project's own hardware testing shows the
+    # write going through under elevation, but on a machine that keeps the stock ACL it is
+    # refused - as UnauthorizedAccessException or SecurityException. Diagnose it here
+    # instead of letting a stack trace land on the user.
+    try {
+        New-ItemProperty -LiteralPath $instancePath -Name 'LowerFilters' -Value $existing -PropertyType MultiString -Force | Out-Null
+    } catch [System.UnauthorizedAccessException], [System.Security.SecurityException] {
+        Write-Status "Access denied writing LowerFilters: $($_.Exception.Message)" "ERROR"
+        Write-Host "  That key is owned by SYSTEM on this machine, so Administrator rights are not" -ForegroundColor Yellow
+        Write-Host "  enough to write it. Two ways forward:" -ForegroundColor Yellow
+        Write-Host "    1. Re-run this installer in a SYSTEM context, e.g." -ForegroundColor Yellow
+        Write-Host "       psexec -s -i powershell.exe -File .\Install-MagicMousePatch.ps1" -ForegroundColor Yellow
+        Write-Host "    2. Grant your account write access to that one device-instance key:" -ForegroundColor Yellow
+        Write-Host "       HKLM\SYSTEM\CurrentControlSet\Enum\$InstanceId" -ForegroundColor Yellow
+        return $false
+    }
     Write-Status "LowerFilters = [$([string]::Join(', ', $existing))]" "OK"
     return $true
 }
@@ -547,33 +563,51 @@ function Invoke-DirectCopyInstall {
     }
 
     Write-Section "Installing driver (disable -> copy -> enable)..."
-    & pnputil /disable-device "$InstanceId" 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Status "pnputil /disable-device failed (exit $LASTEXITCODE) - continuing" "WARN"
-    } else {
+    # Disabling is an optimisation, not a requirement: it unloads the driver so the copy
+    # is not blocked by the running one holding System32\drivers\applewirelessmouse.sys
+    # open. When the disable cannot be done the copy is still attempted, and nothing is
+    # re-enabled afterwards, because nothing was disabled.
+    $disabled = $false
+    try {
+        Disable-PnpDevice -InstanceId $InstanceId -Confirm:$false -ErrorAction Stop
+        $disabled = $true
         Start-Sleep -Seconds 5
+    } catch {
+        Write-Status "Could not disable the device: $($_.Exception.Message)" "WARN"
+        Write-Host "  The device was NOT disabled, so it will not be re-enabled either." -ForegroundColor Yellow
+        Write-Host "  Attempting the copy anyway." -ForegroundColor Yellow
     }
 
-    # The re-enable MUST happen even when the copy throws: this mouse may be the only
-    # pointing device on the machine.
+    # A device that WAS disabled has to be re-enabled even when the copy throws: this
+    # mouse may be the only pointing device on the machine.
+    $copyFailed   = $false
     $enableFailed = $false
     try {
         Copy-Item -LiteralPath $Info.Path -Destination $TargetDriver -Force
         Write-Status "Copied driver to $TargetDriver" "OK"
+    } catch {
+        Write-Status "Could not copy the driver to $TargetDriver" "ERROR"
+        Write-Host "  $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "  The loaded driver holds that file open, which is exactly what the disable" -ForegroundColor Yellow
+        Write-Host "  step above is for. Reboot and re-run this installer." -ForegroundColor Yellow
+        $copyFailed = $true
     } finally {
-        & pnputil /enable-device "$InstanceId" 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            Write-Status "pnputil /enable-device failed (exit $LASTEXITCODE)" "ERROR"
-            Write-Host "  Re-enable the device in Device Manager before re-running." -ForegroundColor Yellow
-            $enableFailed = $true
-        } else {
-            Start-Sleep -Seconds 8
-            Write-Status "Device re-enabled" "OK"
+        if ($disabled) {
+            try {
+                Enable-PnpDevice -InstanceId $InstanceId -Confirm:$false -ErrorAction Stop
+                Start-Sleep -Seconds 8
+                Write-Status "Device re-enabled" "OK"
+            } catch {
+                Write-Status "Could not re-enable the device: $($_.Exception.Message)" "ERROR"
+                Write-Host "  Re-enable the device in Device Manager before re-running." -ForegroundColor Yellow
+                $enableFailed = $true
+            }
         }
     }
-    # Reached only when the copy succeeded: a device left administratively disabled is
-    # a failed install, not a complete one.
-    if ($enableFailed) { throw "pnputil /enable-device failed for $InstanceId" }
+    # A device left administratively disabled is a failed install even if the copy
+    # worked, and it is the more urgent of the two problems.
+    if ($enableFailed) { throw "The device was disabled but could not be re-enabled: $InstanceId" }
+    if ($copyFailed)   { throw "Could not copy the driver to ${TargetDriver}: reboot and re-run" }
 }
 
 function Test-PostInstall {

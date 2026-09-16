@@ -1,6 +1,6 @@
 # Magic Mouse 2024 (v3) Windows Driver — Scroll Fix for PID 0323
 
-A free, MIT-licensed **Magic Mouse v3 Windows driver** for the USB-C **Apple Magic Mouse 2024** (Bluetooth **PID 0323**) on **Windows 10/11**. Apple ships no Windows driver for PID `0x0323` and its Boot Camp INF has no `0323` entry, so two-finger scroll dies after a Bluetooth idle disconnect while the cursor keeps working. This project restores and protects scroll by keeping the HID collection stack from collapsing. Not v1 (`030D`) or v2 (`0269`).
+A free, MIT-licensed **Magic Mouse v3 Windows driver** for the USB-C **Apple Magic Mouse 2024** (Bluetooth **PID 0323**) on **Windows 10/11**. Apple ships no Windows driver for PID `0x0323` and its Boot Camp INF has no `0323` entry, so two-finger scroll dies after a Bluetooth idle disconnect while the cursor keeps working. This project restores and protects scroll by keeping the HID collection stack from collapsing. Driver 1 also covers Magic Mouse v1 (`030D`) and v2 (`0269`, `0310`); only Driver 2 (KMDF) is limited to `0323`.
 
 **Read the guides:**
 [Magic Mouse v3 Windows driver site](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/) ·
@@ -222,7 +222,7 @@ Each driver in this repo addresses that differently, and they are not two stages
 - Apple Magic Mouse v3 (2024), Bluetooth PID 0x0323
 - Windows 10 build 14393 or later / Windows 11 any build
 
-> **Have a Magic Mouse v1 or v2?** This repo is v3-only. For v1/v2 scroll fix on Windows, see [`sbagirici/apple-magic-mouse-scroll-fix-windows`](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) — the project this work builds on.
+> **Have a Magic Mouse v1 or v2?** Driver 1 covers you: it supports v1 (`030D`), v2 (`0269`, `0310`) and v3 (`0323`) — see [Supported hardware](#supported-hardware). Only Driver 2 (KMDF) is v3-only. The v1/v2 registry approach Driver 1 builds on is [`sbagirici/apple-magic-mouse-scroll-fix-windows`](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows).
 
 **Symptoms before the fix:**
 - Scroll wheel works immediately after pairing
@@ -250,9 +250,17 @@ purpose-built `0323` driver and does not claim the older models.
 Common to both drivers:
 
 - Windows 10 build 14393 or later, or Windows 11 any version
-- Apple Magic Mouse v3 (PID `0x0323`) paired over Bluetooth
+- Apple Magic Mouse paired over Bluetooth — Driver 1: v1 (`030D`), v2 (`0269`, `0310`) or v3 (`0323`); Driver 2: `0323` only
 - Administrator account for installation
 - Reboot access
+
+**Driver 1 only:** the installer writes `LowerFilters` under
+`HKLM\SYSTEM\CurrentControlSet\Enum\<InstanceId>`, a tree Windows reserves for the PnP manager and
+which on some machines grants write access only to `SYSTEM`. If that write is refused, the
+installer names the condition rather than failing obscurely and does not report success; the two
+ways forward are to run it in a SYSTEM context (for example `psexec -s -i`), or to grant your
+account write access to that one device-instance key. The uninstaller reports the same condition
+the same way.
 
 **Driver 2 only:** **Windows Test Mode on** (`bcdedit /set testsigning on`), with **Secure Boot
 off** and **memory integrity off**. Driver 1 is expected to need none of that — Apple's binary is
@@ -474,7 +482,7 @@ wevtutil epl "Microsoft-Windows-DeviceSetupManager/Admin" C:\dsm-admin.evtx
 
 Big thanks to [`sbagirici`](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) for surfacing Apple's `applewirelessmouse.sys` and the LowerFilter installation approach that this project builds on. Without that starting point, the v3 investigation would have taken significantly longer.
 
-**v1 / v2 users:** sbagirici's repo is the right place for you — go give it a star.
+**v1 / v2 users:** Driver 1 here supports your mouse too (`030D`, `0269`, `0310`) — sbagirici's repo is where that approach came from, so go give it a star.
 
 Our additions on top of that baseline (v3-specific):
 - Full root cause analysis of the H-011 / DSM trigger bug (COL01/COL02 Mode A/B collapse mechanism)

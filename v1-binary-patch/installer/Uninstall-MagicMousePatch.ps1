@@ -13,7 +13,7 @@ Workflow:
   1. Confirmation prompt
   2. Stop the applewirelessmouse service
   3. Find the paired Magic Mouse (report every match, act on the selected one)
-     and pnputil /disable-device it
+     and disable it, so the loaded driver is not holding its files open
   4. Restore the backup from C:\ProgramData\MagicMousePatch\backup\, or delete
      the installed driver when there is no backup to restore
   5. Remove 'applewirelessmouse' from LowerFilters (REG_MULTI_SZ) on that
@@ -22,7 +22,7 @@ Workflow:
      applewirelessmouse)
   7. Remove the MagicMouseFix certificate from LocalMachine\TrustedPublisher
      by thumbprint - a no-op on an Apple-signed install, which imports none
-  8. pnputil /enable-device
+  8. Re-enable the device, but only when step 3 actually disabled it
   9. Remove C:\ProgramData\MagicMousePatch\
  10. Reboot instruction
 
@@ -89,6 +89,10 @@ $MagicMouseDeviceRe = if ($TargetPid) {
 
 # Set by any step that could not complete; decides the exit code.
 $script:Failed = $false
+
+# Whether step 3 actually took the device down. Only then is there anything to
+# re-enable at the end, and only then is a failed re-enable a real problem.
+$script:DeviceDisabled = $false
 
 # ============================================================================
 # Helpers
@@ -164,8 +168,9 @@ function Stop-MagicMouseService {
     }
 }
 
-# Returns the InstanceId that was disabled, so the same device is re-enabled at
-# the end, or $null when no supported mouse is paired.
+# Returns the InstanceId that was selected - whether or not the disable worked, so the
+# registry revert still runs on the right device - or $null when no supported mouse is
+# paired. $script:DeviceDisabled records whether it was really disabled.
 function Disable-MagicMouseDevice {
     Write-Section "Finding the Magic Mouse..."
     $found = @(Get-MagicMouseDevice)
@@ -189,14 +194,16 @@ function Disable-MagicMouseDevice {
     }
 
     Write-Section "Disabling the device..."
-    & pnputil /disable-device "$($mouse.InstanceId)" 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        # Carry on: the registry revert below does not need the device down, it
-        # just takes effect on reboot rather than immediately.
-        Write-Status "pnputil /disable-device returned $LASTEXITCODE; continuing" "WARN"
-    } else {
+    # An optimisation only: the registry revert below does not need the device down, it
+    # just takes effect on reboot rather than immediately. A failure here is therefore a
+    # WARN, and the device is not re-enabled later, because it was never disabled.
+    try {
+        Disable-PnpDevice -InstanceId $mouse.InstanceId -Confirm:$false -ErrorAction Stop
+        $script:DeviceDisabled = $true
         Start-Sleep -Seconds 5
         Write-Status "Disabled $($mouse.InstanceId)" "OK"
+    } catch {
+        Write-Status "Could not disable the device: $($_.Exception.Message); continuing" "WARN"
     }
     return $mouse.InstanceId
 }
@@ -274,9 +281,26 @@ function Remove-LowerFiltersEntry {
 
     # Preserve every other filter that was there.
     $kept = @($entries | Where-Object { $_ -and ($_ -ne $ServiceName) })
-    Remove-ItemProperty -Path $instancePath -Name 'LowerFilters' -Force -ErrorAction SilentlyContinue
-    if ($kept.Count -gt 0) {
-        New-ItemProperty -Path $instancePath -Name 'LowerFilters' -Value $kept -PropertyType MultiString -Force -ErrorAction SilentlyContinue | Out-Null
+    # The Enum tree is the PnP manager's and can be SYSTEM-owned, in which case even an
+    # elevated write is refused. -ErrorAction Stop so that condition is named here rather
+    # than silently leaving the filter in place.
+    try {
+        Remove-ItemProperty -Path $instancePath -Name 'LowerFilters' -Force -ErrorAction Stop
+        if ($kept.Count -gt 0) {
+            New-ItemProperty -Path $instancePath -Name 'LowerFilters' -Value $kept -PropertyType MultiString -Force -ErrorAction Stop | Out-Null
+        }
+    } catch [System.UnauthorizedAccessException], [System.Security.SecurityException] {
+        Write-Failure "Access denied re-writing LowerFilters: $($_.Exception.Message)"
+        Write-Host "  That key is owned by SYSTEM on this machine, so Administrator rights are not" -ForegroundColor Yellow
+        Write-Host "  enough to write it. Two ways forward:" -ForegroundColor Yellow
+        Write-Host "    1. Re-run this uninstaller in a SYSTEM context, e.g." -ForegroundColor Yellow
+        Write-Host "       psexec -s -i powershell.exe -File .\Uninstall-MagicMousePatch.ps1" -ForegroundColor Yellow
+        Write-Host "    2. Grant your account write access to that one device-instance key:" -ForegroundColor Yellow
+        Write-Host "       HKLM\SYSTEM\CurrentControlSet\Enum\$InstanceId" -ForegroundColor Yellow
+        return
+    } catch {
+        Write-Failure "Could not re-write LowerFilters at ${instancePath}: $($_.Exception.Message)"
+        return
     }
 
     $after = (Get-ItemProperty -Path $instancePath -Name 'LowerFilters' -ErrorAction SilentlyContinue).LowerFilters
@@ -338,9 +362,14 @@ function Enable-MagicMouseDevice {
         Write-Status "No instance to re-enable" "OK"
         return
     }
-    & pnputil /enable-device "$InstanceId" 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Failure "pnputil /enable-device returned $LASTEXITCODE for $InstanceId"
+    if (-not $script:DeviceDisabled) {
+        Write-Status "Device was never disabled -- nothing to re-enable" "OK"
+        return
+    }
+    try {
+        Enable-PnpDevice -InstanceId $InstanceId -Confirm:$false -ErrorAction Stop
+    } catch {
+        Write-Failure "Could not re-enable ${InstanceId}: $($_.Exception.Message)"
         Write-Host "  Re-enable it in Device Manager, or unpair and re-pair the mouse." -ForegroundColor Yellow
         return
     }
