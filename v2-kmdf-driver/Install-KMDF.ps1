@@ -3,11 +3,22 @@
 Add the unique signed 2.0.4 scroll package with pnputil /add-driver only.
 
 .DESCRIPTION
-Requires a already-signed unique package in this folder:
+Requires an already-signed unique package in this folder:
 
   MagicMouseDriver-kmdf-204-scroll.inf
-  MagicMouseDriver-kmdf-204-scroll.sys   (byte-identical to the sha8 artifact)
-  MagicMouseDriver-kmdf-204-scroll.cat   (signed with thumb 16940C0F)
+  MagicMouseDriver-kmdf-204-scroll.sys
+  MagicMouseDriver-kmdf-204-scroll.cat
+
+Nothing in the download is pre-signed. Setup-Community.cmd creates a signing
+certificate on YOUR PC, signs the .sys/.cat with it and records its thumbprint
+in C:\ProgramData\MagicMouseDriver\community-setup-state.json. This script then
+accepts that certificate. Resolution order for the expected signer is
+MM_KMDF_SIGN_THUMB, then the state file, then the historical maintainer cert
+(see Get-KmdfExpectedThumb in scripts\Kmdf-Common.ps1).
+
+Most users should run Setup-Community.cmd instead of this script - it does the
+certificate, test signing, signing, install, multitouch enable and verify steps
+in order. This script is the install step on its own.
 
 Does not Copy-Item onto System32\drivers or DriverStore.
 Does not delete Apr 30 oem16 / MagicMouseDriver.inf.
@@ -16,7 +27,7 @@ PATH-A is refused.
 
 .PARAMETER Uninstall
 Remove only this unique package (match MagicMouseDriver-kmdf-204-scroll.inf).
-Never /delete-driver the Apr 30 MagicMouseDriver.inf package.
+Never /delete-driver the Apr 30 package.
 
 .PARAMETER NoElevate
 Internal. Set when relaunched via UAC so we do not loop.
@@ -33,24 +44,9 @@ $ProgressPreference    = 'SilentlyContinue'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $Here 'scripts\Kmdf-Common.ps1')
 
-function Get-KmdfUniqueOemNames {
-    $pnpRaw = & pnputil.exe /enum-drivers 2>$null | Out-String
-    $blocks = $pnpRaw -split '(?=Published Name:)'
-    $found = @()
-    foreach ($block in $blocks) {
-        if ($block -notmatch 'MagicMouseDriver-kmdf-204-scroll\.inf') { continue }
-        if ($block -match 'Original Name:\s+MagicMouseDriver\.inf') { continue }
-        if ($block -match 'Published Name:\s+oem16\.inf') { continue }
-        if ($block -match 'Published Name:\s+(oem\d+\.inf)') {
-            $found += $Matches[1]
-        }
-    }
-    return $found
-}
-
 function Uninstall-KmdfUniquePackage {
-    Write-KmdfLog -Message "Removing unique 2.0.4 scroll package only. Apr 30 oem16 / MagicMouseDriver.inf is left alone." -Level 'HEAD'
-    $oems = @(Get-KmdfUniqueOemNames)
+    Write-KmdfLog -Message "Removing unique 2.0.4 scroll package only. The Apr 30 oem16 package is left alone." -Level 'HEAD'
+    $oems = @(Get-KmdfPublishedOemNames)
     if ($oems.Count -eq 0) {
         Write-KmdfLog -Message "No published MagicMouseDriver-kmdf-204-scroll.inf package found." -Level 'WARN'
         return
@@ -59,7 +55,7 @@ function Uninstall-KmdfUniquePackage {
         if ($oem -match '^oem16\.inf$') {
             throw "Refusing /delete-driver oem16 (Apr 30 restore)."
         }
-        Write-KmdfLog -Message "pnputil /delete-driver $oem (unique package only)" -Level 'INFO'
+        Write-KmdfLog -Message "pnputil /delete-driver $oem (204-scroll unique package only)" -Level 'INFO'
         & pnputil.exe /delete-driver $oem /uninstall 2>&1 | ForEach-Object { Write-KmdfLog -Message "$_" -Level 'INFO' }
     }
 }
@@ -67,74 +63,40 @@ function Uninstall-KmdfUniquePackage {
 function Install-KmdfUniquePackage {
     $inf = Join-Path $Here $script:KmdfUniqueInf
     $sys = Join-Path $Here $script:KmdfUniqueSys
-    $cat = Join-Path $Here $script:KmdfUniqueCat
-    $retired = Join-Path $Here $script:KmdfRetiredInf
-    $liveNamed = Join-Path $Here $script:KmdfLiveSysName
 
-    if (Test-Path -LiteralPath $retired) {
-        throw "Retired $($script:KmdfRetiredInf) is in the package folder. That identity created oem26 and hardlinked over Apr 30. Use $($script:KmdfUniqueInf) only."
-    }
-    if (Test-Path -LiteralPath $liveNamed) {
-        throw "Package folder has $($script:KmdfLiveSysName). Remove it. That name collides with Apr 30 restore."
-    }
-    if (-not (Test-Path -LiteralPath $inf)) { throw "Missing $inf" }
-    if (-not (Test-Path -LiteralPath $sys)) { throw "Missing $sys — WDK build, then Freeze-KmdfArtifact.ps1." }
-    if (-not (Test-Path -LiteralPath $cat)) { throw "Missing $cat — human must inf2cat + sign with thumb 16940C0F. No unsigned activate." }
-
-    $infText = Get-Content -LiteralPath $inf -Raw
-    if ($infText -notmatch 'CatalogFile\s*=\s*MagicMouseDriver-kmdf-204-scroll\.cat') {
-        throw "INF CatalogFile is not $($script:KmdfUniqueCat)."
-    }
-    if ($infText -match '08/30/2026,2\.0\.4\.0' -or $infText -match '08/31/2026,2\.0\.4\.0') {
-        throw "INF DriverVer collides with the failed 2.0.4 oem26 / PR #3 identity."
-    }
-    if ($infText -notmatch '09/01/2026,2\.0\.4\.1') {
-        throw "INF DriverVer must be 09/01/2026,2.0.4.1 (unique vs oem26)."
-    }
-    if ($infText -match 'ServiceBinary\s*=\s*%12%\\MagicMouseDriver\.sys') {
-        throw "INF ServiceBinary must not be MagicMouseDriver.sys (Apr 30 restore file)."
-    }
-    if ($infText -match '(?m)^MagicMouseDriver\.sys') {
-        throw "INF CopyFiles must not be MagicMouseDriver.sys (Apr 30 restore file)."
-    }
-    if ($infText -match 'AddService\s*=\s*MagicMouseDriver\s*,') {
-        throw "INF AddService must not be MagicMouseDriver (live oem16 SCM name)."
-    }
-    if ($infText -notmatch 'AddService\s*=\s*MagicMouseDriver204Scroll\s*,') {
-        throw "INF AddService must be MagicMouseDriver204Scroll."
-    }
-    if ($infText -notmatch 'LowerFilters.*,0x00010000,"MagicMouseDriver204Scroll"') {
-        throw "INF LowerFilters must be MagicMouseDriver204Scroll."
-    }
-    if ($infText -match 'LowerFilters.*,0x00010000,"MagicMouseDriver"(?!204Scroll)') {
-        throw "INF LowerFilters must not be MagicMouseDriver (live oem16 filter)."
+    # Every identity / banned-artifact / signature gate, shared with the wizard.
+    $problems = @(Get-KmdfPackageProblem -Directory $Here -RequireSignature)
+    if ($problems.Count -gt 0) {
+        foreach ($p in $problems) { Write-KmdfLog -Message $p -Level 'ERROR' }
+        throw ($problems[0])
     }
 
-    if (Test-KmdfForbiddenSys -Path $sys) {
-        throw "Refusing banned .sys."
-    }
-
+    # Freeze-hash gate. The shipped .sys is frozen UNSIGNED; signing it locally
+    # changes its hash by design, so a signed file is accepted only when this
+    # PC recorded the frozen unsigned hash before signing it (state file) and
+    # the signature above matched the expected certificate.
     $sha = Get-KmdfFileSha256 -Path $sys
     $sums = Join-Path $Here 'SHA256SUMS.txt'
-    if (Test-Path -LiteralPath $sums) {
+    $known = $false
+    if ($sha -eq $script:KmdfUnsignedSysSha) { $known = $true }
+    if (-not $known -and (Test-Path -LiteralPath $sums)) {
         $sumText = Get-Content -LiteralPath $sums -Raw
-        if ($sumText -notmatch [regex]::Escape($sha)) {
-            throw "Freeze-hash gate: $sys SHA256 $sha is not in SHA256SUMS.txt."
-        }
+        if ($sumText -match [regex]::Escape($sha)) { $known = $true }
+    }
+    if ($known) {
         Write-KmdfLog -Message "Freeze-hash gate matched $sha" -Level 'OK'
     }
     else {
-        Write-KmdfLog -Message "SHA256SUMS.txt missing — hash this build as MagicMouseDriver-kmdf-2.0.4-scroll-$($sha.Substring(0,8)).sys before treating it as frozen." -Level 'WARN'
+        $st = Read-KmdfState
+        if ($null -ne $st -and $st['driverSha256'] -eq $script:KmdfUnsignedSysSha) {
+            Write-KmdfLog -Message "Freeze-hash gate: $sha is the locally signed copy of frozen $($script:KmdfUnsignedSysSha) (signature already verified)." -Level 'OK'
+        }
+        else {
+            throw "Freeze-hash gate: $sys SHA256 $sha is not the frozen $($script:KmdfDriverVersion) binary ($($script:KmdfUnsignedSysSha)) and is not listed in SHA256SUMS.txt. Re-download the release ZIP, then run Setup-Community.cmd."
+        }
     }
 
-    if (-not (Test-KmdfSignedByThumb -Path $sys -Thumb $script:KmdfSignThumb)) {
-        throw "Unsigned or wrong-thumb .sys. Sign with 16940C0F. Do not run pr3-activate / copy-over."
-    }
-    if (-not (Test-KmdfSignedByThumb -Path $cat -Thumb $script:KmdfSignThumb)) {
-        throw "Unsigned or wrong-thumb .cat. Sign with 16940C0F."
-    }
-
-    Write-KmdfLog -Message "pnputil /add-driver $inf /install (no System32 copy-over, no oem16 delete)" -Level 'HEAD'
+    Write-KmdfLog -Message "pnputil.exe /add-driver $inf /install (no System32 copy-over, no oem16 delete)" -Level 'HEAD'
     & pnputil.exe /add-driver $inf /install 2>&1 | ForEach-Object { Write-KmdfLog -Message "$_" -Level 'INFO' }
     $rc = $LASTEXITCODE
     if ($rc -eq 0) {

@@ -22,6 +22,11 @@ $DataDir     = 'C:\ProgramData\MagicMouseDriver'
 $WatcherDest = Join-Path $DataDir 'mm-auto-f1-watcher.ps1'
 $Here        = Split-Path -Parent $MyInvocation.MyCommand.Path
 $WatcherSrc  = Join-Path $Here 'mm-auto-f1-watcher.ps1'
+# The watcher looks for mm-f1-once.ps1 beside itself in $DataDir first, so the
+# pair has to be installed together - the release ZIP is the only copy a
+# community machine has, and it may be deleted after setup.
+$F1Dest      = Join-Path $DataDir 'mm-f1-once.ps1'
+$F1Src       = Join-Path $Here 'mm-f1-once.ps1'
 
 function Test-MmIsAdmin {
     $id = [System.Security.Principal.WindowsIdentity]::GetCurrent()
@@ -57,6 +62,18 @@ if (-not (Test-Path -LiteralPath $WatcherSrc)) {
 New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
 Copy-Item -LiteralPath $WatcherSrc -Destination $WatcherDest -Force
 Write-Output ('installed watcher script to ' + $WatcherDest)
+
+if (Test-Path -LiteralPath $F1Src) {
+    Copy-Item -LiteralPath $F1Src -Destination $F1Dest -Force
+    Write-Output ('installed F1 script to ' + $F1Dest)
+}
+elseif (Test-Path -LiteralPath $F1Dest) {
+    Write-Output ('F1 script already installed at ' + $F1Dest)
+}
+else {
+    Write-Output ('FATAL missing F1 script source ' + $F1Src + ' - the watcher cannot re-enable multitouch without it')
+    exit 2
+}
 
 $existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 if ($existing) {

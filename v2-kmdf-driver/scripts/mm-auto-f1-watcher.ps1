@@ -26,7 +26,26 @@ $ErrorActionPreference = 'Continue'
 
 $global:MmWatcherLogDir          = 'C:\ProgramData\MagicMouseDriver'
 $global:MmWatcherLogFile         = Join-Path $global:MmWatcherLogDir 'auto-f1-watcher.log'
-$global:MmWatcherF1Script        = 'C:\mm-dev-queue\mm-f1-once.ps1'
+# F1 script location, in order of preference:
+#   1. the copy mm-auto-f1-watcher-install.ps1 places beside this script in
+#      ProgramData - the community install, where nothing else exists
+#   2. a sibling in the folder this script was launched from (running the
+#      release ZIP's scripts folder directly, before install)
+#   3. C:\mm-dev-queue - the maintainer dev box
+# Hard-coding (3) alone made the installed watcher fail with "FATAL missing F1
+# script" on every machine but one.
+$global:MmWatcherF1Script = $null
+$MmWatcherF1Candidates = @(Join-Path $global:MmWatcherLogDir 'mm-f1-once.ps1')
+if ($PSCommandPath) {
+    $MmWatcherF1Candidates += (Join-Path (Split-Path -Parent $PSCommandPath) 'mm-f1-once.ps1')
+}
+$MmWatcherF1Candidates += 'C:\mm-dev-queue\mm-f1-once.ps1'
+foreach ($cand in $MmWatcherF1Candidates) {
+    if ($cand -and (Test-Path -LiteralPath $cand)) {
+        $global:MmWatcherF1Script = $cand
+        break
+    }
+}
 $global:MmWatcherDebounceSeconds = 5
 $global:MmWatcherLastFire        = [DateTime]'2000-01-01'
 
@@ -43,10 +62,11 @@ function global:Write-MmWatcherLog {
 
 Write-MmWatcherLog 'mm-auto-f1-watcher starting'
 
-if (-not (Test-Path -LiteralPath $global:MmWatcherF1Script)) {
-    Write-MmWatcherLog ('FATAL missing F1 script ' + $global:MmWatcherF1Script)
+if (-not $global:MmWatcherF1Script) {
+    Write-MmWatcherLog ('FATAL no mm-f1-once.ps1 found in: ' + ($MmWatcherF1Candidates -join ' ; '))
     exit 2
 }
+Write-MmWatcherLog ('using F1 script ' + $global:MmWatcherF1Script)
 
 # Drop any stale subscription from a previous run in the same session
 # (harmless if none exists).
