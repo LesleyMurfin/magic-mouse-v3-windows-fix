@@ -34,10 +34,18 @@ TestResults/
 Thumbs.db
 .DS_Store
 
-# Git-ignore driver binaries EXCEPT in release/
+# Git-ignore driver binaries EXCEPT the ones we deliberately ship.
 *.sys
 !v1-binary-patch/applewirelessmouse.sys
 !v1-binary-patch/installer/applewirelessmouse.sys
+# UNSIGNED community driver binary. This is the one file in the community ZIP
+# that a user cannot produce themselves without installing the WDK, so it has
+# to be tracked. It carries NO signature and NO catalog: Setup-Community.cmd
+# signs it locally with a code-signing certificate generated on the user's own
+# PC. The maintainer's private key (thumbprint 16940C0F...) is never applied to
+# the shipped copy and never enters this repo.
+# Expected: 25600 bytes, SHA256 08E91E37AF3B7B9A56E793ADB876BA48FBD61DDFEE446C89A6A1751CABABD6AC
+!v2-kmdf-driver/MagicMouseDriver-kmdf-204-scroll.sys
 
 # Certificates EXCEPT release/
 *.cer
