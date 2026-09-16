@@ -72,96 +72,281 @@
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <header>
+  <header class="site">
     <p class="kicker">Scroll fix &middot; Mode A &rarr; Mode B &middot; PID 0323</p>
-  <nav aria-label="Site">
-    <a href="./">Windows driver</a>
-    <a href="install.html">Install</a>
-    <a href="scroll-fix.html" aria-current="page">Scroll fix</a>
-    <a href="battery.html">Battery %</a>
-    <a href="faq.html">FAQ</a>
-    <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
-    <a href="https://magictray.app/">Magic Tray app</a>
-  </nav>
+    <nav class="site" aria-label="Site">
+      <a href="./">Windows driver</a>
+      <a href="install.html">Install</a>
+      <a href="scroll-fix.html" aria-current="page">Scroll fix</a>
+      <a href="battery.html">Battery %</a>
+      <a href="faq.html">FAQ</a>
+      <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
+      <a href="https://magictray.app/">Magic Tray app</a>
+    </nav>
     <h1>Magic Mouse 2024 (v3) scroll not working on Windows 11</h1>
-    <p class="lead">If your <strong>Magic Mouse 2024 (v3)</strong> still moves the cursor on <strong>Windows 11</strong> but two-finger scroll is dead, Windows has collapsed the mouse&rsquo;s HID collections after a Bluetooth idle disconnect. The shipped <strong>Apple-driver route</strong> registers Apple&rsquo;s own unmodified signed driver as a lower filter. The KMDF route is development documentation only and is not shipped on this branch.</p>
+    <p class="lead">Cursor still moves, two-finger scroll is dead: Windows collapsed the mouse&rsquo;s HID collections after a <strong>Bluetooth idle disconnect</strong>. The shipped <strong>Apple-driver route</strong> registers Apple&rsquo;s own unmodified signed driver as a lower filter and needs no Windows Test Mode. The <strong>KMDF route</strong> is development documentation only and is not shipped on this branch.</p>
     <p class="cta">
-      <a class="primary" href="install.html#apple-route">Install the shipped fix</a>
-      <a class="ghost" href="#which-mouse">Which mouse do I have?</a>
+      <a class="btn btn-primary" href="install.html#apple-route"><svg class="icon"><use href="img/icons.svg#download"/></svg> Install the shipped fix</a>
+      <a class="btn btn-ghost" href="#which-mouse"><svg class="icon"><use href="img/icons.svg#mouse"/></svg> Which mouse do I have?</a>
     </p>
   </header>
   <main id="content">
-    <h2>What are the symptoms?</h2>
-    <p>The cursor keeps working and clicks keep working; only scrolling stops. The pattern users report is consistent:</p>
-    <ul class="plain">
-      <li><strong>Cursor and buttons fine</strong> &mdash; the mouse is clearly still connected and still moving.</li>
-      <li><strong>Two-finger scroll completely dead</strong> &mdash; not slow, not jumpy, just nothing.</li>
-      <li><strong>Starts after the mouse sits idle</strong> &mdash; typically around 15 to 30 minutes, followed by a Bluetooth disconnect and reconnect.</li>
-      <li><strong>No self-recovery</strong> &mdash; waking the mouse, sleeping the PC, or toggling Bluetooth does not bring scroll back.</li>
-      <li><strong>Previously fixed only by re-pairing or reinstalling the driver</strong>, and then it came back.</li>
-    </ul>
 
-    <h2>Why does Magic Mouse scroll stop working on Windows 11?</h2>
-    <p>Because Windows rebuilds the device with the wrong shape. After a Bluetooth idle disconnect, DeviceSetupManager (DSM) runs property synchronization against the cached device state, and the HID collections the mouse exposes get collapsed &mdash; the project calls this <strong>Mode A &rarr; Mode B</strong>. Mode A exposes the separate collections that carry the touch-surface data; Mode B exposes a plain mouse. A plain mouse has a cursor and buttons and no scroll surface, which is exactly the symptom.</p>
-    <p>This is not a battery problem, not a Bluetooth range problem, and not a Windows setting you can toggle. Nothing in the Windows mouse settings can re-expose a collection that is no longer there.</p>
-    <p class="note">Common bad advice: &ldquo;just install the Apple driver.&rdquo; Apple&rsquo;s Boot Camp INF contains no <code>0323</code> entry, so for the 2024 Magic Mouse there is no Apple entry to bind to. On a v1 or v2 the advice is no better in practice: Apple&rsquo;s installer refuses to run on non-Apple hardware, and even with <code>applewirelessmouse.sys</code> on disk Windows will not attach it until something registers it as a lower filter. That registration is what the <a href="install.html#apple-route">Apple-driver route</a> here does.</p>
-    <p>Full write-up in the repo: <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/bug-analysis.md">bug analysis of the DSM and BTHPORT path</a> and the <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/diagrams/diagram-mode-ab.md">Mode A / Mode B HID collection diagram</a>.</p>
+    <section>
+      <p class="kicker">The symptoms</p>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <svg class="icon icon-lg"><use href="img/icons.svg#mouse"/></svg>
+          <div class="value">Cursor &amp; clicks</div>
+          <div class="label">keep working fine</div>
+        </div>
+        <div class="stat-card">
+          <svg class="icon icon-lg"><use href="img/icons.svg#scroll"/></svg>
+          <div class="value">Scroll: dead</div>
+          <div class="label">not slow, not jumpy &mdash; nothing</div>
+        </div>
+        <div class="stat-card">
+          <svg class="icon icon-lg"><use href="img/icons.svg#clock"/></svg>
+          <div class="value">~15&ndash;30 min idle</div>
+          <div class="label">then a Bluetooth disconnect/reconnect</div>
+        </div>
+        <div class="stat-card">
+          <svg class="icon icon-lg"><use href="img/icons.svg#restart"/></svg>
+          <div class="value">No self-recovery</div>
+          <div class="label">before this driver: re-pair or reinstall, then it came back</div>
+        </div>
+      </div>
+    </section>
 
-    <h2>Try this first</h2>
-    <p>Rule out the cheap causes before you install a kernel driver.</p>
-    <ol class="steps">
-      <li><strong>Re-pair the mouse.</strong> Remove the device in Bluetooth settings, then pair it again. If scroll comes back and then dies again after the next idle period, you have this bug.</li>
-      <li><strong>Confirm the PID.</strong> Device Manager &rarr; Human Interface Devices &rarr; Apple Magic Mouse &rarr; Properties &rarr; Details &rarr; Hardware Ids. Look for <code>PID_0323</code>.</li>
-      <li><strong>Check whether it is a v1, v2 or v2-alt mouse.</strong> <code>PID_030D</code> is the 2009 AA-battery Magic Mouse, <code>PID_0269</code> is Magic Mouse 2 with the Lightning port, and <code>PID_0310</code> is the v2-alt identifier. The shipped Apple-driver route supports all of them.</li>
-      <li><strong>Check you are not looking at a trackpad.</strong> Magic Trackpads report <code>030E</code>, <code>0265</code>, or <code>0324</code>; the shipped route does not target them.</li>
-      <li><strong>Then install the shipped fix.</strong> Follow <a href="install.html#apple-route">the Apple-driver install guide</a>. It needs no Windows Test Mode and covers v1, v2, v2-alt and v3. The KMDF route is development work only on this branch; do not try to install it.</li>
-    </ol>
+    <section>
+      <p class="kicker">Root cause</p>
+      <h2 id="why-scroll-stops">Why does Magic Mouse scroll stop working on Windows 11?</h2>
+      <p>Windows rebuilds the device with the wrong shape. After a Bluetooth idle disconnect, DeviceSetupManager (DSM) runs a property sync against the cached device state, and the HID collections the mouse exposes get collapsed &mdash; this project calls it <strong>Mode A &rarr; Mode B</strong>. Mode A keeps the touch-surface scroll data on its own collection; Mode B merges everything into one plain-mouse collection, which has a cursor and buttons and no scroll surface. Nothing in Windows&rsquo; mouse settings can re-expose a collection that no longer exists.</p>
 
-    <h2 id="which-mouse">Which mouse do I have, and what should I install?</h2>
-    <table>
-      <thead>
-        <tr><th scope="col">Your mouse</th><th scope="col">Bluetooth PID</th><th scope="col">What to install</th></tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Magic Mouse 2024, USB-C (this project calls it v3)</td>
-          <td><code>0x0323</code></td>
-          <td>Shipped Apple-driver route &mdash; <a href="install.html#apple-route">install</a></td>
-        </tr>
-        <tr>
-          <td>Magic Mouse 2, Lightning (v2)</td>
-          <td><code>0x0269</code></td>
-          <td><a href="install.html#apple-route">Apple-driver route</a>, the approach <a href="https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows">sbagirici proved on v1/v2</a></td>
-        </tr>
-        <tr>
-          <td>Magic Mouse, AA batteries, 2009 (v1)</td>
-          <td><code>0x030D</code></td>
-          <td><a href="install.html#apple-route">Apple-driver route</a> &mdash; verified on a paired v1 alongside a v3</td>
-        </tr>
-        <tr>
-          <td>Magic Mouse 2 (v2-alt) / Apple Wireless Mouse</td>
-          <td><code>0x0310</code></td>
-          <td><a href="install.html#apple-route">Apple-driver route</a> &mdash; supported by the same installer</td>
-        </tr>
-        <tr>
-          <td>Magic Trackpad</td>
-          <td><code>0x030E</code>, <code>0x0265</code>, <code>0x0324</code></td>
-          <td>Not covered by the shipped route</td>
-        </tr>
-      </tbody>
-    </table>
-    <p>Unsure after all that? The Magic Tray site keeps a decision page: <a href="https://magictray.app/drivers.html">which Apple mouse driver do I need on Windows</a>.</p>
+      <figure class="diagram">
+        <svg viewBox="0 0 920 300" role="img" aria-labelledby="mode-ab-title mode-ab-desc">
+          <title id="mode-ab-title">Mode A collapsing into Mode B</title>
+          <desc id="mode-ab-desc">A Bluetooth idle disconnect triggers a DeviceSetupManager resync. Mode A, with independent COL01 scroll-and-cursor and COL02 battery collections, collapses into Mode B, a single unified collection with scroll dropped.</desc>
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 10 5 0 10Z" fill="var(--muted)"/>
+            </marker>
+          </defs>
 
-    <h2>Will this fix the battery percentage too?</h2>
-    <p>No. The shipped Apple-driver route restores scroll but does not read battery. The free <a href="https://magictray.app/">Magic Tray (Windows app)</a> shows battery percentage with a brief temporary mode flip. The KMDF route is not shipped on this branch. Details, including why v1 and v2 battery is not yet characterised: <a href="battery.html">Magic Mouse battery percentage on Windows 11</a>.</p>
+          <rect x="10" y="10" width="250" height="250" rx="14" fill="none" stroke="var(--success)" stroke-width="2"/>
+          <text x="135" y="34" text-anchor="middle" fill="var(--success)" font-weight="650" font-size="14">Mode A &mdash; working</text>
+          <rect x="30" y="55" width="210" height="80" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+          <text x="135" y="88" text-anchor="middle" fill="var(--fg)" font-weight="650" font-size="15">COL01</text>
+          <text x="135" y="110" text-anchor="middle" fill="var(--muted)" font-size="12">scroll + cursor</text>
+          <rect x="30" y="150" width="210" height="80" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+          <text x="135" y="183" text-anchor="middle" fill="var(--fg)" font-weight="650" font-size="15">COL02</text>
+          <text x="135" y="205" text-anchor="middle" fill="var(--muted)" font-size="12">battery / diagnostics</text>
 
-    <h2>Still stuck?</h2>
-    <ul class="plain">
-      <li><a href="faq.html">Magic Mouse v3 Windows driver FAQ</a> &mdash; Boot Camp, signing, v1 and v2 support.</li>
-      <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver source and issues on GitHub</a> &mdash; MIT licensed, free.</li>
-    </ul>
+          <rect x="345" y="55" width="230" height="75" rx="10" fill="var(--bg)" stroke="var(--line)"/>
+          <text x="460" y="82" text-anchor="middle" fill="var(--fg)" font-weight="650" font-size="14">Bluetooth idle disconnect</text>
+          <text x="460" y="103" text-anchor="middle" fill="var(--muted)" font-size="12">~15&ndash;30 min idle, then reconnect</text>
+          <line x1="460" y1="130" x2="460" y2="148" stroke="var(--muted)" stroke-width="2" marker-end="url(#arrow)"/>
+          <rect x="345" y="150" width="230" height="80" rx="10" fill="var(--bg)" stroke="var(--line)"/>
+          <text x="460" y="177" text-anchor="middle" fill="var(--fg)" font-weight="650" font-size="14">DeviceSetupManager resync</text>
+          <text x="460" y="198" text-anchor="middle" fill="var(--muted)" font-size="12">BTHPORT rewrites</text>
+          <text x="460" y="214" text-anchor="middle" fill="var(--muted)" font-size="12">DynamicCachedServices</text>
+
+          <rect x="660" y="10" width="250" height="250" rx="14" fill="none" stroke="var(--warning)" stroke-width="2"/>
+          <text x="785" y="34" text-anchor="middle" fill="var(--warning)" font-weight="650" font-size="14">Mode B &mdash; broken</text>
+          <rect x="680" y="105" width="210" height="80" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+          <text x="785" y="138" text-anchor="middle" fill="var(--fg)" font-weight="650" font-size="15">TLC (unified)</text>
+          <text x="785" y="160" text-anchor="middle" fill="var(--muted)" font-size="12">scroll dropped &mdash; ambiguous routing</text>
+
+          <line x1="262" y1="130" x2="343" y2="130" stroke="var(--muted)" stroke-width="2" marker-end="url(#arrow)"/>
+          <line x1="577" y1="130" x2="658" y2="130" stroke="var(--muted)" stroke-width="2" marker-end="url(#arrow)"/>
+        </svg>
+        <figcaption>COL01 (scroll + cursor) and COL02 (battery) start independent. A Bluetooth idle disconnect and the following DeviceSetupManager resync collapse them into one unified collection (TLC) &mdash; scroll has nowhere unambiguous to route to.</figcaption>
+      </figure>
+
+      <details class="tech">
+        <summary>Registry-level detail: DynamicCachedServices</summary>
+        <p>The collapse is visible in <code>HKLM\SYSTEM\CurrentControlSet\Enum\BTHENUM\...\Device Parameters\DynamicCachedServices</code>, a 560-byte binary value (35 &times; 16-byte entries). In Mode A, entry 0 is <code>COL01</code> and entry 1 is <code>COL02</code>; after the DSM-triggered rewrite in Mode B, entry 0 is the unified <code>TLC</code> and entry 1 is empty. The exact BTHPORT internal code path from the 35th DSM property write to the descriptor rewrite has not been reverse-engineered &mdash; the property write is the confirmed trigger, the collapse mechanism inside BTHPORT is not yet fully characterised.</p>
+        <p>Full write-up: <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/bug-analysis.md">bug analysis of the DSM and BTHPORT path</a> and the <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/diagrams/diagram-mode-ab.md">Mode A / Mode B HID collection diagram</a>.</p>
+      </details>
+
+      <div class="callout callout-warning">
+        <svg class="icon"><use href="img/icons.svg#warning-triangle"/></svg>
+        <div>
+          <p><strong>Common bad advice: &ldquo;just install the Apple driver.&rdquo;</strong> Apple&rsquo;s Boot Camp INF has no <code>0323</code> entry, so there is no Apple entry for the 2024 Magic Mouse to bind to. On v1/v2 it is no better: Apple&rsquo;s installer refuses to run on non-Apple hardware, and even with <code>applewirelessmouse.sys</code> on disk, Windows will not attach it until something registers it as a lower filter &mdash; which is what the <a href="install.html#apple-route">Apple-driver route</a> does.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <p class="kicker">The device stack</p>
+      <h2>Where the collapse happens in the driver stack</h2>
+      <p>The Bluetooth HID path a scroll event travels, from the paired mouse up to your application &mdash; and where the shipped fix inserts itself.</p>
+      <ol class="stepper">
+        <li class="step">
+          <div class="num">1</div>
+          <div class="body"><h3>Application</h3><p>The foreground app (browser, Explorer, anything) expects a scroll event.</p></div>
+        </li>
+        <li class="step">
+          <div class="num">2</div>
+          <div class="body"><h3>Input Manager</h3><p>Windows translates parsed HID reports into pointer and scroll input.</p></div>
+        </li>
+        <li class="step">
+          <div class="num">3</div>
+          <div class="body"><h3>hidclass.sys</h3><p>The HID class driver interprets the reports coming up the stack.</p></div>
+        </li>
+        <li class="step">
+          <div class="num">4</div>
+          <div class="body"><h3>HidBth.sys</h3><p>HID-over-Bluetooth miniclass driver, parses the collections the mouse reports.</p></div>
+        </li>
+        <li class="step">
+          <div class="num">5</div>
+          <div class="body"><h3>applewirelessmouse.sys <span class="badge badge-accent">Lower filter &mdash; shipped fix</span></h3><p>Apple&rsquo;s own signed driver, registered here by the Apple-driver installer.</p></div>
+        </li>
+        <li class="step">
+          <div class="num">6</div>
+          <div class="body"><h3>BTHENUM</h3><p>The Bluetooth Enumerator PDO for the paired Magic Mouse.</p></div>
+        </li>
+        <li class="step">
+          <div class="num">7</div>
+          <div class="body"><h3>BTHPORT <span class="badge badge-warning">Collapse happens here</span></h3><p>Owns <code>DynamicCachedServices</code>; the DSM resync rewrite that merges COL01/COL02 into one TLC happens in this layer.</p></div>
+        </li>
+        <li class="step">
+          <div class="num">8</div>
+          <div class="body"><h3>Hardware</h3><p>The Magic Mouse&rsquo;s Bluetooth HID radio and firmware.</p></div>
+        </li>
+      </ol>
+    </section>
+
+    <section>
+      <p class="kicker">Try this first</p>
+      <h2>Rule out the cheap causes</h2>
+      <p>Before you install a kernel driver, work through this in order.</p>
+      <ol class="stepper">
+        <li class="step">
+          <div class="num">1</div>
+          <div class="body"><h3>Re-pair the mouse</h3><p>Remove it in Bluetooth settings, then pair again. If scroll comes back and dies again after the next idle period, you have this bug.</p></div>
+        </li>
+        <li class="step">
+          <div class="num">2</div>
+          <div class="body"><h3>Confirm the PID</h3><p>Device Manager &rarr; Human Interface Devices &rarr; Apple Magic Mouse &rarr; Properties &rarr; Details &rarr; Hardware Ids. Look for <code>PID_0323</code>.</p></div>
+        </li>
+        <li class="step">
+          <div class="num">3</div>
+          <div class="body"><h3>Check which mouse it is</h3><p><code>PID_030D</code> is the 2009 AA-battery mouse, <code>PID_0269</code> is Magic Mouse 2 (Lightning), <code>PID_0310</code> is the v2-alt identifier. The shipped route covers all of them.</p></div>
+        </li>
+        <li class="step">
+          <div class="num">4</div>
+          <div class="body"><h3>Rule out a trackpad</h3><p>Magic Trackpads report <code>030E</code>, <code>0265</code>, or <code>0324</code>; the shipped route does not target them.</p></div>
+        </li>
+        <li class="step">
+          <div class="num">5</div>
+          <div class="body"><h3>Install the shipped fix</h3><p>Follow <a href="install.html#apple-route">the Apple-driver install guide</a>. No Windows Test Mode, covers v1/v2/v2-alt/v3. The KMDF route is development work only &mdash; do not try to install it.</p></div>
+        </li>
+      </ol>
+    </section>
+
+    <section>
+      <p class="kicker">PID lookup</p>
+      <h2 id="which-mouse">Which mouse do I have, and what should I install?</h2>
+      <div class="device-grid">
+        <div class="device-card">
+          <div class="thumb">
+            <picture>
+              <source srcset="img/magic-mouse-v3-underside-usbc.webp" type="image/webp">
+              <img src="img/magic-mouse-v3-underside-usbc.jpg" alt="Underside of the Magic Mouse 2024 (v3) showing the USB-C port">
+            </picture>
+          </div>
+          <div class="meta">
+            <div class="name">Magic Mouse 2024, USB-C (v3)</div>
+            <div class="pid">0x0323</div>
+            <div class="status">Shipped Apple-driver route &mdash; <a href="install.html#apple-route">install</a></div>
+          </div>
+        </div>
+        <div class="device-card">
+          <div class="thumb">
+            <picture>
+              <source srcset="img/magic-mouse-v2-underside-lightning-alt.webp" type="image/webp">
+              <img src="img/magic-mouse-v2-underside-lightning-alt.jpg" alt="Underside of the Magic Mouse 2, showing the Lightning port">
+            </picture>
+          </div>
+          <div class="meta">
+            <div class="name">Magic Mouse 2, Lightning (v2)</div>
+            <div class="pid">0x0269</div>
+            <div class="status"><a href="install.html#apple-route">Apple-driver route</a>, <a href="https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows">proved by sbagirici</a></div>
+          </div>
+        </div>
+        <div class="device-card">
+          <div class="thumb">
+            <picture>
+              <source srcset="img/magic-mouse-v1-underside-aa-door.webp" type="image/webp">
+              <img src="img/magic-mouse-v1-underside-aa-door.jpg" alt="Underside of the original Magic Mouse, showing the AA battery door">
+            </picture>
+          </div>
+          <div class="meta">
+            <div class="name">Magic Mouse, AA batteries, 2009 (v1)</div>
+            <div class="pid">0x030D</div>
+            <div class="status"><a href="install.html#apple-route">Apple-driver route</a> &mdash; verified on a paired v1 alongside a v3</div>
+          </div>
+        </div>
+        <div class="device-card">
+          <div class="thumb" style="display:flex;align-items:center;justify-content:center;color:var(--muted)">
+            <svg class="icon icon-lg"><use href="img/icons.svg#mouse"/></svg>
+          </div>
+          <div class="meta">
+            <div class="name">Magic Mouse 2 (v2-alt) / Apple Wireless Mouse</div>
+            <div class="pid">0x0310</div>
+            <div class="status"><a href="install.html#apple-route">Apple-driver route</a> &mdash; supported by the same installer</div>
+          </div>
+        </div>
+        <div class="device-card">
+          <div class="thumb" style="display:flex;align-items:center;justify-content:center;color:var(--muted)">
+            <svg class="icon icon-lg"><use href="img/icons.svg#mouse"/></svg>
+          </div>
+          <div class="meta">
+            <div class="name">Magic Trackpad</div>
+            <div class="pid">0x030E &middot; 0x0265 &middot; 0x0324</div>
+            <div class="status">Not covered by the shipped route</div>
+          </div>
+        </div>
+      </div>
+      <p>Unsure after all that? The Magic Tray site keeps a decision page: <a href="https://magictray.app/drivers.html">which Apple mouse driver do I need on Windows</a>.</p>
+    </section>
+
+    <section>
+      <p class="kicker">More questions</p>
+      <div class="accordion">
+        <details>
+          <summary>Will this fix the battery percentage too? <svg class="icon chev"><use href="img/icons.svg#chevron-down"/></svg></summary>
+          <div class="a-body">
+            <p>No. The shipped Apple-driver route restores scroll but does not read battery. The free <a href="https://magictray.app/">Magic Tray (Windows app)</a> shows battery percentage with a brief temporary mode flip. The KMDF route is not shipped on this branch. Details, including why v1/v2 battery is not yet characterised: <a href="battery.html">Magic Mouse battery percentage on Windows 11</a>.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Is this a battery or Bluetooth range problem? <svg class="icon chev"><use href="img/icons.svg#chevron-down"/></svg></summary>
+          <div class="a-body">
+            <p>No, and it is not a Windows setting you can toggle either. It is a one-way HID collection collapse triggered by a DeviceSetupManager resync. Nothing in the Windows mouse settings can re-expose a collection that no longer exists &mdash; only re-pairing, a driver reinstall, or the shipped lower filter restore it.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section>
+      <h2>Still stuck?</h2>
+      <div class="grid grid-2">
+        <div class="card">
+          <svg class="icon icon-lg"><use href="img/icons.svg#shield-check"/></svg>
+          <h3><a href="faq.html">Magic Mouse v3 Windows driver FAQ</a></h3>
+          <p>Boot Camp, signing, v1 and v2 support.</p>
+        </div>
+        <div class="card">
+          <svg class="icon icon-lg"><use href="img/icons.svg#github"/></svg>
+          <h3><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver source and issues on GitHub</a></h3>
+          <p>MIT licensed, free.</p>
+        </div>
+      </div>
+    </section>
   </main>
-  <footer>
+  <footer class="site">
     <p><strong>Magic Mouse 2024 (v3) Windows driver</strong> — MIT licensed, free, no subscription.
       Maintained by Revive Business Solutions / Lesley Murfin.</p>
     <p><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver repo</a> ·
