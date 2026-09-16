@@ -53,13 +53,19 @@ they are **independent** — separate binaries, separate installers, separate do
 | Survives reconnect / reboot | Scroll does not | Filter persists; re-run if the device InstanceId changes after re-pairing | Yes — re-arms multitouch automatically on both |
 | Status | Baseline (the problem) | **Production ready** | **2.0.4.3, live and confirmed on hardware** |
 
-**Why Driver 1 needs no signing:** the fix is *registry work, not a binary patch*. Apple's Boot Camp
-INF simply has no entry for this mouse's Bluetooth PID, so the driver is registered manually as a
-`LowerFilters` entry on the device instead. The `.sys` itself is byte-for-byte Apple's, so its
-Apple + Microsoft WHQL signatures still verify and Windows loads it normally — Secure Boot on,
-memory integrity on, no Test Mode watermark. Verified on this machine:
-`Get-AuthenticodeSignature` returns **Valid**, signer `CN=Microsoft Windows Hardware Compatibility
-Publisher`.
+**Why Driver 1 needs no signing:** the fix is *registration, not a binary patch*. Installing Apple's
+Boot Camp software alone does **not** give you scroll — on a non-Mac PC Apple's installer refuses to
+run, and even with the driver file present Windows will not attach it to the mouse until something
+registers it as a **lower filter** on that device. That is what the installer does: copy the `.sys`,
+create the kernel service, add it to the device's `LowerFilters`. This is the approach
+[`sbagirici`](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) proved on v1/v2.
+
+Because the `.sys` is byte-for-byte Apple's, its Apple + Microsoft WHQL signatures still verify —
+confirmed here: `Get-AuthenticodeSignature` returns **Valid**, signer `CN=Microsoft Windows Hardware
+Compatibility Publisher`. Only the `.sys` is shipped, with no catalog, so that signature is the only
+thing Windows has to trust; a project-signed catalog would drag the whole install back into Test
+Mode. Running with Test Mode off and Secure Boot on is therefore *expected* but **not yet verified**
+— the development PC has `testsigning Yes` because it also runs the self-signed KMDF driver.
 
 ### What you actually get: scroll and battery
 
@@ -151,7 +157,7 @@ If you want full surface scroll, tunable sensitivity and automatic recovery: **D
 Apple's own `applewirelessmouse.sys` — the multi-touch filter Boot Camp uses on Macs — installed as
 a lower filter on the Bluetooth HID stack. Windows has no equivalent filter, which is why scroll
 does not work out of the box. The `.sys` is **not modified**; the fix is registry work, because
-Apple's INF has no entry for this mouse's Bluetooth PID.
+Windows will not attach it on its own — it has to be registered as a lower filter on the device.
 
 What the installer does: copy the `.sys` into `System32\drivers`, create the kernel service, add
 `applewirelessmouse` to the device's `LowerFilters`, restart the Bluetooth HID device.
@@ -222,13 +228,18 @@ Each driver in this repo addresses that differently, and they are not two stages
 
 ## Supported Hardware
 
-| Model | Year | Bluetooth PID | Supported? |
-|-------|------|---------------|------------|
-| Magic Mouse v1 | 2009 | `0x030D` | ❌ Not supported — see [sbagirici's repo](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) |
-| Magic Mouse v2 | 2015 | `0x0269` | ❌ Not supported — see [sbagirici's repo](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) |
-| Magic Mouse v3 | 2024 | `0x0323` | ✅ This repo |
+| Model | Year | Bluetooth PID | Driver 1 — Apple driver | Driver 2 — KMDF |
+|-------|------|---------------|-------------------------|-----------------|
+| Magic Mouse v1 | 2009 | `0x030D` | ✅ supported | ❌ `0323` only |
+| Magic Mouse v2 | 2015 | `0x0269` | ✅ supported | ❌ `0323` only |
+| Magic Mouse v2 (alt) | 2015 | `0x0310` | ✅ supported | ❌ `0323` only |
+| Magic Mouse v3 | 2024 | `0x0323` | ✅ supported | ✅ supported |
 
-**Verify your PID:** Device Manager → Human Interface Devices → Apple Magic Mouse → Properties → Details → Hardware Ids. Look for `PID&030D`, `PID&0269`, or `PID&0323`.
+Driver 1 works on every Magic Mouse Apple's filter driver serves, so v1/v2 owners are covered —
+verified on a paired v1 (`030D`) alongside a v3 (`0323`) on the same PC. Driver 2 is a
+purpose-built `0323` driver and does not claim the older models.
+
+**Verify your PID:** Device Manager → Human Interface Devices → Apple Magic Mouse → Properties → Details → Hardware Ids. Look for `PID&030D`, `PID&0310`, `PID&0269`, or `PID&0323`.
 
 ## System Requirements
 
