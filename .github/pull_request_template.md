@@ -25,9 +25,12 @@ Details for any FAIL or N/A:
 
 ## Checklist
 
-- [ ] Title starts with a conventional-commit prefix (`fix:` or `docs:`)
+- [ ] Title uses Conventional Commits: a type prefix plus optional scope, then a colon
+      (`fix`, `docs`, `feat`, `chore`, `ci`, `refactor`, `test`; e.g. `feat(ci):`).
+      Dependabot's generated `chore(ci):` titles are exempt from this check.
 - [ ] Tested on real Magic Mouse v3 hardware, not assumed
-- [ ] Event logs or screenshots attached where relevant (pnp-config.evtx, dsm-admin.evtx)
+- [ ] Event logs or screenshots attached where relevant, redacted per CONTRIBUTING.md
+      ("Collecting Event Logs") - attach the converted .txt, never the raw .evtx
 - [ ] `Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSScriptAnalyzerSettings.psd1` is clean locally
 - [ ] Docs updated (README/CHANGELOG/SECURITY) if the driver SHA256, size, or cert thumbprint changed
 - [ ] All conversations resolved before requesting merge

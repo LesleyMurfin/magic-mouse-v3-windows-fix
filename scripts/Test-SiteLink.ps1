@@ -12,8 +12,9 @@
       1. Internal HTML targets  - every relative href/src in docs/*.html resolves on disk.
       2. Sitemap coverage       - every <loc> maps to a real file, every page is listed,
                                   and 404.html is never listed.
-      3. Sitemap origin         - all <loc> share one origin, and robots.txt's Sitemap:
-                                  line points at that same origin and base path.
+      3. Declared site base     - robots.txt's Sitemap: line declares where the site is
+                                  published; every <loc> must live under that base, and
+                                  that base must address this sitemap.xml.
       4. Canonical sanity       - every <link rel="canonical"> URL appears as a <loc>.
       5. Markdown links         - every relative ](target) in tracked *.md resolves.
 
@@ -25,6 +26,11 @@
 
 .PARAMETER SiteDir
     Published site directory, relative to RepoRoot (or absolute). Defaults to 'docs'.
+
+.PARAMETER SiteBaseUrl
+    Published base URL of the site, ending in '/'. Defaults to the base declared by the
+    Sitemap: line in <SiteDir>/robots.txt. Pass this only for a site that cannot declare
+    its own base; the base is never guessed from the sitemap contents.
 
 .PARAMETER Quiet
     Suppress the per-check count lines and the summary table. Error annotations are
@@ -41,6 +47,7 @@
 param(
     [string]$RepoRoot = (Split-Path -Parent -Path $PSScriptRoot),
     [string]$SiteDir = 'docs',
+    [string]$SiteBaseUrl = '',
     [switch]$Quiet
 )
 
@@ -219,6 +226,73 @@ function Get-SiteRelativeUrlPath {
     return [System.Uri]::UnescapeDataString($relative)
 }
 
+function Get-DeclaredSiteBase {
+    <#
+    .SYNOPSIS
+        Site base URL declared by robots.txt, derived from its Sitemap: line.
+    .DESCRIPTION
+        robots.txt is the only file in the published site that states where the site is
+        served from, so its Sitemap: URL is the authority for the base: the URL with the
+        trailing 'sitemap.xml' removed. BaseUrl is empty when robots.txt declares nothing
+        usable, and Problem then carries the reason. Callers must treat that as a finding:
+        guessing a base makes every downstream URL comparison validate a fiction.
+    #>
+    [OutputType([psobject])]
+    param(
+        [Parameter(Mandatory)][string]$RobotsPath
+    )
+
+    $declared = [System.Collections.Generic.List[psobject]]::new()
+    $result = [pscustomobject]@{ BaseUrl = ''; Declared = $declared; Problem = ''; ProblemLine = 1 }
+
+    if (-not (Test-Path -LiteralPath $RobotsPath -PathType Leaf)) {
+        $result.Problem = 'robots.txt is missing from the published site directory, so the site declares no published base URL.'
+        return $result
+    }
+
+    $robotsLine = @(Get-Content -LiteralPath $RobotsPath)
+    for ($index = 0; $index -lt $robotsLine.Count; $index++) {
+        $match = [regex]::Match($robotsLine[$index], '(?i)^\s*Sitemap:\s*(\S+)\s*$')
+        if ($match.Success) {
+            $declared.Add([pscustomobject]@{ Url = $match.Groups[1].Value; Line = ($index + 1) })
+        }
+    }
+
+    if ($declared.Count -eq 0) {
+        $result.Problem = 'robots.txt has no Sitemap: line, so the site declares neither its sitemap nor its published base URL.'
+        return $result
+    }
+
+    $base = @()
+    foreach ($item in $declared) {
+        # [Uri] accepts a bare '/path' as an absolute file:// URI on Unix, so the scheme
+        # is asserted explicitly: the base must be a real http(s) location on both runners.
+        $uri = $null
+        if (-not [System.Uri]::TryCreate($item.Url, [System.UriKind]::Absolute, [ref]$uri) -or
+            $uri.Scheme -notin @('http', 'https')) {
+            $result.Problem = "robots.txt Sitemap: '$($item.Url)' is not an absolute http(s) URL, so the published base URL cannot be derived."
+            $result.ProblemLine = $item.Line
+            return $result
+        }
+        if (-not $item.Url.EndsWith('/sitemap.xml', [System.StringComparison]::Ordinal)) {
+            $result.Problem = "robots.txt Sitemap: '$($item.Url)' does not end with '/sitemap.xml', so the published base URL cannot be derived."
+            $result.ProblemLine = $item.Line
+            return $result
+        }
+        $base += $item.Url.Substring(0, $item.Url.Length - 'sitemap.xml'.Length)
+    }
+
+    $distinctBase = @($base | Sort-Object -Unique)
+    if ($distinctBase.Count -gt 1) {
+        $result.Problem = "robots.txt declares conflicting Sitemap: bases ($($distinctBase -join ', ')); the published base URL is ambiguous."
+        $result.ProblemLine = $declared[0].Line
+        return $result
+    }
+
+    $result.BaseUrl = $distinctBase[0]
+    return $result
+}
+
 function Get-TrackedMarkdownFile {
     <#
     .SYNOPSIS
@@ -279,6 +353,37 @@ if (-not $Quiet) {
     Write-Host "Test-SiteLink"
     Write-Host "  repo root : $($script:RepoRootFull)"
     Write-Host "  site dir  : $(Get-RepoRelativePath -Path $siteRoot)"
+}
+
+# The published base URL is declared, never guessed: robots.txt's Sitemap: line is the
+# site's own statement of where it is served from, and -SiteBaseUrl overrides it for a
+# site that cannot declare one. A site that declares no base cannot be checked at all,
+# so that is a finding rather than a fallback.
+$robotsPath = Join-Path -Path $siteRoot -ChildPath 'robots.txt'
+$robotsDeclaration = Get-DeclaredSiteBase -RobotsPath $robotsPath
+
+if ([string]::IsNullOrWhiteSpace($SiteBaseUrl)) {
+    $siteBase = $robotsDeclaration.BaseUrl
+    $siteBaseSource = "$(Get-RepoRelativePath -Path $robotsPath) Sitemap:"
+}
+else {
+    $siteBase = if ($SiteBaseUrl.EndsWith('/')) { $SiteBaseUrl } else { $SiteBaseUrl + '/' }
+    $siteBaseSource = '-SiteBaseUrl'
+}
+
+if ([string]::IsNullOrWhiteSpace($siteBase)) {
+    $baseMessage = "$($robotsDeclaration.Problem) Pass -SiteBaseUrl to check a site that cannot declare its own base."
+    Add-Finding -Check 'site-base' -Path $robotsPath -Line $robotsDeclaration.ProblemLine -Message $baseMessage
+    if (-not $Quiet) {
+        Write-Host ''
+        Write-Host 'FAIL: 1 finding(s).'
+        Write-Host "  [site-base] $(Get-RepoRelativePath -Path $robotsPath):$($robotsDeclaration.ProblemLine): $baseMessage"
+    }
+    exit 1
+}
+
+if (-not $Quiet) {
+    Write-Host "  site base : $siteBase (from $siteBaseSource)"
     Write-Host ''
 }
 
@@ -343,34 +448,26 @@ else {
     }
 }
 
-$siteBaseUrl = ''
 $locUrl = @($locEntry | ForEach-Object { $_.Url })
 $sitemapRelativePath = @()
 
-if ($locEntry.Count -gt 0) {
-    $shortest = @($locUrl | Sort-Object -Property Length)[0]
-    $siteBaseUrl = if ($shortest.EndsWith('/')) { $shortest } else { $shortest.Substring(0, $shortest.LastIndexOf('/') + 1) }
+foreach ($entry in $locEntry) {
+    # A <loc> outside the declared base has no file behind it here; check 3 owns that
+    # finding, and the page it failed to index surfaces below as unindexed.
+    $relative = Get-SiteRelativeUrlPath -Url $entry.Url -BaseUrl $siteBase
+    if ($null -eq $relative) { continue }
 
-    foreach ($entry in $locEntry) {
-        $relative = Get-SiteRelativeUrlPath -Url $entry.Url -BaseUrl $siteBaseUrl
-        if ($null -eq $relative) {
-            Add-Finding -Check 'sitemap' -Path $sitemapPath -Line $entry.Line `
-                -Message "<loc> '$($entry.Url)' is not under the site base URL '$siteBaseUrl'."
-            continue
-        }
+    $sitemapRelativePath += $relative
 
-        $sitemapRelativePath += $relative
+    $target = Resolve-LinkTarget -Value $relative -BaseDirectory $siteRoot -RootDirectory $siteRoot
+    if ($null -eq $target -or -not (Test-Path -LiteralPath $target -PathType Leaf)) {
+        Add-Finding -Check 'sitemap' -Path $sitemapPath -Line $entry.Line `
+            -Message "Dead sitemap URL '$($entry.Url)': no file at $(Get-RepoRelativePath -Path $target)."
+    }
 
-        $target = Resolve-LinkTarget -Value $relative -BaseDirectory $siteRoot -RootDirectory $siteRoot
-        if ($null -eq $target -or -not (Test-Path -LiteralPath $target -PathType Leaf)) {
-            Add-Finding -Check 'sitemap' -Path $sitemapPath -Line $entry.Line `
-                -Message "Dead sitemap URL '$($entry.Url)': no file at $(Get-RepoRelativePath -Path $target)."
-        }
-
-        if ($relative -eq '404.html') {
-            Add-Finding -Check 'sitemap' -Path $sitemapPath -Line $entry.Line `
-                -Message 'An error page must never be listed in the sitemap: remove the 404.html <loc>.'
-        }
+    if ($relative -eq '404.html') {
+        Add-Finding -Check 'sitemap' -Path $sitemapPath -Line $entry.Line `
+            -Message 'An error page must never be listed in the sitemap: remove the 404.html <loc>.'
     }
 }
 
@@ -387,65 +484,65 @@ foreach ($file in $htmlFile) {
 Add-CheckResult -Name 'Sitemap coverage' -Inspected $locEntry.Count -Checked $htmlFile.Count -Unit '<loc> entries vs html pages'
 
 # --------------------------------------------------------------------------------------
-# Check 3 - sitemap URLs share one origin, and robots.txt points at it
+# Check 3 - every <loc> lives under the declared base, and that base addresses this
+#           sitemap.xml. Comparing the base against robots.txt would be circular when the
+#           base came from robots.txt, so both assertions are made against the sitemap
+#           entries and the file on disk instead.
 # --------------------------------------------------------------------------------------
 
-$origin = @()
+$locUnderBase = 0
 foreach ($entry in $locEntry) {
+    # Scheme asserted explicitly: [Uri] reads a bare '/path' as an absolute file:// URI on
+    # Unix, which would smuggle a root-relative <loc> past this gate on ubuntu runners.
     $uri = $null
-    if (-not [System.Uri]::TryCreate($entry.Url, [System.UriKind]::Absolute, [ref]$uri)) {
-        Add-Finding -Check 'origin' -Path $sitemapPath -Line $entry.Line `
-            -Message "<loc> '$($entry.Url)' is not an absolute URL; sitemap entries must be fully qualified."
+    if (-not [System.Uri]::TryCreate($entry.Url, [System.UriKind]::Absolute, [ref]$uri) -or
+        $uri.Scheme -notin @('http', 'https')) {
+        Add-Finding -Check 'site-base' -Path $sitemapPath -Line $entry.Line `
+            -Message "<loc> '$($entry.Url)' is not an absolute http(s) URL; sitemap entries must be fully qualified."
         continue
     }
-    $origin += "$($uri.Scheme)://$($uri.Authority)"
+
+    if (-not $entry.Url.StartsWith($siteBase, [System.StringComparison]::Ordinal)) {
+        Add-Finding -Check 'site-base' -Path $sitemapPath -Line $entry.Line `
+            -Message "<loc> '$($entry.Url)' is not under the declared site base '$siteBase' (from $siteBaseSource); the pages do not live where the site says they are published, so crawlers would drop them."
+        continue
+    }
+
+    $locUnderBase++
 }
 
-$distinctOrigin = @($origin | Sort-Object -Unique)
-if ($distinctOrigin.Count -gt 1) {
-    Add-Finding -Check 'origin' -Path $sitemapPath -Line 1 `
-        -Message "sitemap.xml mixes origins ($($distinctOrigin -join ', ')); every <loc> must share one origin."
-}
-
-$robotsPath = Join-Path -Path $siteRoot -ChildPath 'robots.txt'
-$robotsSitemapCount = 0
+$expectedSitemapUrl = $siteBase + 'sitemap.xml'
+$sitemapUrlChecked = 0
 
 if (-not (Test-Path -LiteralPath $robotsPath -PathType Leaf)) {
-    Add-Finding -Check 'origin' -Path $robotsPath -Line 1 -Message 'robots.txt is missing from the published site directory.'
+    Add-Finding -Check 'site-base' -Path $robotsPath -Line 1 -Message 'robots.txt is missing from the published site directory.'
+}
+elseif ($robotsDeclaration.Declared.Count -eq 0) {
+    Add-Finding -Check 'site-base' -Path $robotsPath -Line 1 `
+        -Message 'robots.txt has no Sitemap: line; crawlers will not discover sitemap.xml.'
 }
 else {
-    $robotsLine = @(Get-Content -LiteralPath $robotsPath)
-    for ($index = 0; $index -lt $robotsLine.Count; $index++) {
-        $match = [regex]::Match($robotsLine[$index], '(?i)^\s*Sitemap:\s*(\S+)\s*$')
-        if (-not $match.Success) { continue }
-
-        $robotsSitemapCount++
-        $declared = $match.Groups[1].Value
-        $robotsUri = $null
-        if (-not [System.Uri]::TryCreate($declared, [System.UriKind]::Absolute, [ref]$robotsUri)) {
-            Add-Finding -Check 'origin' -Path $robotsPath -Line ($index + 1) `
-                -Message "robots.txt Sitemap: '$declared' is not an absolute URL."
+    foreach ($item in $robotsDeclaration.Declared) {
+        if ($item.Url -ne $expectedSitemapUrl) {
+            Add-Finding -Check 'site-base' -Path $robotsPath -Line $item.Line `
+                -Message "robots.txt Sitemap: '$($item.Url)' does not address the sitemap served at the site base '$siteBase' (from $siteBaseSource); expected '$expectedSitemapUrl'."
             continue
         }
 
-        $robotsOrigin = "$($robotsUri.Scheme)://$($robotsUri.Authority)"
-        if ($distinctOrigin.Count -eq 1 -and $robotsOrigin -ne $distinctOrigin[0]) {
-            Add-Finding -Check 'origin' -Path $robotsPath -Line ($index + 1) `
-                -Message "robots.txt Sitemap: origin '$robotsOrigin' does not match the sitemap origin '$($distinctOrigin[0])'; the site would be delisted."
+        if (-not (Test-Path -LiteralPath $sitemapPath -PathType Leaf)) {
+            Add-Finding -Check 'site-base' -Path $robotsPath -Line $item.Line `
+                -Message "robots.txt Sitemap: '$expectedSitemapUrl' has nothing behind it: $(Get-RepoRelativePath -Path $sitemapPath) does not exist."
+            continue
         }
-        if ($siteBaseUrl -and $declared -ne ($siteBaseUrl + 'sitemap.xml')) {
-            Add-Finding -Check 'origin' -Path $robotsPath -Line ($index + 1) `
-                -Message "robots.txt Sitemap: '$declared' does not match the site base URL; expected '$($siteBaseUrl)sitemap.xml'."
-        }
-    }
 
-    if ($robotsSitemapCount -eq 0) {
-        Add-Finding -Check 'origin' -Path $robotsPath -Line 1 `
-            -Message 'robots.txt has no Sitemap: line; crawlers will not discover sitemap.xml.'
+        $sitemapUrlChecked++
     }
 }
 
-Add-CheckResult -Name 'Sitemap origin vs robots' -Inspected $locEntry.Count -Checked $robotsSitemapCount -Unit '<loc> origins / Sitemap: lines'
+Add-CheckResult -Name 'Sitemap URLs vs site base' `
+    -Inspected ($locEntry.Count + $robotsDeclaration.Declared.Count) `
+    -Checked ($locUnderBase + $sitemapUrlChecked) `
+    -Unit '<loc> URLs + robots.txt Sitemap:'
 
 # --------------------------------------------------------------------------------------
 # Check 4 - canonical URLs are present in the sitemap

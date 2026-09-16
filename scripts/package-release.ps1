@@ -8,13 +8,18 @@ temporary directory, generates an in-archive SHA256SUMS manifest, then writes
 dist/magic-mouse-v3-fix-<Tag>-installer.zip plus a .sha256 sidecar.
 
 The signed kernel driver (applewirelessmouse.sys) and its certificate
-(MagicMouseFix.cer) are not tracked in git (see DMCA-NOTICE.md). They are
-included only when a maintainer has committed them for the tag. When they are
-present the driver's real SHA256 and byte length must match the
+(MagicMouseFix.cer) are not tracked in git (see DMCA-NOTICE.md). They are one
+payload, never two options: Install-MagicMousePatch.ps1 imports the .cer into
+LocalMachine\TrustedPublisher and copies the .sys, and refuses to run without
+either. So both are included when both are staged, neither when neither is,
+and staging exactly one is a hard failure -- a kit that carries half the
+payload looks complete and cannot install.
+
+When both are present the driver's real SHA256 and byte length must match the
 $ExpectedSha256 / $ExpectedSize constants in Install-MagicMousePatch.ps1 --
 shipping a binary that contradicts our own documentation is a hard failure.
 
-When the driver is absent this produces a scripts-only kit and reports
+When neither is present this produces a scripts-only kit and reports
 binary_included=false so the release notes can say so explicitly.
 
 .PARAMETER Tag
@@ -129,7 +134,7 @@ $facts = Get-InstallerFact -Path $installerPs1
 Write-Host "  Installer expects SHA256 $($facts.Sha256) / $($facts.Size) bytes" -ForegroundColor Gray
 
 # ============================================================================
-# Optional payload: signed driver + certificate
+# Optional payload: the driver and its certificate, all or nothing
 # ============================================================================
 
 $binarySource = $null
@@ -146,8 +151,21 @@ foreach ($dir in @($installerDir, $patchDir)) {
     }
 }
 
-$binaryIncluded = $false
-if ($null -ne $binarySource) {
+$hasBinary = $null -ne $binarySource
+$hasCert   = $null -ne $certSource
+
+if ($hasBinary -ne $hasCert) {
+    $searched = "$installerDir or $patchDir"
+    if ($hasBinary) {
+        Write-Failure "MagicMouseFix.cer not found in $searched, but applewirelessmouse.sys is staged at $binarySource. The driver and its certificate are one payload - Install-MagicMousePatch.ps1 imports the certificate before it copies the driver. Stage the certificate or remove the driver; refusing to publish half a kit."
+    } else {
+        Write-Failure "applewirelessmouse.sys not found in $searched, but MagicMouseFix.cer is staged at $certSource. The driver and its certificate are one payload - a certificate without a driver installs nothing. Stage the driver or remove the certificate; refusing to publish half a kit."
+    }
+    exit 1
+}
+
+$binaryIncluded = $hasBinary
+if ($binaryIncluded) {
     $actualHash = Get-Sha256Hex -Path $binarySource
     $actualSize = (Get-Item -LiteralPath $binarySource).Length
 
@@ -161,17 +179,11 @@ if ($null -ne $binarySource) {
     }
 
     $plan += [pscustomobject]@{ Name = 'applewirelessmouse.sys' ; Source = $binarySource }
-    $binaryIncluded = $true
+    $plan += [pscustomobject]@{ Name = 'MagicMouseFix.cer'      ; Source = $certSource }
     Write-Host "  Driver verified and included: $binarySource" -ForegroundColor Green
+    Write-Host "  Certificate included:         $certSource" -ForegroundColor Green
 } else {
-    Write-Host "  Driver not present in tree - building scripts-only kit" -ForegroundColor Yellow
-}
-
-if ($null -ne $certSource) {
-    $plan += [pscustomobject]@{ Name = 'MagicMouseFix.cer' ; Source = $certSource }
-    Write-Host "  Certificate included: $certSource" -ForegroundColor Green
-} else {
-    Write-Host "  Certificate not present in tree" -ForegroundColor Yellow
+    Write-Host "  Driver and certificate not present in tree - building scripts-only kit" -ForegroundColor Yellow
 }
 
 # ============================================================================

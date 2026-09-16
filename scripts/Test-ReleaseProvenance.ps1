@@ -13,7 +13,8 @@
     v1-binary-patch/installer/Install-MagicMousePatch.ps1 is the single source of truth.
     This script scrapes the triple out of it, then proves every other occurrence agrees,
     that no documenting file has silently dropped its copy, that SHA256SUMS.txt is in
-    real sha256sum format, and that no signing key material is tracked in git.
+    real sha256sum format and publishes the driver's checksum under its own filename,
+    and that no signing key material is tracked in git.
 
     Emits GitHub Actions error annotations for every finding. Exits 1 on any finding,
     0 when the tree is consistent.
@@ -208,7 +209,6 @@ $hexTargets = @(
     [PSCustomObject]@{ Path = 'SECURITY.md';                                           Sha = $true;  Thumb = $true;  RequireSha = $true;  RequireThumb = $true }
     [PSCustomObject]@{ Path = 'CHANGELOG.md';                                          Sha = $true;  Thumb = $true;  RequireSha = $true;  RequireThumb = $true }
     [PSCustomObject]@{ Path = 'v1-binary-patch/README.md';                             Sha = $true;  Thumb = $true;  RequireSha = $true;  RequireThumb = $true }
-    [PSCustomObject]@{ Path = 'v1-binary-patch/installer/SHA256SUMS.txt';               Sha = $true;  Thumb = $false; RequireSha = $true;  RequireThumb = $false }
     [PSCustomObject]@{ Path = 'v1-binary-patch/installer/Uninstall-MagicMousePatch.ps1'; Sha = $true; Thumb = $true;  RequireSha = $false; RequireThumb = $true }
     [PSCustomObject]@{ Path = 'v1-binary-patch/docs/architecture.md';                   Sha = $false; Thumb = $true;  RequireSha = $false; RequireThumb = $false }
 )
@@ -289,14 +289,29 @@ else {
 }
 
 # ============================================================================
-# 4. SHA256SUMS.txt is real sha256sum output
+# 4. SHA256SUMS.txt is real sha256sum output and its driver entry agrees
 # ============================================================================
+
+# This manifest is the single justified exception to file-wide hash matching. It is a
+# multi-entry sha256sum file: MagicMouseFix.cer (and any future payload) legitimately
+# carries a different checksum, so comparing every hex64 here to the driver hash would
+# fail on a correct edit. The format is parsed structurally anyway, so the driver hash
+# is asserted against the entry named applewirelessmouse.sys instead. Every other
+# documenting file stays strict on purpose: a bare hex64 in prose or in the uninstaller
+# can only be the driver hash, so any other value there is a stale copy.
 
 $sumsPath = 'v1-binary-patch/installer/SHA256SUMS.txt'
 $sumsFull = Join-RelativePath -Root $RepoRoot -RelativePath $sumsPath
-if (Test-Path -LiteralPath $sumsFull -PathType Leaf) {
+$driverEntryName = 'applewirelessmouse.sys'
+if (-not (Test-Path -LiteralPath $sumsFull -PathType Leaf)) {
+    Add-Finding -Message "Documenting file is missing from the tree: $sumsPath" -RelativePath $sumsPath
+    Add-ResultRow -Name "$sumsPath [format]" -Expected 'file present' -Found 'missing' -Result 'FAIL'
+}
+else {
     $sumsLineCount = 0
     $sumsBad = 0
+    $driverEntryLine = 0
+    $driverEntryHash = ''
     $lineNumber = 0
     foreach ($line in [System.IO.File]::ReadAllLines($sumsFull)) {
         $lineNumber++
@@ -308,8 +323,11 @@ if (Test-Path -LiteralPath $sumsFull -PathType Leaf) {
             $sumsBad++
             continue
         }
-        if ($entry.Groups[1].Value -ine $expectedSha) {
-            Add-Finding -Message "checksum mismatch for '$($entry.Groups[2].Value)': got '$($entry.Groups[1].Value)', installer declares '$expectedSha'" -RelativePath $sumsPath -LineNumber $lineNumber
+        if ($entry.Groups[2].Value -ine $driverEntryName) { continue }
+        $driverEntryLine = $lineNumber
+        $driverEntryHash = $entry.Groups[1].Value
+        if ($driverEntryHash -ine $expectedSha) {
+            Add-Finding -Message "checksum mismatch for '$driverEntryName': got '$driverEntryHash', installer declares '$expectedSha'" -RelativePath $sumsPath -LineNumber $lineNumber
             $sumsBad++
         }
     }
@@ -320,6 +338,16 @@ if (Test-Path -LiteralPath $sumsFull -PathType Leaf) {
     $result = 'OK'
     if ($sumsBad -gt 0) { $result = 'FAIL' }
     Add-ResultRow -Name "$sumsPath [format]" -Expected 'sha256sum format' -Found "$sumsLineCount entries / $sumsBad bad" -Result $result
+
+    if ($driverEntryLine -eq 0) {
+        Add-Finding -Message "no '$driverEntryName' entry: this manifest must publish the driver checksum '$expectedSha'" -RelativePath $sumsPath
+        Add-ResultRow -Name "$sumsPath [$driverEntryName]" -Expected $expectedSha -Found 'no entry' -Result 'FAIL'
+    }
+    else {
+        $driverResult = 'OK'
+        if ($driverEntryHash -ine $expectedSha) { $driverResult = 'FAIL' }
+        Add-ResultRow -Name "$sumsPath [$driverEntryName]" -Expected 'matches installer' -Found $driverEntryHash -Result $driverResult
+    }
 }
 
 # ============================================================================
@@ -367,7 +395,7 @@ if (-not $binaryFound) {
 # ============================================================================
 
 # Assembled from fragments so this scanner does not flag its own source.
-$keyBlockPattern = '-----BEGIN ' + '(RSA |EC |OPENSSH )?' + 'PRIVATE' + ' KEY-----'
+$keyBlockPattern = '-----BEGIN ' + '(RSA |DSA |EC |OPENSSH |ENCRYPTED )?' + 'PRIVATE' + ' KEY-----'
 $forbiddenExtensions = @('.pfx', '.p12', '.snk', '.key')
 $skipExtensions = @(
     '.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.bmp', '.pdf',

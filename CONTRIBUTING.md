@@ -36,6 +36,10 @@ Thank you for helping improve the Magic Mouse v3 Windows scroll fix.
 
 ### Collecting Event Logs
 
+GitHub issue attachments are public and permanently visible. These logs embed your
+Bluetooth MAC address, device instance ID, hostname, and user name. Export them, then
+redact before attaching anything.
+
 Copy and paste this into PowerShell as Administrator:
 
 ```powershell
@@ -48,7 +52,17 @@ wevtutil epl "Microsoft-Windows-DeviceSetupManager/Admin" C:\dsm-admin.evtx
 Write-Host "Exported to C:\dsm-admin.evtx"
 ```
 
-Attach both .evtx files to your GitHub issue.
+.evtx is binary, so it cannot be cleaned in a text editor. Convert each log to text and
+redact there:
+
+```powershell
+(wevtutil qe "Microsoft-Windows-Kernel-PnP/Configuration" /f:text) -replace '(?<=&0&)[0-9A-Fa-f]{12}', 'REDACTEDMAC' -replace '([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}', 'XX:XX:XX:XX:XX:XX' | Set-Content C:\pnp-config.txt
+```
+
+Repeat with "Microsoft-Windows-DeviceSetupManager/Admin" for dsm-admin.txt, then replace
+any remaining hostname or user name by hand. Attach the redacted .txt files to your
+GitHub issue, not the raw .evtx. If a log cannot be safely redacted, email it to
+riley@revivebusiness.ca instead of posting it.
 
 **Optional but helpful:**
 ```powershell
@@ -189,14 +203,18 @@ Comment on the pull request with:
 
 ### PR Requirements
 
-- **Title:** Start with `fix:` or `docs:` (conventional commits)
+- **Title:** Conventional Commits - a type prefix plus optional scope, then a colon.
+  Types in use here: `fix`, `docs`, `feat`, `chore`, `ci`, `refactor`, `test`
+  (for example `feat(ci): add lint workflow`). Dependabot's `chore(ci):` titles are
+  generated and exempt from manual checking.
 - **Description:** Include:
   - What problem this solves
   - How it solves the problem
   - Test results from your hardware
   - Any breaking changes (usually none)
 - **Link to issue:** `Fixes #123`
-- **Test evidence:** Attach event logs or screenshots if relevant
+- **Test evidence:** Attach redacted event logs (see "Collecting Event Logs") or
+  screenshots if relevant
 - **All scripts:** Must pass PSScriptAnalyzer checks (GitHub Actions will verify)
 
 ### PR Review Process
