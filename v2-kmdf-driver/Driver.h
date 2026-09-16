@@ -34,7 +34,7 @@
 
 // FileVersion / package label. INF dest is unique so Apr 30 MagicMouseDriver.sys
 // (oem16 / AD5D244B) is not replaced or hardlinked.
-#define MM_FILE_VERSION_STR     "2.0.4.2"
+#define MM_FILE_VERSION_STR     "2.0.4.3"
 #define MM_ARTIFACT_SYS_PATTERN "MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys"
 #define MM_INF_SYS_NAME         "MagicMouseDriver-kmdf-204-scroll.sys"
 
@@ -94,7 +94,6 @@ typedef struct _DEVICE_CONTEXT
     ULONG   LastOutHdr;
     ULONG   MtEnableStatus;
     ULONG   MtEnableTries;
-    ULONG   MtControlOutSeen;
     BOOLEAN MtEnableSent;
     PVOID   MtChannelHandle;
     PVOID   MtControlHandle;
@@ -139,6 +138,5 @@ EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnSdpQueryComplete;
 EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnReadComplete;
 EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnAclTransferComplete;
 EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnOpenChannelComplete;
-EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnAclOutComplete;
 EVT_WDF_TIMER                           MmDiagTimerFunc;
 EVT_WDF_WORKITEM                        MmDiagWorkItemFunc;

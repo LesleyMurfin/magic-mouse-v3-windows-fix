@@ -1,22 +1,30 @@
-# Shipping — unique 2.0.4.1 (PID 0323)
+# Shipping — unique 2.0.4.3 (PID 0323)
 
 This PC is the only lab. Do not lose the restore package.
 
-## What is proven (2026-09-01)
+## What is proven (2026-09-15, current package)
 
 | | |
 |--|--|
+| Version | **2.0.4.3** — `DriverVer 09/15/2026,2.0.4.3` |
 | Product on **this** PC | Pointer, battery `0x90`, **2-finger** Wheel/AC Pan, 1-finger glass does not scroll |
-| Loaded | oem50 / dest `MagicMouseDriver-kmdf-204-scroll.sys` SHA `9901390e…` signed **16940C0F** |
-| Unsigned freeze | `E73EC0A8…` |
+| Loaded | dest `MagicMouseDriver-kmdf-204-scroll.sys` signed SHA256 `FE7CF014C806D99B92DA864124090790CA38F0763F6802DE8F06037DA5F54DB2`, cert **16940C0F** |
+| Unsigned freeze | `08E91E37AF3B7B9A56E793ADB876BA48FBD61DDFEE446C89A6A1751CABABD6AC` (25600 bytes) |
+| Detent | registry `ScrollStep` (default 8, clamp `[1,224]`); `Diag!ScrollStep=8` |
 | oem16 | `AD5D244B` — never delete |
 | Gestures | **Not** in this package (mouse+wheel, not PTP) |
 
-Source: branch `ai/kmdf-204-unique-pkg-7748`, checkpoint `CHECKPOINT-2026-09-01-SCROLL.md`.
+Source: branch `ai/kmdf-204-unique-pkg-7748`.
+
+*Dated historical evidence — not the current package:* on **2026-09-01** the **2.0.4.1** build
+(oem50, signed `9901390e…`, unsigned freeze `E73EC0A8…`) proved the same pointer / 2-finger
+behaviour. Checkpoint: `CHECKPOINT-2026-09-01-SCROLL.md`. It survives only as the rollback target
+below.
 
 ## Restore (keep this)
 
-Known-good **16940C0F** unique package:
+Known-good **16940C0F** unique package — this folder still holds the **2026-09-01 2.0.4.1** build
+and is kept as dated rollback evidence, not as the shipped version:
 
 ```
 C:\mm-dev-queue\kmdf-204-sign\
@@ -25,7 +33,9 @@ C:\mm-dev-queue\kmdf-204-sign\
   MagicMouseDriver-kmdf-204-scroll.cat
 ```
 
-Reload: `kmdf-204-pnputil-once.ps1` (unique oem50 only, then F1). Do not `Copy-Item` onto System32. Do not delete oem16.
+Reload: `kmdf-204-pnputil-once.ps1` (unique INF only, then F1). Its `-Stage` defaults to that
+2.0.4.1 folder, so a bare run **is** the rollback; pass `-Stage C:\mm-dev-queue\kmdf-204-sign-2043`
+to reload the current 2.0.4.3 package. Do not `Copy-Item` onto System32. Do not delete oem16.
 
 This PC: testsigning **Yes**, Secure Boot **off**, Memory integrity **off**. `16940C0F` HasPrivateKey=True.
 
@@ -35,19 +45,19 @@ This PC: testsigning **Yes**, Secure Boot **off**, Memory integrity **off**. `16
 
 | Step | Status |
 |------|--------|
-| Parse on Windows PowerShell 5.1 | Pass (ASCII strings; `New-FileCatalog` without `-Force`) |
+| Parse on Windows PowerShell 5.1 | Pass (ASCII strings) |
 | Create cert + trust Root/TrustedPublisher | Pass — thumb `74C7C4888C7E3BA5D2BD82751C2EC094E7CEB211` |
-| Sign sys+cat (`-SkipPnputil`) | Pass — Authenticode **Valid** in `C:\mm-dev-queue\community-dry\` |
+| Sign sys+cat (`-SkipPnputil`) | Pass — Authenticode **Valid** in `C:\mm-dev-queue\community-dry\`. That dry run predates the Inf2Cat requirement and catalogued with `New-FileCatalog`; its `.cat` must not be published or handed to `pnputil`. |
 | `pnputil` of that community-signed package | **Not run** — would replace working oem50 |
 | Reboot / first-run testsigning enable | **Not run** — already Yes here |
-| Inf2Cat branch | **Not run** — Inf2Cat not on PATH; used `New-FileCatalog` |
+| Catalog | **Inf2Cat.exe (WDK) is required.** `New-FileCatalog` does not produce a catalog `pnputil` accepts, so there is no fallback: setup fails with an actionable "install the WDK" message when Inf2Cat is absent. |
 
 ## Proper test (swap and restore)
 
 Only way to prove the $0 installer on this hardware:
 
 1. Confirm restore folder `C:\mm-dev-queue\kmdf-204-sign\` still has 16940C0F-signed sys+cat.
-2. `pnputil /add-driver` the community-dry unique INF (or run `Setup-Community.ps1` **without** `-SkipPnputil` from that dry folder).
+2. Re-catalogue that dry folder before anything touches `pnputil`: run `Setup-Community.ps1` **without** `-SkipPnputil` from `C:\mm-dev-queue\community-dry\`. A full run rebuilds the `.cat` with `Inf2Cat.exe`, re-signs it, and only then does `pnputil /add-driver <unique INF> /install`. Do **not** hand the `New-FileCatalog` `.cat` left by the earlier `-SkipPnputil` dry run to `pnputil` — that catalog is not installable.
 3. Sleep 3s, `scripts\mm-f1-once.ps1`.
 4. Glass: 1-finger must **not** scroll; 2-finger must scroll; pointer; battery.
 5. **Immediately** reload `kmdf-204-sign` via `kmdf-204-pnputil-once.ps1` + F1.

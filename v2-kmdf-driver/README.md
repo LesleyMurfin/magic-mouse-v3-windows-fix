@@ -1,6 +1,6 @@
 # MagicMouseDriver (KMDF) — PID 0x0323 only
 
-**Unique 2.0.4 scroll package.** **2026-09-01 hardware:** pointer + **2-finger** surface scroll + battery `0x90`. 1-finger glass does not scroll. See `CHECKPOINT-2026-09-01-SCROLL.md`.
+**Unique 2.0.4.3 scroll package** (`DriverVer 09/15/2026,2.0.4.3`). **2026-09-15 hardware:** pointer + **2-finger** surface scroll + battery `0x90`. 1-finger glass does not scroll. Detent is the registry tunable `ScrollStep` (default 8). Earlier dated evidence for the 2.0.4.1 build is in `CHECKPOINT-2026-09-01-SCROLL.md`.
 
 **Other PCs ($0):** `Setup-Community.cmd` (testsigning, Secure Boot off). **How to help test:** `COMMUNITY-TESTING.md`. Status / leftovers: `STATUS.md`. Ship plan: `SHIPPING.md`. Developer path: thumb `16940C0F` + `Install-KMDF.cmd`.
 
@@ -17,14 +17,27 @@ was a hardlink. Restore needed Safe Mode takeown. This package uses a **new INF 
 
 | Filename | FileVersion | Role |
 |----------|-------------|------|
-| **`MagicMouseDriver.sys`** | not 2.0.4.1 | **Apr 30 live / restore name only.** SHA `AD5D244B…`. Do not ship a second copy. |
-| **`MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys`** | not 2.0.4.1 | Package label for that pointer-only binary. |
+| **`MagicMouseDriver.sys`** | not 2.0.4.3 | **Apr 30 live / restore name only.** SHA `AD5D244B…`. Do not ship a second copy. |
+| **`MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys`** | not 2.0.4.3 | Package label for that pointer-only binary. |
 | **`MagicMouseDriver-kmdf-may20-pointerdead-559B136A.sys`** | 2.0.2.0 | Pointer-dead. Refuse. |
-| **`MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys`** | **2.0.4.1** | **Canonical scroll artifact** after freeze-hash. |
-| **`MagicMouseDriver-kmdf-204-scroll.sys`** | **2.0.4.1** | INF dest / ServiceBinary (same bytes as the sha8 file). |
+| **`MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys`** | **2.0.4.3** | **Canonical scroll artifact** after freeze-hash. |
+| **`MagicMouseDriver-kmdf-204-scroll.sys`** | **2.0.4.3** | INF dest / ServiceBinary (same bytes as the sha8 file). |
 | **`applewirelessmouse-patched-pathA-SHIPBLOCKER.sys`** | PATH-A v1 | **SHIPBLOCKER.** Never this product. |
 
 Do not install PATH-A. Do not install May 20. Do not install SHA `845435CE…`. No dual-filter.
+
+## Current release freeze / sign record (2.0.4.3)
+
+| Field | Value |
+|-------|-------|
+| DriverVer | `09/15/2026,2.0.4.3` |
+| Unsigned freeze SHA256 | `08E91E37AF3B7B9A56E793ADB876BA48FBD61DDFEE446C89A6A1751CABABD6AC` (25600 bytes) |
+| Signed `.sys` SHA256 | `FE7CF014C806D99B92DA864124090790CA38F0763F6802DE8F06037DA5F54DB2` |
+| Cert thumb | `16940C0F` (private key on the PC, never in git) |
+| Diag | `ScrollStep=8` |
+
+Those two hashes are the only ones that describe this release. `AD5D244B…` is the Apr 30 restore
+baseline and `845435CE…` is the refused 2.0.4.0 package.
 
 ## Install (signed pnputil only)
 

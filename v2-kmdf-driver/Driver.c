@@ -558,43 +558,12 @@ OnOpenChannelComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
                       &pBrb->BrbL2caOpenChannel.BtAddress,
                       sizeof(ctx->MtBtAddress));
         ctx->MtEnableTries = 0;
-        ctx->MtControlOutSeen = 0;
         ctx->MtEnableSent = FALSE;
         WdfSpinLockRelease(ctx->Lock);
         if (ctx->DiagWorkItem != NULL)
         {
             WdfWorkItemEnqueue(ctx->DiagWorkItem);
         }
-    }
-
-    WdfRequestComplete(Request, status);
-}
-
-VOID
-OnAclOutComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
-                 _In_ PWDF_REQUEST_COMPLETION_PARAMS Params, _In_ WDFCONTEXT Context)
-{
-    UNREFERENCED_PARAMETER(Target);
-
-    PDEVICE_CONTEXT ctx = (PDEVICE_CONTEXT)Context;
-    NTSTATUS status = Params->IoStatus.Status;
-    PMM_REQUEST_CONTEXT reqCtx = GetRequestContext(Request);
-    PBRB pBrb = (reqCtx != NULL) ? (PBRB)reqCtx->Brb : NULL;
-
-    if (pBrb != NULL && reqCtx != NULL && reqCtx->UsedScratch)
-    {
-        pBrb->BrbL2caAclTransfer.Buffer = reqCtx->OrigBuffer;
-        pBrb->BrbL2caAclTransfer.BufferMDL = reqCtx->OrigMdl;
-        pBrb->BrbL2caAclTransfer.BufferSize = reqCtx->OrigBufferSize;
-        pBrb->BrbL2caAclTransfer.TransferFlags = reqCtx->OrigFlags;
-        reqCtx->UsedScratch = FALSE;
-    }
-
-    if (ctx != NULL)
-    {
-        WdfSpinLockAcquire(ctx->Lock);
-        ctx->MtEnableStatus = (ULONG)status;
-        WdfSpinLockRelease(ctx->Lock);
     }
 
     WdfRequestComplete(Request, status);

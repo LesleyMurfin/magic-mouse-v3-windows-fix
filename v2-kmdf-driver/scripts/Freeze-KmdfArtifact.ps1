@@ -46,7 +46,7 @@ if ($outFull.StartsWith($sysRoot, [System.StringComparison]::OrdinalIgnoreCase) 
     throw "Freeze output must not be System32\drivers or DriverStore."
 }
 
-if (Test-KmdfForbiddenSys -Path $full) {
+if (Test-KmdfForbiddenSysFile -Path $full) {
     throw "Refusing to freeze a banned .sys (PATH-A / May 20 / failed 2.0.4 / Apr 30 / live name)."
 }
 
@@ -78,7 +78,7 @@ $sumBody = "# Freeze-hash gate for KMDF 2.0.4 scroll$nl" +
     "# Canonical: MagicMouseDriver-kmdf-2.0.4-scroll-$sha8.sys$nl" +
     "# INF dest : $($script:KmdfUniqueSys)$nl" +
     "# Do not install if SHA256 is not this value.$nl" +
-    "# Banned: Apr 30 AD5D244B… / May 20 559B136A… / failed 2.0.4 845435CE…$nl" +
+    "# Banned: Apr 30 AD5D244B... / May 20 559B136A... / failed 2.0.4 845435CE...$nl" +
     "$sha  MagicMouseDriver-kmdf-2.0.4-scroll-$sha8.sys$nl" +
     "$sha  $($script:KmdfUniqueSys)$nl"
 Set-Content -LiteralPath $sums -Value $sumBody -Encoding ASCII

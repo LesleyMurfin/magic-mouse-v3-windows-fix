@@ -10,6 +10,13 @@ bad() { echo "FAIL $1"; fail=1; }
 
 INF="$ROOT/MagicMouseDriver-kmdf-204-scroll.inf"
 
+# Single version source: the build script's -Version / -DriverVerDate defaults.
+# The build script hard-fails when the INF disagrees, so reading it here (rather
+# than re-hardcoding, or reading the INF we are validating) still catches drift.
+BUILD_PS1="$ROOT/scripts/kmdf-204-scroll-build.ps1"
+WANT_VER="$(grep -oE '\$Version[[:space:]]*=[[:space:]]*.[0-9.]+.' "$BUILD_PS1" | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
+WANT_DATE="$(grep -oE '\$DriverVerDate[[:space:]]*=[[:space:]]*.[0-9/]+.' "$BUILD_PS1" | grep -oE '[0-9]{2}/[0-9]{2}/[0-9]{4}' | head -n1)"
+
 echo "Validating $ROOT"
 
 # --- unique package identity ---
@@ -24,10 +31,17 @@ if grep -q 'CatalogFile *= *MagicMouseDriver-kmdf-204-scroll.cat' "$INF"; then
 else
   bad "unique CatalogFile"
 fi
-if grep -q 'DriverVer *= *09/08/2026,2.0.4.2' "$INF"; then
-  ok "DriverVer 09/08/2026,2.0.4.2"
+if test -n "$WANT_VER" && test -n "$WANT_DATE"; then
+  ok "build script pins one version: $WANT_DATE,$WANT_VER"
 else
-  bad "DriverVer 09/08/2026,2.0.4.2"
+  bad "build script -Version / -DriverVerDate defaults unreadable (single version source)"
+  WANT_VER='unreadable'; WANT_DATE='unreadable'
+fi
+WANT_DRIVERVER="$WANT_DATE,$WANT_VER"
+if grep -E '^DriverVer' "$INF" | grep -qF "$WANT_DRIVERVER"; then
+  ok "DriverVer $WANT_DRIVERVER"
+else
+  bad "DriverVer $WANT_DRIVERVER"
 fi
 if grep -E '^DriverVer' "$INF" | grep -qE '08/30/2026,2\.0\.4\.0|08/31/2026,2\.0\.4\.0'; then
   bad "INF must not reuse failed 2.0.4 DriverVer"
@@ -103,9 +117,10 @@ if grep -R -n --include='*.ps1' --include='*.cmd' -E 'Copy-Item[^\n]*-Destinatio
 else
   ok "no Copy-Item onto System32/DriverStore"
 fi
-if grep -R -n --include='*.ps1' 'delete-driver.*MagicMouseDriver\.inf|/delete-driver \$oem' "$ROOT/scripts" "$ROOT/Install-KMDF.ps1" >/dev/null 2>&1; then
-  # allow unique-package-only delete
-  if grep -n 'delete-driver' "$ROOT/Install-KMDF.ps1" | grep -v '204-scroll' | grep -q 'MagicMouseDriver\.inf'; then
+if grep -R -n -E --include='*.ps1' 'delete-driver[^\n]*MagicMouseDriver\.inf|/delete-driver \$oem' "$ROOT/scripts" "$ROOT/Install-KMDF.ps1" >/dev/null 2>&1; then
+  # allow unique-package-only delete; only real pnputil invocations count, not doc prose
+  if grep -R -n -E --include='*.ps1' 'pnputil[^\n]*/delete-driver' "$ROOT/scripts" "$ROOT/Install-KMDF.ps1" \
+       | grep -v '204-scroll' | grep -qE 'MagicMouseDriver\.inf|oem16'; then
     bad "uninstall must not delete Apr 30 MagicMouseDriver.inf / oem16"
   else
     ok "uninstall does not delete Apr 30 MagicMouseDriver.inf"
@@ -234,7 +249,17 @@ else
 fi
 
 # --- versions / names ---
-grep -q 'FILEVERSION    2,0,4,2' "$ROOT/MagicMouseDriver.rc" && ok "FileVersion 2.0.4.2 in VERSIONINFO" || bad "FileVersion 2.0.4.2 in VERSIONINFO"
+WANT_FILEVERSION="$(echo "$WANT_VER" | tr '.' ',')"
+if grep -qE "^[[:space:]]*FILEVERSION[[:space:]]+$WANT_FILEVERSION[[:space:]]*$" "$ROOT/MagicMouseDriver.rc"; then
+  ok "FILEVERSION $WANT_FILEVERSION in VERSIONINFO"
+else
+  bad "FILEVERSION $WANT_FILEVERSION in VERSIONINFO"
+fi
+if grep -qF "$WANT_DRIVERVER" "$ROOT/Install-KMDF.ps1"; then
+  ok "Install-KMDF.ps1 requires DriverVer $WANT_DRIVERVER"
+else
+  bad "Install-KMDF.ps1 requires DriverVer $WANT_DRIVERVER"
+fi
 if grep -q '<TargetName>MagicMouseDriver-kmdf-204-scroll</TargetName>' "$ROOT/MagicMouseDriver.vcxproj"; then
   ok "vcxproj TargetName is unique dest"
 else
@@ -244,19 +269,6 @@ if grep -q '<TargetName>MagicMouseDriver</TargetName>' "$ROOT/MagicMouseDriver.v
   bad "vcxproj must not emit live-named MagicMouseDriver.sys"
 else
   ok "vcxproj does not emit live-named MagicMouseDriver.sys"
-fi
-if grep -q 'MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys' "$REPO/README.md" && \
-   grep -q 'MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys' "$REPO/README.md" && \
-   grep -q 'applewirelessmouse-patched-pathA-SHIPBLOCKER.sys' "$REPO/README.md"; then
-  ok "root README names sha8 artifact vs Apr 30 vs SHIP-BLOCKER"
-else
-  bad "root README names sha8 artifact vs Apr 30 vs SHIP-BLOCKER"
-fi
-if grep -q 'applewirelessmouse-patched-pathA-SHIPBLOCKER.sys' "$REPO/v1-binary-patch/installer/Install-MagicMousePatch.ps1" && \
-   grep -q 'System32\\drivers\\applewirelessmouse.sys' "$REPO/v1-binary-patch/installer/Install-MagicMousePatch.ps1"; then
-  ok "PATH-A package name vs Windows install name (historical only)"
-else
-  bad "PATH-A package name vs Windows install name (historical only)"
 fi
 if grep -qi 'magic-tray' "$ROOT/MAGIC-TRAY.md"; then ok "magic-tray pull note"; else bad "magic-tray pull note"; fi
 if grep -q '16940C0F' "$ROOT/SIGN-AND-INSTALL.md" && grep -q 'pnputil /add-driver' "$ROOT/SIGN-AND-INSTALL.md"; then

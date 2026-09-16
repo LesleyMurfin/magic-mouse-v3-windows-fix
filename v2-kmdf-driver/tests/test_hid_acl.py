@@ -8,21 +8,37 @@ buffers:
 
   - 0x90 never rewritten (raw 0x90 and HID DATA A1 90; COL02 battery).
   - 6→8 refused without SdpPatchSuccess/capacity (pointer-safe no-grow).
-  - Wheel only on 8-byte 0x12 after success. Never RID 0x02.
+  - Output is always 8-byte RID 0x12, never RID 0x02. Wheel / AC Pan come
+    from the 14+8*N touch block (hostmodel AccumulateSurfaceScroll); native
+    report[6]/[7] are never copied, so compact 8-byte 0x12 yields zero.
   - Feature 0x47 is absent from the injected descriptor.
   - Unique SCM MagicMouseDriver204Scroll (not live MagicMouseDriver).
 """
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from hostmodel import (  # noqa: E402
+    MM2_HEADER_LEN,
+    MM_SCROLL_STEP,
+    TOUCH_STATE_DRAG,
+    TOUCH_STATE_START,
+    Ctx,
+    accumulate_surface_scroll,
+    clamp_i8,
+    make_mt,
+    pack_touch,
+)
 
 HID_MSG_DATA_INPUT = 0xA1
 MM_REPORT_ID_MOUSE = 0x12
 MM_REPORT_ID_BATTERY = 0x90
 MM_MOUSE_REPORT_LEN = 8
-MM2_COMPACT_LEN = 8
 MM_BTN_MASK = 0x03
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,7 +55,7 @@ def _i16le(lo: int, hi: int) -> int:
 
 
 def translate_acl_hid_report(
-    buf: bytearray, received_len: int, capacity: int
+    buf: bytearray, received_len: int, capacity: int, ctx: Ctx
 ) -> tuple[int, bool]:
     """Host model of TranslateAclHidReport. Mutates buf only on rewrite.
 
@@ -91,13 +107,19 @@ def translate_acl_hid_report(
     buttons = report[1] & MM_BTN_MASK
     x_lo, x_hi = report[2], report[3]
     y_lo, y_hi = report[4], report[5]
+    # TranslateMouse2ToHid fills Wheel / AC Pan from the 14+8*N touch block
+    # only, and skips AccumulateSurfaceScroll below MM2_HEADER_LEN. Native
+    # report[6]/[7] are never copied through, so a compact 8-byte 0x12
+    # translates to AC Pan 0 / Wheel 0.
     ac_pan = 0
     wheel = 0
-    if report_len >= MM2_COMPACT_LEN:
-        ac_pan = report[6] if report[6] < 128 else report[6] - 256
-        wheel = report[7] if report[7] < 128 else report[7] - 256
-        ac_pan = max(-127, min(127, ac_pan))
-        wheel = max(-127, min(127, wheel))
+    if report_len >= MM2_HEADER_LEN:
+        # ctx is the persistent DEVICE_CONTEXT: a notch needs the anchor a
+        # PREVIOUS report left behind, so a per-report context could never
+        # produce one.
+        wheel, ac_pan = accumulate_surface_scroll(bytes(report), ctx)
+        wheel = clamp_i8(wheel)
+        ac_pan = clamp_i8(ac_pan)
 
     translated = bytearray(MM_MOUSE_REPORT_LEN)
     translated[0] = MM_REPORT_ID_MOUSE  # never RID 0x02
@@ -119,7 +141,11 @@ def translate_acl_hid_report(
 
 
 def apply_acl(
-    buf: bytearray, received_len: int, capacity: int, sdp_ok: bool
+    buf: bytearray,
+    received_len: int,
+    capacity: int,
+    sdp_ok: bool,
+    ctx: Ctx | None = None,
 ) -> tuple[int, bool]:
     """Host model of OnAclTransferComplete then TranslateAclHidReport.
 
@@ -131,7 +157,9 @@ def apply_acl(
     # Driver.c: never call translate unless proven capacity >= 8.
     if capacity < 8:
         return received_len, False
-    return translate_acl_hid_report(buf, received_len, capacity)
+    return translate_acl_hid_report(
+        buf, received_len, capacity, ctx if ctx is not None else Ctx()
+    )
 
 
 def _inf_code(text: str) -> str:
@@ -240,7 +268,8 @@ def test_no_grow_without_sdp(run: _Run) -> None:
 def test_wheel_on_0x12(run: _Run) -> None:
     """WHEEL_ON_0x12: after 8-byte rewrite, RID 0x12, X/Y INT16 at 2-5, wheel byte 7."""
     # Native 6-byte 0x12: buttons=1, X=10, Y=-10.
-    native = bytearray([0x12, 0x01, 0x0A, 0x00, 0xF6, 0xFF, 0x00, 0x00])
+    # [6]/[7] hold stale bytes the translation must overwrite, not pass on.
+    native = bytearray([0x12, 0x01, 0x0A, 0x00, 0xF6, 0xFF, 0x7F, 0x81])
     n, rewritten = apply_acl(native, received_len=6, capacity=8, sdp_ok=True)
 
     grow_ok = (
@@ -250,10 +279,13 @@ def test_wheel_on_0x12(run: _Run) -> None:
         and native[0] != 0x02
         and _i16le(native[2], native[3]) == 10
         and _i16le(native[4], native[5]) == -10
-        and native[7] == 0  # no touch block → wheel extra is 0
+        and native[6] == 0  # 6-byte report: no touch block → AC Pan 0
+        and native[7] == 0  # stale 0x81 overwritten, not copied through
     )
 
-    # Compact 8-byte 0x12 with wheel already present: keep RID 0x12, wheel at [7].
+    # Compact 8-byte 0x12 is shorter than MM2_HEADER_LEN, so the touch loop
+    # never runs: keep RID 0x12 and X/Y, and zero [6]/[7] instead of copying
+    # the native bytes through.
     compact = bytearray([0x12, 0x00, 0x05, 0x00, 0x00, 0x00, 0x02, 0x03])
     n2, rw2 = apply_acl(compact, received_len=8, capacity=8, sdp_ok=True)
     compact_ok = (
@@ -263,8 +295,8 @@ def test_wheel_on_0x12(run: _Run) -> None:
         and compact[0] != 0x02
         and _i16le(compact[2], compact[3]) == 5
         and _i16le(compact[4], compact[5]) == 0
-        and compact[6] == 0x02  # AC Pan extra
-        and compact[7] == 0x03  # Wheel extra (0x0038)
+        and compact[6] == 0  # AC Pan: no touch block → 0
+        and compact[7] == 0  # Wheel (0x0038): no touch block → 0
     )
 
     run.check(
@@ -272,6 +304,62 @@ def test_wheel_on_0x12(run: _Run) -> None:
         grow_ok and compact_ok,
         f"grow rewritten={rewritten} rid={native[0]:#x} len={n}; "
         f"compact rewritten={rw2} rid={compact[0]:#x} wheel={compact[7]}",
+    )
+
+
+def test_wheel_notch_across_reports(run: _Run) -> None:
+    """WHEEL_NOTCH_ACROSS_REPORTS: a notch needs the anchor of a prior report.
+
+    One DEVICE_CONTEXT, two 14+16 reports through the ACL path: the first
+    lands two contacts (anchors only), the second drags both by the detent so
+    the reference finger emits one notch into byte 7. The same second report
+    replayed against a device that never saw the first must emit nothing —
+    which is why a per-report context makes any Wheel assertion unfalsifiable.
+    """
+    ctx = Ctx()
+    land = make_mt(
+        [
+            pack_touch(0, 0, 0, TOUCH_STATE_START),
+            pack_touch(40, 0, 1, TOUCH_STATE_START),
+        ]
+    )
+    drag = make_mt(
+        [
+            pack_touch(0, -MM_SCROLL_STEP, 0, TOUCH_STATE_DRAG),
+            pack_touch(40, -MM_SCROLL_STEP, 1, TOUCH_STATE_DRAG),
+        ]
+    )
+
+    n_land, rw_land = apply_acl(
+        bytearray(land), received_len=len(land), capacity=len(land), sdp_ok=True, ctx=ctx
+    )
+
+    notch = bytearray(drag)
+    n_drag, rw_drag = apply_acl(
+        notch, received_len=len(drag), capacity=len(drag), sdp_ok=True, ctx=ctx
+    )
+
+    cold = bytearray(drag)
+    apply_acl(
+        cold, received_len=len(drag), capacity=len(drag), sdp_ok=True, ctx=Ctx()
+    )
+
+    ok = (
+        rw_land
+        and n_land == MM_MOUSE_REPORT_LEN
+        and rw_drag
+        and n_drag == MM_MOUSE_REPORT_LEN
+        and notch[0] == MM_REPORT_ID_MOUSE
+        and notch[7] == 1  # Wheel: one notch per detent of travel
+        and notch[6] == 0  # AC Pan: no horizontal travel
+        and cold[7] == 0  # no persisted anchor → no notch
+        and cold[6] == 0
+    )
+    run.check(
+        "WHEEL_NOTCH_ACROSS_REPORTS",
+        ok,
+        f"shared ctx wheel={notch[7]} acpan={notch[6]} len={n_drag}; "
+        f"fresh ctx wheel={cold[7]} acpan={cold[6]}",
     )
 
 
@@ -386,6 +474,7 @@ def main() -> int:
     test_no_grow_without_capacity(run)
     test_no_grow_without_sdp(run)
     test_wheel_on_0x12(run)
+    test_wheel_notch_across_reports(run)
     test_no_feature_47(run)
     test_unique_scm(run)
     test_c_source_acl_contract(run)

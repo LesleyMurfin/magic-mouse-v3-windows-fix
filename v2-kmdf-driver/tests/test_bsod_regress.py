@@ -36,6 +36,212 @@ def _code(text: str) -> str:
     return re.sub(r"//.*?$", "", text, flags=re.M)
 
 
+# Anything that can land bytes at a DESTINATION, including the forms that
+# hide the destination: `cmd /c copy`, `cmd /c mklink`, hard/symbolic links,
+# and a raw byte write. pnputil /add-driver is the only permitted install
+# path (contract 6).
+_COPY_VERB = re.compile(
+    r"Copy-Item|Move-Item|Set-Content"
+    r"|New-Item[^\r\n]*?-ItemType\s+(?:Hard|Symbolic)Link"
+    r"|\[(?:System\.)?IO\.File\]::(?:Copy|Move|WriteAll\w+)"
+    r"|\bcmd(?:\.exe)?\s*/c\b|\bmklink\b"
+    r"|\bcopy\b|\bxcopy\b|\brobocopy\b",
+    re.I,
+)
+
+# Destinations no script may write: the live driver directory or the
+# DriverStore.
+_BANNED_DEST = re.compile(r"System32[\\/]+drivers|DriverStore", re.I)
+
+_ASSIGN = re.compile(
+    r"^\s*\$(?:script:|global:|local:|private:)?(\w+)\s*=\s*(.+?)\s*;?\s*$"
+)
+_VAR = re.compile(r"\$(?:\{(\w+)\}|(\w+))")
+_CMD_COMMENT = re.compile(r"^\s*(?:@?rem\b|::)", re.I)
+
+
+def _glue(text: str) -> str:
+    """Splice path fragments the way Join-Path splices them.
+
+    `Join-Path $root 'System32' | Join-Path -ChildPath 'drivers'` becomes
+    `$root\\System32\\drivers`, so a destination assembled from pieces still
+    shows the banned path on one line.
+    """
+    # `\b` does not exist between a space and a dash, so parameter names get
+    # their own alternative.
+    text = re.sub(
+        r"(?i)\bJoin-Path\b"
+        r"|-(?:ChildPath|LiteralPath|Path|Destination|Target|Value|Resolve)\b",
+        " ",
+        text,
+    )
+    return re.sub(r"[\s,;'\"()|&+]+", lambda _: "\\", text).strip("\\")
+
+
+def _subst(text: str, variables: dict[str, str]) -> str:
+    """Resolve simple literal variable assignments seen earlier in the file."""
+
+    def repl(hit: re.Match[str]) -> str:
+        name = (hit.group(1) or hit.group(2)).lower()
+        return variables.get(name, hit.group(0))
+
+    for _ in range(3):
+        expanded = _VAR.sub(repl, text)
+        if expanded == text:
+            break
+        text = expanded
+    return text
+
+
+def _script_lines(text: str, cmd_syntax: bool) -> list[tuple[str, str]] | None:
+    """Logical lines as (code, code-with-string-contents-blanked), or None.
+
+    Comments can neither green nor red the gate: PowerShell `#` and nested
+    `<# #>`, and cmd `REM` / `::`, are removed. String CONTENTS are blanked
+    in the second element, so a guard message ("Refusing: this would copy
+    onto ...System32\\drivers") carries no verb, while the first element
+    keeps the literal so a real destination is still visible. Backtick (and
+    cmd caret) line continuations are joined, so a command split from its
+    destination is still one line. None = unparseable; the caller must fail.
+    """
+    if cmd_syntax:
+        text = "\n".join(
+            "" if _CMD_COMMENT.match(line) else line for line in text.splitlines()
+        )
+
+    code: list[str] = []
+    blank: list[str] = []
+    i = 0
+    n = len(text)
+    depth = 0
+    while i < n:
+        ch = text[i]
+        if depth:
+            if text.startswith("<#", i):
+                depth += 1
+                i += 2
+                continue
+            if text.startswith("#>", i):
+                depth -= 1
+                i += 2
+                continue
+            code.append("\n" if ch == "\n" else " ")
+            blank.append("\n" if ch == "\n" else " ")
+            i += 1
+            continue
+        if text.startswith("<#", i):
+            depth += 1
+            i += 2
+            continue
+        if ch == "#" and (i == 0 or text[i - 1] != "`"):
+            # Line comment: a stray `#>` in prose lands here, not in a block.
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        if ch == "@" and i + 1 < n and text[i + 1] in "'\"":
+            quote = text[i + 1]
+            end = text.find(quote + "@", i + 2)
+            if end < 0:
+                return None
+            body = text[i : end + 2]
+            code.extend(body)
+            blank.extend("\n" if c == "\n" else " " for c in body)
+            i = end + 2
+            continue
+        if ch in "'\"":
+            j = i + 1
+            while j < n:
+                if ch == '"' and text[j] == "`":
+                    j += 2
+                    continue
+                if text[j] == ch:
+                    if j + 1 < n and text[j + 1] == ch:
+                        j += 2
+                        continue
+                    break
+                j += 1
+            if j >= n:
+                return None
+            body = text[i : j + 1]
+            code.extend(body)
+            blank.append(ch)
+            blank.extend("\n" if c == "\n" else " " for c in body[1:-1])
+            blank.append(ch)
+            i = j + 1
+            continue
+        code.append(ch)
+        blank.append(ch)
+        i += 1
+    if depth:
+        return None
+
+    joined = "".join(code)
+    cont = re.compile(r"[`^][ \t]*\r?\n[ \t]*" if cmd_syntax else r"`[ \t]*\r?\n[ \t]*")
+    spans = [m.span() for m in cont.finditer(joined)]
+
+    def splice(raw: str) -> str:
+        out: list[str] = []
+        prev = 0
+        for start, end in spans:
+            out.append(raw[prev:start])
+            out.append(" ")
+            prev = end
+        out.append(raw[prev:])
+        return "".join(out)
+
+    return list(zip(splice(joined).splitlines(), splice("".join(blank)).splitlines()))
+
+
+def _copy_into_banned_dest(text: str, cmd_syntax: bool) -> tuple[str | None, str]:
+    """(offending line, detail). Line is None when the script is clean."""
+    lines = _script_lines(text, cmd_syntax)
+    if lines is None:
+        return "", "unparseable (unbalanced <# #>, here-string or quote)"
+    variables: dict[str, str] = {}
+    for code_line, blank_line in lines:
+        assign = _ASSIGN.match(code_line)
+        if assign is not None:
+            variables[assign.group(1).lower()] = _glue(
+                _subst(assign.group(2), variables)
+            )
+        # The verb must be a command, not a word inside a warning string.
+        if _COPY_VERB.search(blank_line) is None:
+            continue
+        probe = _subst(code_line, variables)
+        if _BANNED_DEST.search(probe) or _BANNED_DEST.search(_glue(probe)):
+            return code_line.strip(), "destination is System32\\drivers/DriverStore"
+    return None, "clean"
+
+
+def script_sources() -> dict[str, str]:
+    """Every .ps1/.cmd under v2-kmdf-driver, discovered — never a fixed list."""
+    found: dict[str, str] = {}
+    for pattern in ("*.ps1", "*.cmd"):
+        for path in sorted(ROOT.rglob(pattern)):
+            found[path.relative_to(ROOT).as_posix()] = path.read_text(
+                encoding="utf-8", errors="replace"
+            )
+    return found
+
+
+def no_system32_copy(sources: dict[str, str]) -> tuple[bool, str]:
+    """True only if every script is parseable and copies nowhere banned."""
+    if not sources:
+        return False, "no .ps1/.cmd found under v2-kmdf-driver (cannot prove anything)"
+    for name in sorted(sources):
+        text = sources[name]
+        if not text.strip():
+            return False, f"{name} missing or empty (cannot prove no copy-over)"
+        line, detail = _copy_into_banned_dest(text, name.lower().endswith(".cmd"))
+        if line is not None:
+            return False, f"{name}: {detail}: {line}"
+    return (
+        True,
+        f"{len(sources)} scripts: no copy, link or write into "
+        "System32\\drivers or the DriverStore",
+    )
+
+
 class _Run:
     def __init__(self) -> None:
         self.failed: list[str] = []
@@ -136,11 +342,8 @@ def main() -> int:
         "unsigned" in inst.lower() and "16940C0F" in inst,
         "Install-KMDF.ps1 must throw on unsigned .sys",
     )
-    run.check(
-        "BSOD_41_NO_SYSTEM32_COPY",
-        "Copy-Item" not in inst or "System32" in inst and "Does not Copy-Item" in inst,
-        "no Copy-Item onto System32/DriverStore",
-    )
+    no_copy, copy_detail = no_system32_copy(script_sources())
+    run.check("BSOD_41_NO_SYSTEM32_COPY", no_copy, copy_detail)
 
     # --- 0xD1 PATH-A ---
     dest_ok = "MagicMouseDriver-kmdf-204-scroll.sys" in inf
@@ -151,7 +354,7 @@ def main() -> int:
     )
     patha_ban = (
         "applewirelessmouse" in common.lower()
-        and "Test-KmdfForbiddenSys" in inst
+        and "Test-KmdfForbiddenSysFile" in inst
     )
     run.check(
         "BSOD_D1_NO_PATHA",

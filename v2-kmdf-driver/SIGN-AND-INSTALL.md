@@ -1,4 +1,4 @@
-# Sign and install — unique 2.0.4 scroll package
+# Sign and install — unique 2.0.4.3 scroll package
 
 **Do not merge. Draft PR only.** Linux cannot produce a `.sys`.
 
@@ -20,10 +20,10 @@ Install story is **signed `pnputil /add-driver` only**.
 |-------|----------------|-----------------------------|---------------------------|
 | INF | `MagicMouseDriver-kmdf-204-scroll.inf` | `MagicMouseDriver.inf` | `MagicMouseDriver.inf` |
 | CatalogFile | `MagicMouseDriver-kmdf-204-scroll.cat` | `MagicMouseDriver.cat` | existing oem16 cat |
-| DriverVer | `09/01/2026,2.0.4.1` | `08/30/2026,2.0.4.0` | pointer-only |
+| DriverVer | `09/15/2026,2.0.4.3` | `08/30/2026,2.0.4.0` | pointer-only |
 | Dest `.sys` | `MagicMouseDriver-kmdf-204-scroll.sys` | `MagicMouseDriver.sys` (hardlink) | `MagicMouseDriver.sys` |
 | DriverStore | new `…204-scroll.inf_amd64_<hash>` | `magicmousedriver.inf_amd64_79beb68f1da25da4` | oem16 `f7bf31c7` |
-| SHA256 | freeze after WDK | `845435CE…` refuse | `AD5D244B…` restore baseline |
+| SHA256 | signed `FE7CF014…` / unsigned freeze `08E91E37…` (25600 bytes) | `845435CE…` refuse | `AD5D244B…` restore baseline |
 
 Windows then creates a **new** DriverStore folder beside oem16. System32 keeps Apr 30 `MagicMouseDriver.sys` for Safe Mode restore.
 
@@ -79,10 +79,10 @@ End users run **`Setup-Community.cmd`** (Admin) from this folder, with the uniqu
 1. Creates `CN=MagicMouseDriver Community` code-signing cert on **this PC** (non-exportable key; not in git).
 2. Trusts it in LocalMachine Root + TrustedPublisher.
 3. `bcdedit /set testsigning on` if needed, then **reboot and run again**.
-4. Signs unique `.sys` + `.cat` (Inf2Cat if WDK is present, else `New-FileCatalog`).
+4. Signs the unique `.sys` and builds the `.cat` with **`Inf2Cat.exe` from the WDK — required, no fallback**. `New-FileCatalog` does not produce a driver catalog `pnputil` accepts, so setup does not attempt one: if `Inf2Cat.exe` is not found, setup stops with an actionable message telling you to install the Windows Driver Kit.
 5. `pnputil /add-driver MagicMouseDriver-kmdf-204-scroll.inf /install` only. Sleep 3s. `HidD_SetFeature(F1)`.
 
-Requires: **Secure Boot OFF**, **Memory integrity OFF**, testsigning ON. Not WHQL. Not Secure Boot compatible.
+Requires: **Secure Boot OFF**, **Memory integrity OFF**, testsigning ON, and **`Inf2Cat.exe` from the WDK** on the machine running setup. Not WHQL. Not Secure Boot compatible.
 
 Still banned: System32 copy-over, oem16 delete, PATH-A, live `MagicMouseDriver.sys` in the folder, PFX in git.
 

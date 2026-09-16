@@ -33,7 +33,12 @@ $ProgressPreference    = 'SilentlyContinue'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $Here 'scripts\Kmdf-Common.ps1')
 
-function Get-KmdfUniqueOemNames {
+# 3010 = success-with-reboot-required. Banked here and carried to the process exit code
+# at the bottom so Install-KMDF.cmd and automation can tell "staged, needs a reboot"
+# from plain success. Same idiom as Setup-Community.ps1.
+$script:KmdfRebootRequired = $false
+
+function Get-KmdfUniqueOemName {
     $pnpRaw = & pnputil.exe /enum-drivers 2>$null | Out-String
     $blocks = $pnpRaw -split '(?=Published Name:)'
     $found = @()
@@ -50,7 +55,7 @@ function Get-KmdfUniqueOemNames {
 
 function Uninstall-KmdfUniquePackage {
     Write-KmdfLog -Message "Removing unique 2.0.4 scroll package only. Apr 30 oem16 / MagicMouseDriver.inf is left alone." -Level 'HEAD'
-    $oems = @(Get-KmdfUniqueOemNames)
+    $oems = @(Get-KmdfUniqueOemName)
     if ($oems.Count -eq 0) {
         Write-KmdfLog -Message "No published MagicMouseDriver-kmdf-204-scroll.inf package found." -Level 'WARN'
         return
@@ -60,7 +65,11 @@ function Uninstall-KmdfUniquePackage {
             throw "Refusing /delete-driver oem16 (Apr 30 restore)."
         }
         Write-KmdfLog -Message "pnputil /delete-driver $oem (unique package only)" -Level 'INFO'
-        & pnputil.exe /delete-driver $oem /uninstall 2>&1 | ForEach-Object { Write-KmdfLog -Message "$_" -Level 'INFO' }
+        # 2>$null, not 2>&1: merging a native command's stderr into the pipeline while
+        # $ErrorActionPreference is 'Stop' raises a terminating NativeCommandError in
+        # Windows PowerShell 5.1, which would abort this loop and report FAIL for a
+        # removal that actually worked.
+        & pnputil.exe /delete-driver $oem /uninstall 2>$null | ForEach-Object { Write-KmdfLog -Message "$_" -Level 'INFO' }
     }
 }
 
@@ -78,8 +87,8 @@ function Install-KmdfUniquePackage {
         throw "Package folder has $($script:KmdfLiveSysName). Remove it. That name collides with Apr 30 restore."
     }
     if (-not (Test-Path -LiteralPath $inf)) { throw "Missing $inf" }
-    if (-not (Test-Path -LiteralPath $sys)) { throw "Missing $sys — WDK build, then Freeze-KmdfArtifact.ps1." }
-    if (-not (Test-Path -LiteralPath $cat)) { throw "Missing $cat — human must inf2cat + sign with thumb 16940C0F. No unsigned activate." }
+    if (-not (Test-Path -LiteralPath $sys)) { throw "Missing $sys - WDK build, then Freeze-KmdfArtifact.ps1." }
+    if (-not (Test-Path -LiteralPath $cat)) { throw "Missing $cat - human must inf2cat + sign with thumb 16940C0F. No unsigned activate." }
 
     $infText = Get-Content -LiteralPath $inf -Raw
     if ($infText -notmatch 'CatalogFile\s*=\s*MagicMouseDriver-kmdf-204-scroll\.cat') {
@@ -88,8 +97,8 @@ function Install-KmdfUniquePackage {
     if ($infText -match '08/30/2026,2\.0\.4\.0' -or $infText -match '08/31/2026,2\.0\.4\.0') {
         throw "INF DriverVer collides with the failed 2.0.4 oem26 / PR #3 identity."
     }
-    if ($infText -notmatch '09/01/2026,2\.0\.4\.1') {
-        throw "INF DriverVer must be 09/01/2026,2.0.4.1 (unique vs oem26)."
+    if ($infText -notmatch '09/15/2026,2\.0\.4\.3') {
+        throw "INF DriverVer must be 09/15/2026,2.0.4.3 (unique vs oem26)."
     }
     if ($infText -match 'ServiceBinary\s*=\s*%12%\\MagicMouseDriver\.sys') {
         throw "INF ServiceBinary must not be MagicMouseDriver.sys (Apr 30 restore file)."
@@ -110,7 +119,7 @@ function Install-KmdfUniquePackage {
         throw "INF LowerFilters must not be MagicMouseDriver (live oem16 filter)."
     }
 
-    if (Test-KmdfForbiddenSys -Path $sys) {
+    if (Test-KmdfForbiddenSysFile -Path $sys) {
         throw "Refusing banned .sys."
     }
 
@@ -124,7 +133,7 @@ function Install-KmdfUniquePackage {
         Write-KmdfLog -Message "Freeze-hash gate matched $sha" -Level 'OK'
     }
     else {
-        Write-KmdfLog -Message "SHA256SUMS.txt missing — hash this build as MagicMouseDriver-kmdf-2.0.4-scroll-$($sha.Substring(0,8)).sys before treating it as frozen." -Level 'WARN'
+        Write-KmdfLog -Message "SHA256SUMS.txt missing - hash this build as MagicMouseDriver-kmdf-2.0.4-scroll-$($sha.Substring(0,8)).sys before treating it as frozen." -Level 'WARN'
     }
 
     if (-not (Test-KmdfSignedByThumb -Path $sys -Thumb $script:KmdfSignThumb)) {
@@ -135,13 +144,17 @@ function Install-KmdfUniquePackage {
     }
 
     Write-KmdfLog -Message "pnputil /add-driver $inf /install (no System32 copy-over, no oem16 delete)" -Level 'HEAD'
-    & pnputil.exe /add-driver $inf /install 2>&1 | ForEach-Object { Write-KmdfLog -Message "$_" -Level 'INFO' }
+    # 2>$null, not 2>&1: see Uninstall-KmdfUniquePackage. Under 'Stop', a merged stderr
+    # line becomes a terminating NativeCommandError, so a successful 0/3010 install could
+    # be reported FAIL by the outer catch without $rc ever being read.
+    & pnputil.exe /add-driver $inf /install 2>$null | ForEach-Object { Write-KmdfLog -Message "$_" -Level 'INFO' }
     $rc = $LASTEXITCODE
     if ($rc -eq 0) {
         Write-KmdfResult -Status 'PASS' -Detail "pnputil added unique package. SHA256=$sha dest=$($script:KmdfUniqueSys). Apr 30 MagicMouseDriver.sys / oem16 left in place."
         return
     }
     if ($rc -eq 3010) {
+        $script:KmdfRebootRequired = $true
         Write-KmdfResult -Status 'PENDING' -Detail "pnputil 3010 reboot required. Unique package staged. Apr 30 oem16 not deleted."
         return
     }
@@ -164,10 +177,14 @@ if (-not (Test-KmdfIsAdmin)) {
 try {
     if ($Uninstall) {
         Uninstall-KmdfUniquePackage
-        Write-KmdfResult -Status 'FAIL' -Detail 'Unique 2.0.4 scroll package removed. Apr 30 oem16 / MagicMouseDriver.sys was not deleted.'
+        Write-KmdfResult -Status 'PASS' -Detail 'Unique 2.0.4 scroll package removed. Apr 30 oem16 / MagicMouseDriver.sys was not deleted.'
         exit 0
     }
     Install-KmdfUniquePackage
+    if ($script:KmdfRebootRequired) {
+        Write-Host 'Unique package staged. Reboot to finish (3010).' -ForegroundColor Yellow
+        exit 3010
+    }
     exit 0
 } catch {
     Write-KmdfLog -Message "$_" -Level 'ERROR'
