@@ -1,29 +1,8 @@
 # Magic Mouse v3 Windows Scroll Fix
 
-**0323 product: unique KMDF 2.0.4 scroll package in `v2-kmdf-driver/`.**  
-Install is **signed `pnputil /add-driver MagicMouseDriver-kmdf-204-scroll.inf` only**.  
-See [`v2-kmdf-driver/SIGN-AND-INSTALL.md`](v2-kmdf-driver/SIGN-AND-INSTALL.md).
+**STATUS: Production Ready v1.0.0**
 
-**Do not merge.** Leave Apr 30 `MagicMouseDriver.sys` SHA256 `AD5D244B…` (oem16 `f7bf31c7`) installed. Linux cannot produce a `.sys`. Do not `Copy-Item` onto System32 or DriverStore. Do not run unsigned activate (`pr3-activate-204`). PATH-A is a SHIPBLOCKER BSOD.
-
-`magic-tray` should install **this unique package** for PID 0323 (do not vendor the tree; do not delete oem16).
-
-## Artifact names (do not mix these up)
-
-| Filename | FileVersion | What it is |
-|----------|-------------|------------|
-| **`MagicMouseDriver.sys`** | not 2.0.4.1 | **Apr 30 live / restore name.** SHA `AD5D244B…`. Do not ship a second copy. |
-| **`MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys`** | not 2.0.4.1 | Package label for that pointer-only binary. |
-| **`MagicMouseDriver-kmdf-may20-pointerdead-559B136A.sys`** | 2.0.2.0 | **Pointer-dead.** Refuse. |
-| **`MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys`** | **2.0.4.1** | **Canonical scroll artifact** after the freeze-hash gate. |
-| **`MagicMouseDriver-kmdf-204-scroll.sys`** | **2.0.4.1** | Unique INF dest (same bytes). Will not hardlink over oem16. |
-| **`applewirelessmouse-patched-pathA-SHIPBLOCKER.sys`** | PATH-A v1 | **SHIPBLOCKER** (BSOD 0xD1). Never the 0323 product. |
-
-Linux cannot produce a `.sys`. Do not merge until hardware proves scroll. The failed 2.0.4 SHA `845435CE…` / oem26 `79beb68f1da25da4` is refused.
-
----
-
-A Windows KMDF lower filter that presents a standard mouse to hidclass and translates Magic Mouse 2 USB-C (PID 0x0323) RID 0x12 reports so the pointer moves. Also addresses the v3 scroll-stop / DSM collection collapse the v1 patch was aimed at.
+A Windows kernel driver patch that restores scroll functionality on Apple Magic Mouse v3 (2024) after Bluetooth reconnection.
 
 ## What This Fixes
 
@@ -58,26 +37,16 @@ Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after Bluetooth id
 - Administrator account for installation
 - Reboot access
 
-## Quick Install (signed pnputil only)
+## Quick Install (3 Steps)
 
-1. Build on Windows + WDK. Run `v2-kmdf-driver\scripts\Freeze-KmdfArtifact.ps1`.
-2. Human-sign `.sys` + `.cat` with cert thumb **16940C0F** (private key on the PC, not in git).
-3. `pnputil /add-driver v2-kmdf-driver\MagicMouseDriver-kmdf-204-scroll.inf /install`
-
-Details: [`v2-kmdf-driver/SIGN-AND-INSTALL.md`](v2-kmdf-driver/SIGN-AND-INSTALL.md), [`v2-kmdf-driver/HID-CONTRACT.md`](v2-kmdf-driver/HID-CONTRACT.md), [`v2-kmdf-driver/FREEZE-HASH.md`](v2-kmdf-driver/FREEZE-HASH.md).
-
-## Legacy v1 binary patch (do not ship)
-
-The steps below install the old PATH-A package `applewirelessmouse-patched-pathA-SHIPBLOCKER.sys` (Windows dest: `applewirelessmouse.sys`). **Do not use this for 0323.** It is kept only as history.
-
-### Step 1: Download & Verify (v1 only — ship-blocker)
+### Step 1: Download & Verify
 
 ```powershell
 # Download v1.0.0 release
 # Extract to C:\Program Files\MagicMousePatch\
 
 # Verify binary integrity (mandatory)
-$sys = "C:\Program Files\MagicMousePatch\v1-binary-patch\applewirelessmouse-patched-pathA-SHIPBLOCKER.sys"
+$sys = "C:\Program Files\MagicMousePatch\v1-binary-patch\applewirelessmouse.sys"
 (Get-FileHash $sys -Algorithm SHA256).Hash
 # Expected: 370A5555AEBF673C3156EA5B5FBABD8030F2EE7A3A6BD0FCB1B4B6C93FA56A03
 ```
@@ -215,12 +184,19 @@ HKLM\SYSTEM\CurrentControlSet\Enum\BTHENUM\
 ## Roadmap
 
 **v1.0.0 (current):** Binary patch of Apple firmware via WDM lower filter.
-- PATH-A `applewirelessmouse-patched-pathA-SHIPBLOCKER.sys` (66 KB; installs as `applewirelessmouse.sys`)
+- Patched applewirelessmouse.sys (66 KB)
 - PowerShell installer + uninstaller
 - Registry-based LowerFilters registration
 - Requires certificate trust
 
-**v2.0.4.1 (this tree):** unique KMDF scroll package `MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys` (FileVersion / DriverVer **2.0.4.1**). INF dest is `MagicMouseDriver-kmdf-204-scroll.sys` so Apr 30 `MagicMouseDriver.sys` is not hardlinked. See `/v2-kmdf-driver/README.md`.
+**v2.0.0 (in progress):** KMDF filter driver rewrite.
+- From-scratch WDF source code
+- No Apple binary dependency
+- Cleaner driver signing process
+- Better Windows Defender SmartScreen integration
+- Windows 11 22H2+ target
+
+See `/v2-kmdf-driver/README.md` for v2 status.
 
 ## Contributing
 

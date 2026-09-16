@@ -5,10 +5,8 @@
 Installs the Magic Mouse v3 scroll fix (PATH-A binary patch) on Windows.
 
 .DESCRIPTION
-Installs a lower-filter kernel driver. Package file is
-applewirelessmouse-patched-pathA-SHIPBLOCKER.sys. Windows still loads
-applewirelessmouse.sys. This is a SHIP-BLOCKER (BSOD 0xD1), not the 0323
-KMDF product, and must never be named MagicMouseDriver.sys.
+Installs a lower-filter kernel driver (applewirelessmouse.sys) that restores scroll
+functionality on Apple Magic Mouse v3 (PID 0x0323) when paired over Bluetooth.
 
 Logic is extracted from the production-tested install route
 (PATHA-V5-DIRECTCOPY-INSTALL) and adapted for a pre-signed public binary.
@@ -18,7 +16,7 @@ Workflow:
   2. HiberbootEnabled (Fast Startup) must be 0
   3. Test Signing mode must be ON (self-signed kernel driver)
   4. HVCI / Memory Integrity warning (Win11 22H2+ blocks self-signed drivers)
-  5. SHA256 + size verify of applewirelessmouse-patched-pathA-SHIPBLOCKER.sys
+  5. SHA256 + size verify of shipped applewirelessmouse.sys
   6. Import MagicMouseFix.cer to LocalMachine\TrustedPublisher (NOT Root)
   7. Backup existing driver to C:\ProgramData\MagicMousePatch\backup\
   8. Detect v3 device via BTHENUM PID&0323
@@ -50,17 +48,9 @@ if ($PSVersionTable.PSVersion.Major -lt 5) {
 }
 
 $ScriptRoot   = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$PackageName  = "applewirelessmouse-patched-pathA-SHIPBLOCKER.sys"
-$DriverSrc    = @(
-    (Join-Path (Split-Path -Parent $ScriptRoot) $PackageName),
-    (Join-Path $ScriptRoot $PackageName)
-) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-if (-not $DriverSrc) {
-    $DriverSrc = Join-Path (Split-Path -Parent $ScriptRoot) $PackageName
-}
+$DriverSrc    = Join-Path $ScriptRoot "applewirelessmouse.sys"
 $CertPath     = Join-Path $ScriptRoot "MagicMouseFix.cer"
 $BackupDir    = "C:\ProgramData\MagicMousePatch\backup"
-# Windows service / ImagePath name — do not change.
 $TargetDriver = "C:\Windows\System32\drivers\applewirelessmouse.sys"
 $ServiceName  = "applewirelessmouse"
 
@@ -171,7 +161,7 @@ function Test-HvciState {
 function Test-DriverBinary {
     Write-Section "Verifying shipped driver binary..."
     if (-not (Test-Path $DriverSrc)) {
-        Write-Status "PATH-A package not found: $DriverSrc (expected $PackageName; Windows still installs as applewirelessmouse.sys). Never use MagicMouseDriver.sys." "ERROR"
+        Write-Status "Driver binary not found: $DriverSrc" "ERROR"
         return $false
     }
     $size = (Get-Item $DriverSrc).Length
@@ -246,7 +236,7 @@ function Backup-ExistingDriver {
         New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null
     }
     $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
-    $dst   = Join-Path $BackupDir "applewirelessmouse-pre-pathA_$stamp.sys"
+    $dst   = Join-Path $BackupDir "applewirelessmouse_$stamp.sys"
     Copy-Item -Path $TargetDriver -Destination $dst -Force
     Write-Status "Backed up to $dst" "OK"
     return $true
