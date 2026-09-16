@@ -5,16 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Install Magic Mouse 2024 (v3) Windows Driver</title>
   <meta name="description" content="Install the shipped Apple-driver route for the Magic Mouse scroll fix: double-click Install.cmd with no Test Mode. The KMDF route is development documentation only and is not shipped on this branch.">
-  <link rel="canonical" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html">
+  <link rel="canonical" href="https://drivers.magictray.app/install.html">
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
-  <link rel="describedby" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/llms.txt">
+  <link rel="describedby" href="https://drivers.magictray.app/llms.txt">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Magic Mouse v3 Windows Driver">
   <meta property="og:locale" content="en_US">
   <meta property="og:title" content="How to install the Magic Mouse 2024 (v3) Windows driver">
   <meta property="og:description" content="Install the shipped Apple-driver route by double-clicking Install.cmd; no Test Mode is required. The KMDF route is development documentation only and is not shipped on this branch.">
-  <meta property="og:url" content="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html">
-  <meta property="og:image" content="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/og.png">
+  <meta property="og:url" content="https://drivers.magictray.app/install.html">
+  <meta property="og:image" content="https://drivers.magictray.app/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Magic Mouse 2024 (v3) Windows driver &mdash; scroll fix for PID 0323">
@@ -25,25 +25,25 @@
   "@graph": [
     {
       "@type": "WebPage",
-      "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#webpage",
-      "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html",
+      "@id": "https://drivers.magictray.app/install.html#webpage",
+      "url": "https://drivers.magictray.app/install.html",
       "name": "How to install the Magic Mouse 2024 (v3) Windows driver",
       "description": "Install the shipped Apple-driver route for the Magic Mouse scroll fix: double-click Install.cmd with no Windows Test Mode. The KMDF route is development documentation only and is not shipped on this branch.",
       "isPartOf": {
-        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#website"
+        "@id": "https://drivers.magictray.app/#website"
       },
       "about": {
-        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#software"
+        "@id": "https://drivers.magictray.app/#software"
       },
       "primaryImageOfPage": {
         "@type": "ImageObject",
-        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#primaryimage",
-        "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/og.png",
+        "@id": "https://drivers.magictray.app/install.html#primaryimage",
+        "url": "https://drivers.magictray.app/og.png",
         "width": 1200,
         "height": 630
       },
       "breadcrumb": {
-        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#breadcrumb"
+        "@id": "https://drivers.magictray.app/install.html#breadcrumb"
       },
       "datePublished": "2026-05-01",
       "dateModified": "2026-09-15",
@@ -51,33 +51,33 @@
     },
     {
       "@type": "BreadcrumbList",
-      "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#breadcrumb",
+      "@id": "https://drivers.magictray.app/install.html#breadcrumb",
       "itemListElement": [
         {
           "@type": "ListItem",
           "position": 1,
           "name": "Windows driver",
-          "item": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/"
+          "item": "https://drivers.magictray.app/"
         },
         {
           "@type": "ListItem",
           "position": 2,
           "name": "Install",
-          "item": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html"
+          "item": "https://drivers.magictray.app/install.html"
         }
       ]
     },
     {
       "@type": "HowTo",
-      "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#howto-apple",
+      "@id": "https://drivers.magictray.app/install.html#howto-apple",
       "name": "How to install the Apple-driver route for Magic Mouse scroll on Windows",
       "description": "Register Apple's own unmodified applewirelessmouse.sys as a lower filter so two-finger scroll works on Magic Mouse v1 (0x030D), v2 (0x0269), v2-alt (0x0310) and the 2024 model (0x0323). No Windows Test Mode is required. Fast Startup must be off first: run powercfg /h off and reboot.",
       "inLanguage": "en",
       "isPartOf": {
-        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#webpage"
+        "@id": "https://drivers.magictray.app/install.html#webpage"
       },
       "about": {
-        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#software"
+        "@id": "https://drivers.magictray.app/#software"
       },
       "step": [
         {
@@ -85,35 +85,35 @@
           "position": 1,
           "name": "Check which Magic Mouse you have",
           "text": "Open Device Manager, expand Human Interface Devices, open Apple Magic Mouse, then Properties, Details, Hardware Ids. This route supports PID_030D, PID_0269, PID_0310 and PID_0323.",
-          "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#a-step-1"
+          "url": "https://drivers.magictray.app/install.html#a-step-1"
         },
         {
           "@type": "HowToStep",
           "position": 2,
           "name": "Download the repository and verify the bundled Apple driver",
           "text": "Download the magic-mouse-v3-windows-fix repository from GitHub. The bundled applewirelessmouse.sys is Apple's binary, unmodified: SHA256 08F33D7E3ECE2C73950A9706F1C4C9057894EAEAF1C4FB355F261F3C2333378F, 78,424 bytes, file version 6.1.7700.0, Authenticode signature Valid, signer CN=Microsoft Windows Hardware Compatibility Publisher.",
-          "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#a-step-2"
+          "url": "https://drivers.magictray.app/install.html#a-step-2"
         },
         {
           "@type": "HowToStep",
           "position": 3,
           "name": "Double-click Install.cmd",
           "text": "Double-click v1-binary-patch/Install.cmd. It asks for Administrator itself, uses the bundled Apple driver, and needs no PowerShell window and no execution-policy change. It copies the driver to System32\\drivers, creates the applewirelessmouse kernel service, adds applewirelessmouse to the device's LowerFilters, and restarts the Bluetooth HID device.",
-          "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#a-step-3"
+          "url": "https://drivers.magictray.app/install.html#a-step-3"
         },
         {
           "@type": "HowToStep",
           "position": 4,
           "name": "Reboot and test two-finger scroll",
           "text": "Reboot to finish the install, then swipe two fingers on the glass surface. Scroll uses Apple's own Mac-style translation, and the sensitivity is fixed rather than tunable. Run Install.cmd again if you unpair and re-pair the mouse, because the filter is registered against the device InstanceId.",
-          "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#a-step-4"
+          "url": "https://drivers.magictray.app/install.html#a-step-4"
         },
         {
           "@type": "HowToStep",
           "position": 5,
           "name": "Uninstall or roll back",
           "text": "Run installer\\Uninstall-MagicMousePatch.ps1 as administrator. It stops the applewirelessmouse service, restores the backed-up driver, removes applewirelessmouse from LowerFilters, deletes the service registry key, re-enables the device, and prompts for a reboot.",
-          "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#a-step-5"
+          "url": "https://drivers.magictray.app/install.html#a-step-5"
         }
       ]
     }
