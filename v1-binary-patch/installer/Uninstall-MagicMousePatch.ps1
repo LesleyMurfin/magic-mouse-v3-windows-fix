@@ -12,12 +12,14 @@ state.
 Workflow:
   1. Confirmation prompt
   2. Stop the applewirelessmouse service
-  3. Find the paired Magic Mouse (report every match, act on the selected one)
-     and disable it, so the loaded driver is not holding its files open
-  4. Restore the backup from C:\ProgramData\MagicMousePatch\backup\, or delete
+  3. Find the paired Magic Mouse (report every match) and disable the selected
+     one, so the loaded driver is not holding its files open
+  4. Remove 'applewirelessmouse' from LowerFilters (REG_MULTI_SZ) on EVERY
+     supported Magic Mouse device-instance key under
+     HKLM\SYSTEM\CurrentControlSet\Enum\ - the service is machine-global, so
+     more than one instance can be bound to it
+  5. Restore the backup from C:\ProgramData\MagicMousePatch\backup\, or delete
      the installed driver when there is no backup to restore
-  5. Remove 'applewirelessmouse' from LowerFilters (REG_MULTI_SZ) on that
-     device-instance key under HKLM\SYSTEM\CurrentControlSet\Enum\
   6. Delete the service key (HKLM\SYSTEM\CurrentControlSet\Services\
      applewirelessmouse)
   7. Remove the MagicMouseFix certificate from LocalMachine\TrustedPublisher
@@ -31,8 +33,12 @@ remaining steps still run either way, because a half-installed state has to be
 cleaned up as far as it can be.
 
 .PARAMETER TargetPid
-Revert only the mouse with this Bluetooth PID. Use it when several Magic Mice
-are paired and only one of them was patched.
+Restrict the disable / re-enable step (3 and 8) to the mouse with this Bluetooth
+PID. Use it when several Magic Mice are paired and only one of them was patched.
+The LowerFilters cleanup in step 4 is always exhaustive: 'applewirelessmouse' is
+this project's own service name, so removing it from any Magic Mouse instance is
+correct regardless of -TargetPid, and every other filter in those values is
+preserved.
 
 .EXAMPLE
 .\Uninstall-MagicMousePatch.ps1
@@ -47,7 +53,8 @@ Contact: riley@revivebusiness.ca
 #>
 
 param(
-    # Restrict to one model, e.g. -TargetPid 030D. Mirrors the installer.
+    # Restrict the disable / re-enable step to one model, e.g. -TargetPid 030D. Mirrors
+    # the installer. It does not scope the LowerFilters cleanup, which is exhaustive.
     [ValidateSet('030D','0310','0269','0323')]
     [string]$TargetPid
 )
@@ -79,13 +86,10 @@ $MagicMouseModels = @(
     [pscustomobject]@{ Pid = '030D'; Name = 'Magic Mouse v1'              }
 )
 
-# Matches any supported model on the Bluetooth HID (00001124) profile, or just
-# the one asked for with -TargetPid.
-$MagicMouseDeviceRe = if ($TargetPid) {
-    'BTHENUM.*00001124.*PID&' + $TargetPid
-} else {
-    'BTHENUM.*00001124.*PID&(0323|0269|0310|030D)'
-}
+# Matches any supported model on the Bluetooth HID (00001124) profile, and the same
+# narrowed to the one model asked for with -TargetPid.
+$MagicMouseAnyRe    = 'BTHENUM.*00001124.*PID&(0323|0269|0310|030D)'
+$MagicMouseDeviceRe = if ($TargetPid) { 'BTHENUM.*00001124.*PID&' + $TargetPid } else { $MagicMouseAnyRe }
 
 # Set by any step that could not complete; decides the exit code.
 $script:Failed = $false
@@ -121,9 +125,13 @@ function Write-Section {
     Write-Host $Title -ForegroundColor Cyan
 }
 
+# -AllModels ignores -TargetPid: the LowerFilters cleanup has to see every patched
+# instance, not just the one being disabled.
 function Get-MagicMouseDevice {
+    param([switch]$AllModels)
+    $re = if ($AllModels) { $MagicMouseAnyRe } else { $MagicMouseDeviceRe }
     Get-PnpDevice -ErrorAction SilentlyContinue |
-        Where-Object { $_.InstanceId -match $MagicMouseDeviceRe }
+        Where-Object { $_.InstanceId -match $re }
 }
 
 function Get-MagicMouseModel {
@@ -168,9 +176,10 @@ function Stop-MagicMouseService {
     }
 }
 
-# Returns the InstanceId that was selected - whether or not the disable worked, so the
-# registry revert still runs on the right device - or $null when no supported mouse is
-# paired. $script:DeviceDisabled records whether it was really disabled.
+# Returns the InstanceId that was selected - whether or not the disable worked - or $null
+# when no supported mouse is paired, so the re-enable at the end knows what to bring back.
+# $script:DeviceDisabled records whether it was really disabled. The LowerFilters cleanup
+# does not use this id: it visits every supported instance.
 function Disable-MagicMouseDevice {
     Write-Section "Finding the Magic Mouse..."
     $found = @(Get-MagicMouseDevice)
@@ -189,13 +198,13 @@ function Disable-MagicMouseDevice {
 
     $mouse = $found[0]
     if ($found.Count -gt 1) {
-        Write-Status "$($found.Count) Magic Mice paired; reverting only the first listed" "WARN"
+        Write-Status "$($found.Count) Magic Mice paired; disabling only the first listed (LowerFilters is cleaned on all of them)" "WARN"
         Write-Host "  Re-run with -TargetPid <030D|0310|0269|0323> to pick another." -ForegroundColor Yellow
     }
 
     Write-Section "Disabling the device..."
-    # An optimisation only: the registry revert below does not need the device down, it
-    # just takes effect on reboot rather than immediately. A failure here is therefore a
+    # An optimisation only: the registry revert does not need the device down, it just
+    # takes effect on reboot rather than immediately. A failure here is therefore a
     # WARN, and the device is not re-enabled later, because it was never disabled.
     try {
         Disable-PnpDevice -InstanceId $mouse.InstanceId -Confirm:$false -ErrorAction Stop
@@ -252,13 +261,30 @@ function Restore-DriverBackup {
     }
 }
 
-function Remove-LowerFiltersEntry {
-    param([string]$InstanceId)
+# -TargetPid selects the single device that gets disabled and re-enabled; it deliberately
+# does NOT scope this cleanup. The applewirelessmouse service is machine-global, so an
+# install run twice with different -TargetPid values leaves its name in the LowerFilters
+# of two device instances, and every one of them has to lose it before the service key
+# and the driver file go away - otherwise Windows keeps resolving a filter that is gone.
+function Remove-MagicMouseFilterBinding {
     Write-Section "Removing 'applewirelessmouse' from LowerFilters..."
-    if (-not $InstanceId) {
-        Write-Status "No device selected -- no LowerFilters to remove" "OK"
+    $found = @(Get-MagicMouseDevice -AllModels)
+    if ($found.Count -eq 0) {
+        Write-Status "No Magic Mouse paired -- no LowerFilters to clean" "OK"
         return
     }
+    foreach ($d in $found) {
+        $model = Get-MagicMouseModel -InstanceId $d.InstanceId
+        $name  = if ($model) { $model.Name } else { 'unrecognised PID' }
+        Write-Host "  $name" -ForegroundColor Gray
+        Remove-LowerFiltersEntry -InstanceId $d.InstanceId
+    }
+}
+
+# One device instance. An instance that never listed our filter is reported and left
+# alone, which is a normal outcome and not a failure.
+function Remove-LowerFiltersEntry {
+    param([string]$InstanceId)
     $instancePath = Get-MagicMouseInstanceRegPath -InstanceId $InstanceId
     if (-not (Test-Path $instancePath)) {
         Write-Status "Instance key not found: $instancePath" "OK"
@@ -279,15 +305,20 @@ function Remove-LowerFiltersEntry {
         return
     }
 
-    # Preserve every other filter that was there.
+    # Preserve every other filter that was there. New-ItemProperty -Force overwrites the
+    # value in place and honours -PropertyType, so nothing is removed first: a write that
+    # is then refused must not be able to destroy another vendor's filters. With nothing
+    # left to keep, Remove-ItemProperty is the right call instead - an empty
+    # REG_MULTI_SZ is not what was there before the install.
     $kept = @($entries | Where-Object { $_ -and ($_ -ne $ServiceName) })
     # The Enum tree is the PnP manager's and can be SYSTEM-owned, in which case even an
     # elevated write is refused. -ErrorAction Stop so that condition is named here rather
     # than silently leaving the filter in place.
     try {
-        Remove-ItemProperty -Path $instancePath -Name 'LowerFilters' -Force -ErrorAction Stop
         if ($kept.Count -gt 0) {
             New-ItemProperty -Path $instancePath -Name 'LowerFilters' -Value $kept -PropertyType MultiString -Force -ErrorAction Stop | Out-Null
+        } else {
+            Remove-ItemProperty -Path $instancePath -Name 'LowerFilters' -Force -ErrorAction Stop
         }
     } catch [System.UnauthorizedAccessException], [System.Security.SecurityException] {
         Write-Failure "Access denied re-writing LowerFilters: $($_.Exception.Message)"
@@ -411,8 +442,11 @@ function Main {
 
     Stop-MagicMouseService
     $iid = Disable-MagicMouseDevice
+    # Unbind the filter from every patched instance first: after this point the service
+    # key and the driver file go away, and a LowerFilters entry naming either of them
+    # would be left for Windows to resolve at every boot.
+    Remove-MagicMouseFilterBinding
     Restore-DriverBackup
-    Remove-LowerFiltersEntry -InstanceId $iid
     Remove-MagicMouseService
     Remove-MagicMouseCert
     Enable-MagicMouseDevice -InstanceId $iid
