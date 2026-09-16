@@ -1,20 +1,12 @@
 name: Docs
 
+# No paths filter: `links` is a required status check, and a required check that is
+# skipped never reports, leaving pull requests pending forever. The job is ~12s.
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'docs/**'
-      - '**.md'
-      - 'scripts/Test-SiteLink.ps1'
-      - '.github/workflows/docs-check.yml'
   pull_request:
     branches: [ main ]
-    paths:
-      - 'docs/**'
-      - '**.md'
-      - 'scripts/Test-SiteLink.ps1'
-      - '.github/workflows/docs-check.yml'
   workflow_dispatch:
 
 permissions:
