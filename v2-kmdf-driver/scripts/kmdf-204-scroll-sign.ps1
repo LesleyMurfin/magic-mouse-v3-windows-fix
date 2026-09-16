@@ -35,11 +35,17 @@ if (-not (Test-Path -LiteralPath $FrozenFile)) {
     exit 2
 }
 $Want = ''
+$WantInf = ''
 foreach ($ln in (Get-Content -LiteralPath $FrozenFile)) {
     if ($ln -match '^unsigned_sha256=([0-9A-Fa-f]{64})$') { $Want = $Matches[1].ToUpperInvariant() }
+    if ($ln -match '^unsigned_inf_sha256=([0-9A-Fa-f]{64})$') { $WantInf = $Matches[1].ToUpperInvariant() }
 }
 if (-not $Want) {
     Write-Output ('no unsigned_sha256 in ' + $FrozenFile)
+    exit 2
+}
+if (-not $WantInf) {
+    Write-Output ('no unsigned_inf_sha256 in ' + $FrozenFile)
     exit 2
 }
 $Forbid = @(
@@ -54,6 +60,7 @@ function Fail([int]$c, [string]$m) { Write-Output $m; exit $c }
 
 Write-Output ("===== unique $Version SIGN start =====")
 Write-Output ('frozen_expects=' + $Want)
+Write-Output ('frozen_inf_expects=' + $WantInf)
 if (-not (Test-Path -LiteralPath $SrcSys)) { Fail 2 ('missing sys ' + $SrcSys) }
 if (-not (Test-Path -LiteralPath $SrcInf)) { Fail 2 ('missing inf ' + $SrcInf) }
 if (-not (Test-Path -LiteralPath $SignTool)) { Fail 2 ('missing signtool ' + $SignTool) }
@@ -66,6 +73,10 @@ if ($hash -ne $Want) { Fail 3 ('REFUSE hash not frozen, want ' + $Want + ' got '
 foreach ($p in $Forbid) {
     if ($hash.StartsWith($p)) { Fail 3 ('REFUSE forbidden hash ' + $hash) }
 }
+
+$infHash = (Get-FileHash -LiteralPath $SrcInf -Algorithm SHA256).Hash.ToUpperInvariant()
+Write-Output ('pre_sign_INF_SHA256=' + $infHash)
+if ($infHash -ne $WantInf) { Fail 3 ('REFUSE INF hash not frozen, want ' + $WantInf + ' got ' + $infHash) }
 
 $infText = Get-Content -LiteralPath $SrcInf -Raw
 if ($infText -match 'AddService\s*=\s*MagicMouseDriver\s*,') { Fail 3 'INF AddService hijacks live MagicMouseDriver' }

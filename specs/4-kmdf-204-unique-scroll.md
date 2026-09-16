@@ -6,7 +6,7 @@
 
 *Dated historical evidence — not current state:* the **2026-09-01** run of package **2.0.4.1** (unsigned `E73EC0A8…`, signed `9901390e…`) produced the same pointer / 2-finger / 1-finger-no-scroll result and is the documented rollback target. Checkpoint: `v2-kmdf-driver/CHECKPOINT-2026-09-01-SCROLL.md`.
 
-Loaded unique dest `MagicMouseDriver-kmdf-204-scroll.sys`, SCM `MagicMouseDriver204Scroll`, oem50. Wheel is emitted only while **two or more** contacts are down (`down >= 2`); one finger (START or DRAG) never emits wheel, at any step magnitude. The detent is the registry tunable `ScrollStep` (`Services\MagicMouseDriver204Scroll\Parameters`, REG_DWORD), default `MM_SCROLL_STEP` **8**, clamped to `[MM_SCROLL_STEP_MIN=1, MM_SCROLL_STEP_MAX=224]` — **224 is the clamp ceiling, not the detent**; do not ship detent 224. Exactly **one reference finger** (lowest active DRAG slot with a valid anchor) drives the wheel; non-reference contacts only re-anchor. While `down < 2` an active DRAG contact's anchor is refreshed to the current x/y, so one-finger movement never accumulates and a second finger landing starts the step calculation from current positions. After pnputil, sleep 3s then `HidD_SetFeature(F1)` or `LastAclReceived` stays 9.
+Loaded unique dest `MagicMouseDriver-kmdf-204-scroll.sys`, SCM `MagicMouseDriver204Scroll`, oem50. Wheel is emitted only while **two or more** contacts are down (`down >= 2`); one finger (START or DRAG) never emits wheel, at any step magnitude. The detent is the registry tunable `ScrollStep` (`Services\MagicMouseDriver204Scroll\Parameters`, REG_DWORD), default `MM_SCROLL_STEP` **8**; registry values outside `[MM_SCROLL_STEP_MIN=1, MM_SCROLL_STEP_MAX=224]` retain the default `8` — **224 is the runtime clamp ceiling, not the detent**; do not ship ...
 
 Gestures = Wheel + AC Pan only (not PTP / macOS). PTP needs a later virtual device, not a larger SDP overlay (0x50). v1/v2 = `PidInfo` after dumps; never 0323 overlay on 030D/0269.
 
@@ -76,7 +76,7 @@ Do not touch: live `MagicMouseDriver.sys` (SHA `AD5D244B`), `MagicMouseDriver.in
 7. ACL fail-closed: 6→8 grow only if `SdpPatchSuccess` AND proven capacity >= need (8, or 9 with `0xA1`). Else no-op: native 6-byte `0x12` X/Y stays (pointer lives, wheel omitted). Do not treat `BufferSize` as allocation. Growing an 8-byte payload into a 6-byte hidparse report is Event 41.
 8. Battery fail-closed: RID `0x90` COL02 is passthrough. `HidD_GetInputReport` `0x90` percent at byte[2] (0–100). Never rewrite `0x90`. Never Feature `0x47`.
 9. Scroll: 8-byte RID `0x12` after SDP/capacity success: `[6]` AC Pan `0x0238`, `[7]` Wheel `0x0038` (`GestureEngine.c` / `HID-CONTRACT.md`). Wheel/AC Pan bytes only on that 8-byte report. Never RID `0x02`.
-10. Executable gate: `specs/gate_4.py` prints `FAIL:`/`PASS:` lines and exits nonzero on the current tree because `v2-kmdf-driver/tests/test_sdp_overlay.py` is missing **or** does not quote prefix `09 02 06 35 8D 35 8B 08 22 25 87` unchanged after overlay **and** HID `sizeof == 0x87`. Keep 0x90 passthrough + 6-byte no-grow asserts against `AclTranslate.c` / `Driver.c`. Do **not** green the gate because unique INF is already present. Do **not** green the gate on a Python self-model.
+10. Executable gate: `specs/gate_4.py` prints `FAIL:`/`PASS:` lines and exits nonzero if `v2-kmdf-driver/tests/test_sdp_overlay.py` is missing **or** does not verify prefix `09 02 06 35 8D 35 8B 08 22 25 87` unchanged after overlay **and** HID `sizeof == 0x87`. Keep 0x90 passthrough + 6-byte no-grow asserts against `AclTranslate.c` / `Driver.c`. Do **not** green the gate because unique INF is already present. Do **not** green the gate on a Python self-model.
 11. Overlay host test (sibling BUILD): `python3 v2-kmdf-driver/tests/test_sdp_overlay.py` must prove prefix byte-identical after overlay and payload 135B (`0x87`). Exit 1 → no msbuild, no sign, no pnputil.
 12. Host ACL tests (sibling): `python3 v2-kmdf-driver/tests/test_hid_acl.py` must prove `0x90` never rewritten; 6→8 refused without `SdpPatchSuccess`/capacity; Wheel only on 8-byte `0x12` after success.
 13. Linux identity gate stays: `bash v2-kmdf-driver/tests/validate-package.sh`. Non-zero is a BUILD fail. Do not skip. It is not a substitute for `specs/gate_4.py`.
@@ -90,7 +90,7 @@ Linux identity (keep; must not be weakened):
 bash v2-kmdf-driver/tests/validate-package.sh
 ```
 
-ADW executable gate (must be RED on current tree — `test_sdp_overlay.py` missing or does not quote prefix `09 02 06 35 8D 35 8B 08 22 25 87` unchanged after overlay and HID `sizeof == 0x87`; unique INF present is not a pass; a Python self-model is not a pass; keep 0x90 / 6-byte C-source asserts):
+ADW executable gate (must exit nonzero when any required source or assertion is missing — `test_sdp_overlay.py` missing or does not quote prefix `09 02 06 35 8D 35 8B 08 22 25 87` unchanged after overlay and HID `sizeof == 0x87`; unique INF present is not a pass; a Python self-model is not a pass; keep 0x90 / 6-byte C-source asserts):
 
 ```bash
 python3 specs/gate_4.py
@@ -117,7 +117,7 @@ python3 v2-kmdf-driver/tests/test_scroll_threshold.py
 - 2-slot DRAG `|stepY| >= ScrollStep` → exactly one notch on that frame, emitted only by the reference finger (the second contact just re-anchors, so a two-finger drag is one notch per `step` of travel, not two)
 - compact 8-byte garbage `[6]/[7]` → wheel/hwheel 0
 - 1-finger DRAG → wheel **0** at every magnitude exercised (below the detent, at the detent, and well past it in both directions); `down >= 2` gates the emit path, so one finger never scrolls at any magnitude
-- `ScrollStep` below `MM_SCROLL_STEP_MIN` 1 → falls back to the default **8**; above `MM_SCROLL_STEP_MAX` 224 → **clamped to 224**, not to the default. `step` is a `ULONG`, so a negative `REG_DWORD` arrives as a huge unsigned value and clamps to 224 as well
+- `ScrollStep` below `MM_SCROLL_STEP_MIN` 1 → falls back to the default **8**; above `MM_SCROLL_STEP_MAX` 224 → **retains the default 8**, not clamped to 224. `step` is a `ULONG`, so a negative `REG_DWORD` arrives as a huge unsigned value and also retains the default 8
 
 Host tests must fail closed:
 

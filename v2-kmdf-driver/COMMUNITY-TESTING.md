@@ -55,9 +55,9 @@ If 1-finger still scrolls, or 2-finger never scrolls, we need a Diag dump (below
 
 It is tunable — no rebuild, no reinstall. `ScrollStep` is how far (in touch units) you must drag
 per scroll notch, so **higher = less sensitive**. Default 8, valid `1`–`224`. Out of range is
-**not** symmetric: below `1` falls back to the default `8`, but **above `224` is clamped to `224`**
-— not to the default. `ScrollStep` is a `REG_DWORD` read as an unsigned 32-bit value, so a
-"negative" number arrives as a huge positive one and also clamps to `224`.
+**not accepted**: values below `1` or above `224` leave the driver at the default `8`.
+`ScrollStep` is a `REG_DWORD` read as an unsigned 32-bit value, so a "negative" number arrives
+as a huge positive value and also loads the default.
 
 ```powershell
 # admin PowerShell, from the package directory
@@ -68,8 +68,8 @@ It writes the value, restarts the 0323 device, re-sends F1, then prints what the
 loaded (`driver_ScrollStep`) so you can tell a real change from a silent no-op. Reference points on
 the original hardware: `8` is the proven default, and `224` (the Linux `hid-magicmouse` default)
 produced **zero** wheel — so treat the high end with suspicion and move in small steps. That fits
-the clamp above: asking for anything over `224` lands you exactly on `224`, i.e. on the detent that
-scrolled nothing here. A typo like `500` does **not** bounce back to the safe default.
+the range check above: asking for anything over `224` leaves you at the default `8`, not on the
+detent that scrolled nothing here. A typo like `500` therefore loads the default.
 
 ## What to send if it fails
 

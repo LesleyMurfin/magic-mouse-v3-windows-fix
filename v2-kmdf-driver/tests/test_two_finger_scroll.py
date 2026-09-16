@@ -55,6 +55,21 @@ class _Run:
             self.failed.append(name)
 
 
+def _function_body(code: str, name: str) -> str:
+    """Return one production C function body, including nested blocks."""
+    match = re.search(r"\b" + re.escape(name) + r"\s*\([^;{}]*\)\s*\{", code, re.S)
+    if not match:
+        return ""
+    depth = 1
+    pos = match.end()
+    while depth and pos < len(code):
+        if code[pos] == "{":
+            depth += 1
+        elif code[pos] == "}":
+            depth -= 1
+        pos += 1
+    return code[match.end() : pos - 1] if depth == 0 else ""
+
 def test_c_source(run: _Run) -> None:
     if not GESTURE.is_file():
         run.check("TWO_FINGER", False, f"missing {GESTURE}")
@@ -64,14 +79,20 @@ def test_c_source(run: _Run) -> None:
         return
     raw = GESTURE.read_text(encoding="utf-8")
     code = strip_c_comments(raw)
-    # Token may sit in a comment next to the down < 2 check.
-    has_token = "TWO_FINGER" in raw
-    has_down = re.search(r"down\s*<\s*2", code) is not None
+    active_raw = _function_body(raw, "AccumulateSurfaceScroll")
+    active = _function_body(code, "AccumulateSurfaceScroll")
+    # Token may sit in a comment next to the production down < 2 branch.
+    branch_match = re.search(
+        r"down\s*<\s*2\s*\)\s*\{([^{}]*)\}", active, re.S
+    )
+    branch = branch_match.group(1) if branch_match else ""
+    has_down = branch_match is not None
+    has_token = "TWO_FINGER" in active_raw and has_down
     run.check(
         "TWO_FINGER",
-        has_token and has_down,
+        has_token,
         "GestureEngine.c TWO_FINGER next to down < 2"
-        if has_token and has_down
+        if has_token
         else "GestureEngine.c missing TWO_FINGER next to down < 2",
     )
     run.check(
@@ -81,15 +102,20 @@ def test_c_source(run: _Run) -> None:
         if has_down
         else "GestureEngine.c missing down < 2 (count START/DRAG; 1-finger anchors only)",
     )
-    # The down < 2 branch must refresh the anchor, not just skip: a stale
-    # touch-down anchor dumps the whole one-finger travel as notches on the
-    # frame a second finger lands.
-    block = re.search(r"down\s*<\s*2\s*\)\s*\{([^{}]*)\}", code, re.S)
-    body = block.group(1) if block else ""
+    # The down < 2 branch must refresh the anchor from this report's x/y,
+    # not merely assign stale or unrelated coordinates before continuing.
     refreshes = (
-        re.search(r"TouchAnchorX\s*\[\s*id\s*\]\s*=", body) is not None
-        and re.search(r"TouchAnchorY\s*\[\s*id\s*\]\s*=", body) is not None
-        and "continue" in body
+        re.search(
+            r"TouchAnchorX\s*\[\s*id\s*\]\s*=\s*\(\s*INT16\s*\)\s*x\s*;",
+            branch,
+        )
+        is not None
+        and re.search(
+            r"TouchAnchorY\s*\[\s*id\s*\]\s*=\s*\(\s*INT16\s*\)\s*y\s*;",
+            branch,
+        )
+        is not None
+        and re.search(r"\bcontinue\s*;", branch) is not None
     )
     run.check(
         "ONE_FINGER_ANCHOR_REFRESH",

@@ -52,8 +52,16 @@ Write-Output ('previous=' + $prev)
 Set-ItemProperty -LiteralPath $ParamsKey -Name ScrollStep -Type DWord -Value $ScrollStep
 Write-Output ('wrote ScrollStep=' + $ScrollStep)
 
-Write-Output '=== restart 0323 instance so EvtDeviceAdd re-reads it ==='
-& pnputil.exe /restart-device $Instance
+Write-Output '=== resolve present 0323 instance so EvtDeviceAdd re-reads it ==='
+$device = Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue |
+    Where-Object { $_.InstanceId -and $_.InstanceId -like ($Instance + '\*') } |
+    Select-Object -First 1
+if ($null -eq $device -or [string]::IsNullOrWhiteSpace([string]$device.InstanceId)) {
+    Fail 3 ('no present PID 0323 device instance found for ' + $Instance)
+}
+$instanceId = [string]$device.InstanceId
+Write-Output ('restart_instance=' + $instanceId)
+& pnputil.exe /restart-device $instanceId
 $restartExit = $LASTEXITCODE
 Write-Output ('restart_exit=' + $restartExit)
 # 3010 is success-with-reboot-required, not failure.

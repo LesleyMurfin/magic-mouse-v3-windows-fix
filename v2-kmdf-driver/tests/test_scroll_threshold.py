@@ -81,6 +81,21 @@ def one_slot_drag(step_y: int) -> tuple[Mouse2Result, int]:
     inp = make_mt([drag])
     return translate_mouse2_to_hid(inp, ctx), len(inp)
 
+def _function_body(code: str, name: str) -> str:
+    """Return one production C function body, including nested blocks."""
+    match = re.search(r"\b" + re.escape(name) + r"\s*\([^;{}]*\)\s*\{", code, re.S)
+    if not match:
+        return ""
+    depth = 1
+    pos = match.end()
+    while depth and pos < len(code):
+        if code[pos] == "{":
+            depth += 1
+        elif code[pos] == "}":
+            depth -= 1
+        pos += 1
+    return code[match.end() : pos - 1] if depth == 0 else ""
+
 
 def test_c_source(run: _Run) -> None:
     if not GESTURE.is_file():
@@ -90,7 +105,22 @@ def test_c_source(run: _Run) -> None:
         return
     raw = GESTURE.read_text(encoding="utf-8")
     code = strip_c_comments(raw)
-    has_token = "SCROLL_STEP_8" in raw
+    active_raw = _function_body(raw, "AccumulateSurfaceScroll")
+    active = _function_body(code, "AccumulateSurfaceScroll")
+    down_match = re.search(r"down\s*<\s*2", active)
+    detent_match = re.search(
+        r"stepY\s*>=\s*\(INT\)\s*step.*?\*outWheel",
+        active,
+        re.S,
+    )
+    has_active_detent = (
+        bool(active)
+        and re.search(r"step\s*=\s*ctx->ScrollStep", active) is not None
+        and detent_match is not None
+        and down_match is not None
+        and down_match.start() < detent_match.start()
+    )
+    has_token = "SCROLL_STEP_8" in active_raw and has_active_detent
     run.check(
         "SCROLL_STEP_8",
         has_token,
@@ -98,7 +128,7 @@ def test_c_source(run: _Run) -> None:
         if has_token
         else "GestureEngine.c missing SCROLL_STEP_8 next to the detent",
     )
-    has_down = re.search(r"down\s*<\s*2", code) is not None
+    has_down = has_active_detent
     run.check(
         "DOWN_LT_2",
         has_down,
@@ -106,7 +136,7 @@ def test_c_source(run: _Run) -> None:
         if has_down
         else "GestureEngine.c missing down < 2 (1-finger must not emit Wheel)",
     )
-    has_tf = "TWO_FINGER" in raw
+    has_tf = "TWO_FINGER" in active_raw and has_down
     run.check(
         "TWO_FINGER",
         has_tf,
@@ -125,7 +155,6 @@ def test_c_source(run: _Run) -> None:
         if not copies_native
         else "compact 8-byte path assigns in[6]/in[7] into wheel/hwheel (must leave 0)",
     )
-
     if not GESTURE_H.is_file():
         run.check("MM_SCROLL_STEP_8", False, f"missing {GESTURE_H}")
         return
@@ -141,7 +170,6 @@ def test_c_source(run: _Run) -> None:
         if has_step
         else "GestureEngine.h missing #define MM_SCROLL_STEP 8",
     )
-
 
 def test_scroll_step_clamp(run: _Run) -> None:
     """ctx->ScrollStep is ULONG: too low → default 8, too high → 224."""

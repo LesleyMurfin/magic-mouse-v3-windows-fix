@@ -19,8 +19,10 @@ Do **not** emit `MagicMouseDriver.sys`. That filename is the Apr 30 restore bina
 ## WDK / Visual Studio
 
 ```bat
-msbuild MagicMouseDriver.vcxproj /p:Configuration=Release /p:Platform=x64 /p:SignMode=Off
+msbuild MagicMouseDriver.vcxproj /t:Build /p:Configuration=Release /p:Platform=x64 /p:SignMode=Off /p:EnableInf2cat=false /p:StampInf=false
 ```
+
+`EnableInf2cat=false` keeps the WDK `Build` target from running signability/Inf2Cat here; the script runs the desktop `InfVerif` check separately before freezing the `.sys`.
 
 ```powershell
 powershell -NoProfile -File scripts\Freeze-KmdfArtifact.ps1 -SysPath x64\Release\MagicMouseDriver-kmdf-204-scroll.sys

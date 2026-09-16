@@ -116,7 +116,7 @@ try {
         ('call "{0}" amd64' -f $setup),
         'if errorlevel 1 exit /b 11',
         ('cd /d "{0}"' -f $Work),
-        'msbuild MagicMouseDriver.vcxproj /t:Build /m /nr:false /v:minimal /p:Configuration=Release /p:Platform=x64 /p:SignMode=Off /p:RunCodeAnalysis=false /p:Inf2Cat=false /p:StampInf=false',
+        'msbuild MagicMouseDriver.vcxproj /t:Build /m /nr:false /v:minimal /p:Configuration=Release /p:Platform=x64 /p:SignMode=Off /p:RunCodeAnalysis=false /p:EnableInf2cat=false /p:StampInf=false',
         'exit /b %ERRORLEVEL%'
     )
     Set-Content -LiteralPath $bat -Value $batLines -Encoding ASCII
@@ -125,13 +125,12 @@ try {
     & cmd.exe /c $bat > $msbuildLog 2>&1
     $rc = $LASTEXITCODE
     Log ("msbuild exit={0} log={1}" -f $rc, $msbuildLog)
-    if ($rc -ne 0 -and -not (Test-Path -LiteralPath $outSys)) { Fail $rc 'msbuild failed' }
+    if ($rc -ne 0) { Fail $rc 'msbuild failed' }
     $msbuildText = ''
     if (Test-Path -LiteralPath $msbuildLog) {
         $msbuildText = Get-Content -LiteralPath $msbuildLog -Raw -ErrorAction SilentlyContinue
     }
     if ($msbuildText -match 'error C[0-9]+') { Fail 1 'msbuild C compile error (not Inf2Cat)' }
-    if ($rc -ne 0) { Log 'msbuild nonzero: Inf2Cat/signability expected (StampInf/Inf2Cat off); unique sys must exist' }
     $infPath = Join-Path $Work 'MagicMouseDriver-kmdf-204-scroll.inf'
     $infVerif = "${letter}:\Program Files\Windows Kits\10\Tools\10.0.26100.0\x64\InfVerif.exe"
     if (-not (Test-Path -LiteralPath $infVerif)) { Fail 2 "InfVerif missing $infVerif" }
@@ -169,9 +168,12 @@ if (-not (Test-Path -LiteralPath $parkDir2)) {
 }
 Copy-Item -LiteralPath $outSys -Destination $park2 -Force
 Copy-Item -LiteralPath (Join-Path $Work 'MagicMouseDriver-kmdf-204-scroll.inf') -Destination (Join-Path $Work 'x64\Release\MagicMouseDriver-kmdf-204-scroll.inf') -Force
+$infPath = Join-Path $Work 'x64\Release\MagicMouseDriver-kmdf-204-scroll.inf'
+$infHash = (Get-FileHash -LiteralPath $infPath -Algorithm SHA256).Hash.ToUpperInvariant()
 
 $frozenLines = @(
     ('unsigned_sha256={0}' -f $hash),
+    ('unsigned_inf_sha256={0}' -f $infHash),
     ('size={0}' -f $size),
     'dest=MagicMouseDriver-kmdf-204-scroll.sys',
     ('artifact={0}' -f $parkName),

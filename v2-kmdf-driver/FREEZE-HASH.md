@@ -2,7 +2,7 @@
 
 Ship one named artifact after a Windows WDK build:
 
-```
+```text
 MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys
 ```
 

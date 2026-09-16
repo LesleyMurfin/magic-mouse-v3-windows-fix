@@ -47,6 +47,48 @@ ForwardSdpWithCompletion(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target, _In_ 
     }
 }
 
+static VOID
+MmInvalidateChannelStateLocked(_In_ PDEVICE_CONTEXT ctx)
+{
+    ctx->MtControlHandle = NULL;
+    ctx->MtChannelHandle = NULL;
+    ctx->MtEnableSent = FALSE;
+    ctx->MtEnableTries = 0;
+}
+
+static VOID
+MmInvalidateClosedChannelStateLocked(_In_ PDEVICE_CONTEXT ctx,
+                                     _In_ PVOID ClosedHandle)
+{
+    if (ClosedHandle == NULL)
+    {
+        return;
+    }
+
+    if (ctx->MtControlHandle == ClosedHandle)
+    {
+        ctx->MtControlHandle = NULL;
+        ctx->MtEnableSent = FALSE;
+        ctx->MtEnableTries = 0;
+    }
+    if (ctx->MtChannelHandle == ClosedHandle)
+    {
+        ctx->MtChannelHandle = NULL;
+    }
+}
+
+VOID
+EvtDeviceContextCleanup(_In_ WDFOBJECT Object)
+{
+    PDEVICE_CONTEXT ctx = GetDeviceContext((WDFDEVICE)Object);
+    if (ctx != NULL && ctx->Lock != NULL)
+    {
+        WdfSpinLockAcquire(ctx->Lock);
+        MmInvalidateChannelStateLocked(ctx);
+        WdfSpinLockRelease(ctx->Lock);
+    }
+}
+
 NTSTATUS
 DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING RegistryPath)
 {
@@ -62,7 +104,6 @@ NTSTATUS
 EvtDeviceAdd(_In_ WDFDRIVER Driver, _Inout_ PWDFDEVICE_INIT DeviceInit)
 {
     UNREFERENCED_PARAMETER(Driver);
-
     WdfFdoInitSetFilter(DeviceInit);
 
     WDF_OBJECT_ATTRIBUTES reqAttr;
@@ -71,7 +112,7 @@ EvtDeviceAdd(_In_ WDFDRIVER Driver, _Inout_ PWDFDEVICE_INIT DeviceInit)
 
     WDF_OBJECT_ATTRIBUTES devAttr;
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&devAttr, DEVICE_CONTEXT);
-
+    devAttr.EvtCleanupCallback = EvtDeviceContextCleanup;
     WDFDEVICE device;
     NTSTATUS status = WdfDeviceCreate(&DeviceInit, &devAttr, &device);
     if (!NT_SUCCESS(status)) { return status; }
@@ -209,6 +250,31 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
         return;
     }
 
+    // Closing a channel must always be observed, including when injection
+    // is disabled, so teardown cannot leave a handle eligible for reuse.
+    if (IoControlCode == IOCTL_INTERNAL_BTH_SUBMIT_BRB && ctx != NULL)
+    {
+        PIRP irp = WdfRequestWdmGetIrp(Request);
+        PIO_STACK_LOCATION sl = IoGetCurrentIrpStackLocation(irp);
+        PBRB pBrb = (PBRB)sl->Parameters.Others.Argument1;
+
+        if (pBrb != NULL &&
+            pBrb->BrbHeader.Type == BRB_L2CA_CLOSE_CHANNEL &&
+            pBrb->BrbHeader.Length >= sizeof(struct _BRB_L2CA_CLOSE_CHANNEL))
+        {
+            PMM_REQUEST_CONTEXT reqCtx = GetRequestContext(Request);
+            reqCtx->Brb = pBrb;
+            reqCtx->UsedScratch = FALSE;
+            WdfRequestFormatRequestUsingCurrentType(Request);
+            WdfRequestSetCompletionRoutine(Request, OnCloseChannelComplete, ctx);
+            if (!WdfRequestSend(Request, target, WDF_NO_SEND_OPTIONS))
+            {
+                WdfRequestComplete(Request, WdfRequestGetStatus(Request));
+            }
+            return;
+        }
+    }
+
     if (IoControlCode == IOCTL_INTERNAL_BTH_SUBMIT_BRB &&
         ctx != NULL && ctx->EnableInjection)
     {
@@ -232,6 +298,8 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
             }
             return;
         }
+
+
         if (pBrb != NULL &&
             pBrb->BrbHeader.Type == BRB_L2CA_ACL_TRANSFER &&
             pBrb->BrbHeader.Length >= sizeof(BRB_L2CA_ACL_TRANSFER) &&
@@ -570,6 +638,30 @@ OnOpenChannelComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
 }
 
 VOID
+OnCloseChannelComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
+                       _In_ PWDF_REQUEST_COMPLETION_PARAMS Params, _In_ WDFCONTEXT Context)
+{
+    UNREFERENCED_PARAMETER(Target);
+
+    PDEVICE_CONTEXT ctx = (PDEVICE_CONTEXT)Context;
+    NTSTATUS status = Params->IoStatus.Status;
+    PMM_REQUEST_CONTEXT reqCtx = GetRequestContext(Request);
+    PBRB pBrb = (reqCtx != NULL) ? (PBRB)reqCtx->Brb : NULL;
+
+    if (NT_SUCCESS(status) && ctx != NULL && pBrb != NULL &&
+        pBrb->BrbHeader.Type == BRB_L2CA_CLOSE_CHANNEL &&
+        pBrb->BrbHeader.Length >= sizeof(struct _BRB_L2CA_CLOSE_CHANNEL))
+    {
+        PVOID closedHandle = pBrb->BrbL2caCloseChannel.ChannelHandle;
+        WdfSpinLockAcquire(ctx->Lock);
+        MmInvalidateClosedChannelStateLocked(ctx, closedHandle);
+        WdfSpinLockRelease(ctx->Lock);
+    }
+
+    WdfRequestComplete(Request, status);
+}
+
+VOID
 OnReadComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
                _In_ PWDF_REQUEST_COMPLETION_PARAMS Params, _In_ WDFCONTEXT Context)
 {
@@ -719,6 +811,7 @@ MmDiagTimerFunc(_In_ WDFTIMER Timer)
 // HidBth SET_REPORT BufferSize was 66. Third-party OUT size 4 was 0xC0000206.
 // Do not rewrite 0x55. Do not put 0xF1 in the HID descriptor.
 #define MM_MT_OUT_LEN  66
+#define MM_BRB_WAIT_MS  5000
 
 static NTSTATUS
 MmSubmitBrb(_In_ PDEVICE_OBJECT TargetDev, _In_ PBRB Brb)
@@ -748,7 +841,18 @@ MmSubmitBrb(_In_ PDEVICE_OBJECT TargetDev, _In_ PBRB Brb)
     status = IoCallDriver(TargetDev, irp);
     if (status == STATUS_PENDING)
     {
-        KeWaitForSingleObject(&event, Executive, KernelMode, FALSE, NULL);
+        LARGE_INTEGER timeout;
+        timeout.QuadPart = -((LONGLONG)MM_BRB_WAIT_MS * 10 * 1000);
+
+        // Do not let a transport that never completes pin the caller's
+        // stack packet and BRB indefinitely.  Once cancellation is issued,
+        // the completion event must be observed before either is released.
+        if (KeWaitForSingleObject(&event, Executive, KernelMode, FALSE,
+                                  &timeout) == STATUS_TIMEOUT)
+        {
+            IoCancelIrp(irp);
+            KeWaitForSingleObject(&event, Executive, KernelMode, FALSE, NULL);
+        }
         status = iosb.Status;
     }
     return status;
@@ -828,6 +932,54 @@ MmSendMtEnable(_In_ WDFDEVICE Device, _In_ PDEVICE_CONTEXT ctx)
              (ULONG)status, tries);
 }
 
+static BOOLEAN
+MmDiagValueMatches(_In_ HANDLE Key, _In_z_ PCWSTR Name, _In_ ULONG Type,
+                   _In_reads_bytes_(DataSize) PVOID Data, _In_ ULONG DataSize)
+{
+    union
+    {
+        KEY_VALUE_PARTIAL_INFORMATION Info;
+        UCHAR Buffer[FIELD_OFFSET(KEY_VALUE_PARTIAL_INFORMATION, Data) + 64];
+    } valueStorage;
+    PKEY_VALUE_PARTIAL_INFORMATION valueInfo = &valueStorage.Info;
+    ULONG resultLength = 0;
+    UNICODE_STRING valueName;
+
+    if (DataSize > 64)
+    {
+        return FALSE;
+    }
+
+    RtlInitUnicodeString(&valueName, Name);
+    if (!NT_SUCCESS(ZwQueryValueKey(Key, &valueName,
+                                    KeyValuePartialInformation,
+                                    valueInfo, sizeof(valueStorage),
+                                    &resultLength)) ||
+        valueInfo->Type != Type ||
+        valueInfo->DataLength != DataSize)
+    {
+        return FALSE;
+    }
+
+    return (RtlCompareMemory(valueInfo->Data, Data, DataSize) == DataSize);
+}
+
+static VOID
+MmDiagSetValueIfChanged(_In_ HANDLE Key, _In_z_ PCWSTR Name, _In_ ULONG Type,
+                        _In_reads_bytes_(DataSize) PVOID Data, _In_ ULONG DataSize)
+{
+    UNICODE_STRING valueName;
+
+    if (MmDiagValueMatches(Key, Name, Type, Data, DataSize))
+    {
+        return;
+    }
+
+    RtlInitUnicodeString(&valueName, Name);
+    ZwSetValueKey(Key, &valueName, 0, Type, Data, DataSize);
+}
+
+
 VOID
 MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
 {
@@ -876,47 +1028,60 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
                                OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
     HANDLE key  = NULL;
     ULONG  disp = 0;
-    if (!NT_SUCCESS(ZwCreateKey(&key, KEY_WRITE, &attr, 0, NULL,
-                                REG_OPTION_NON_VOLATILE, &disp)))
+    if (!NT_SUCCESS(ZwCreateKey(&key,
+                                KEY_WRITE | KEY_QUERY_VALUE,
+                                &attr, 0, NULL, REG_OPTION_NON_VOLATILE, &disp)))
     {
         return;
     }
 
-    UNICODE_STRING n;
-
-#define SET_DWORD(Name, Val) \
-    RtlInitUnicodeString(&n, Name); \
-    ZwSetValueKey(key, &n, 0, REG_DWORD, &(Val), sizeof(ULONG))
-
-    SET_DWORD(L"IoctlInterceptCount", ictlCount);
-    SET_DWORD(L"SdpScanHits",         scanHits);
-    SET_DWORD(L"SdpPatchSuccess",     patchOk);
-    SET_DWORD(L"LastSdpBufSize",      lastSize);
-    SET_DWORD(L"LastPatchStatusHex",  lastStatus);
-    SET_DWORD(L"HidReadCount",        hidReads);
-    SET_DWORD(L"Rid12Count",          rid12);
-    SET_DWORD(L"AclInterceptCount",   aclN);
-    SET_DWORD(L"AclTranslateCount",   aclX);
-    SET_DWORD(L"LastAclReceived",     lastAclR);
-    SET_DWORD(L"LastAclCapacity",     lastAclC);
-    SET_DWORD(L"MtEnableStatus",     mtStatus);
-    SET_DWORD(L"MtEnableTries",      mtTries);
-    SET_DWORD(L"LastInBrbLength",    lastInLen);
-    SET_DWORD(L"LastInFlags",        lastInFl);
-    SET_DWORD(L"AclOutCount",        aclOut);
-    SET_DWORD(L"LastOutBufferSize",  lastOutSz);
-    SET_DWORD(L"LastOutFlags",       lastOutFl);
-    SET_DWORD(L"LastOutHdr",         lastOutHdr);
+    MmDiagSetValueIfChanged(key, L"IoctlInterceptCount",
+                            REG_DWORD, &ictlCount, sizeof(ictlCount));
+    MmDiagSetValueIfChanged(key, L"SdpScanHits",
+                            REG_DWORD, &scanHits, sizeof(scanHits));
+    MmDiagSetValueIfChanged(key, L"SdpPatchSuccess",
+                            REG_DWORD, &patchOk, sizeof(patchOk));
+    MmDiagSetValueIfChanged(key, L"LastSdpBufSize",
+                            REG_DWORD, &lastSize, sizeof(lastSize));
+    MmDiagSetValueIfChanged(key, L"LastPatchStatusHex",
+                            REG_DWORD, &lastStatus, sizeof(lastStatus));
+    MmDiagSetValueIfChanged(key, L"HidReadCount",
+                            REG_DWORD, &hidReads, sizeof(hidReads));
+    MmDiagSetValueIfChanged(key, L"Rid12Count",
+                            REG_DWORD, &rid12, sizeof(rid12));
+    MmDiagSetValueIfChanged(key, L"AclInterceptCount",
+                            REG_DWORD, &aclN, sizeof(aclN));
+    MmDiagSetValueIfChanged(key, L"AclTranslateCount",
+                            REG_DWORD, &aclX, sizeof(aclX));
+    MmDiagSetValueIfChanged(key, L"LastAclReceived",
+                            REG_DWORD, &lastAclR, sizeof(lastAclR));
+    MmDiagSetValueIfChanged(key, L"LastAclCapacity",
+                            REG_DWORD, &lastAclC, sizeof(lastAclC));
+    MmDiagSetValueIfChanged(key, L"MtEnableStatus",
+                            REG_DWORD, &mtStatus, sizeof(mtStatus));
+    MmDiagSetValueIfChanged(key, L"MtEnableTries",
+                            REG_DWORD, &mtTries, sizeof(mtTries));
+    MmDiagSetValueIfChanged(key, L"LastInBrbLength",
+                            REG_DWORD, &lastInLen, sizeof(lastInLen));
+    MmDiagSetValueIfChanged(key, L"LastInFlags",
+                            REG_DWORD, &lastInFl, sizeof(lastInFl));
+    MmDiagSetValueIfChanged(key, L"AclOutCount",
+                            REG_DWORD, &aclOut, sizeof(aclOut));
+    MmDiagSetValueIfChanged(key, L"LastOutBufferSize",
+                            REG_DWORD, &lastOutSz, sizeof(lastOutSz));
+    MmDiagSetValueIfChanged(key, L"LastOutFlags",
+                            REG_DWORD, &lastOutFl, sizeof(lastOutFl));
+    MmDiagSetValueIfChanged(key, L"LastOutHdr",
+                            REG_DWORD, &lastOutHdr, sizeof(lastOutHdr));
     // Echoes the tunable actually in force, so a tune can be confirmed
     // without guessing whether the registry write was picked up.
-    SET_DWORD(L"ScrollStep",            scrollStep);
+    MmDiagSetValueIfChanged(key, L"ScrollStep",
+                            REG_DWORD, &scrollStep, sizeof(scrollStep));
 
-#undef SET_DWORD
-
-    RtlInitUnicodeString(&n, L"LastSdpBytes");
-    ZwSetValueKey(key, &n, 0, REG_BINARY, lastBytes, 64);
-    RtlInitUnicodeString(&n, L"LastAclBytes");
-    ZwSetValueKey(key, &n, 0, REG_BINARY, lastAclBytes, 16);
+    MmDiagSetValueIfChanged(key, L"LastSdpBytes",
+                            REG_BINARY, lastBytes, sizeof(lastBytes));
+    MmDiagSetValueIfChanged(key, L"LastAclBytes",
+                            REG_BINARY, lastAclBytes, sizeof(lastAclBytes));
     ZwClose(key);
 }
 

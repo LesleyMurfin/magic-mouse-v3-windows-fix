@@ -94,6 +94,9 @@ function Add-KmdfCommunitySignature {
         $sig = Set-AuthenticodeSignature -FilePath $sys -Certificate $Cert -HashAlgorithm SHA256
     }
     if ($null -eq $sig.SignerCertificate) { Fail "Set-AuthenticodeSignature failed on $sys" }
+    if (-not (Test-KmdfSignedByThumb -Path $sys -Thumb $Cert.Thumbprint)) {
+        Fail "Signature verification failed on $sys"
+    }
 
     # New-FileCatalog is NOT a substitute: it emits a generic file-hash catalog
     # that pnputil /add-driver rejects, so the fallback shipped a package that
@@ -106,14 +109,14 @@ function Add-KmdfCommunitySignature {
               'a Developer Command Prompt, or add C:\Program Files (x86)\Windows Kits\10\bin\x86 to PATH.')
     }
     Write-KmdfLog -Message 'Inf2Cat present - building driver catalog' -Level 'INFO'
-    & Inf2Cat.exe /driver:$Here /os:10_X64
-    if ($LASTEXITCODE -ne 0) { Fail "Inf2Cat exited $LASTEXITCODE" }
-    if (-not (Test-Path -LiteralPath $cat)) { Fail "Missing $cat after catalog step" }
     $csig = Set-AuthenticodeSignature -FilePath $cat -Certificate $Cert -HashAlgorithm SHA256 -TimestampServer 'http://timestamp.digicert.com' -ErrorAction SilentlyContinue
     if ($null -eq $csig -or $null -eq $csig.SignerCertificate) {
         $csig = Set-AuthenticodeSignature -FilePath $cat -Certificate $Cert -HashAlgorithm SHA256
     }
     if ($null -eq $csig.SignerCertificate) { Fail "Set-AuthenticodeSignature failed on $cat" }
+    if (-not (Test-KmdfSignedByThumb -Path $cat -Thumb $Cert.Thumbprint)) {
+        Fail "Signature verification failed on $cat"
+    }
     Write-KmdfLog -Message "Signed sys+cat thumb=$($Cert.Thumbprint)" -Level 'OK'
 }
 

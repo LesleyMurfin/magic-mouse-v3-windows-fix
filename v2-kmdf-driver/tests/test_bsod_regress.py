@@ -35,6 +35,21 @@ def _code(text: str) -> str:
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
     return re.sub(r"//.*?$", "", text, flags=re.M)
 
+def _function_body(code: str, name: str) -> str:
+    """Return one production C function body, including nested blocks."""
+    match = re.search(r"\b" + re.escape(name) + r"\s*\([^;{}]*\)\s*\{", code, re.S)
+    if not match:
+        return ""
+    depth = 1
+    pos = match.end()
+    while depth and pos < len(code):
+        if code[pos] == "{":
+            depth += 1
+        elif code[pos] == "}":
+            depth -= 1
+        pos += 1
+    return code[match.end() : pos - 1] if depth == 0 else ""
+
 
 # Anything that can land bytes at a DESTINATION, including the forms that
 # hide the destination: `cmd /c copy`, `cmd /c mklink`, hard/symbolic links,
@@ -275,6 +290,26 @@ def main() -> int:
     inst = INSTALL.read_text(encoding="utf-8") if INSTALL.is_file() else ""
     common = COMMON.read_text(encoding="utf-8") if COMMON.is_file() else ""
     ih_code = _code(ih)
+    overlay_path = _function_body(ih_code, "SdpRewrite_Process")
+    copy_path = re.search(
+        r"RtlCopyMemory\s*\(\s*buf\s*\+\s*descOffset\s*,\s*"
+        r"g_HidDescriptor\s*,\s*SDP_HID_OVERLAY_LEN\s*\)",
+        overlay_path,
+    )
+    prefix_path = re.search(
+        r"buf\s*\[\s*i\s*\+\s*n\s*\]\s*!=\s*g_SdpHidPrefix\s*\[\s*n\s*\]",
+        overlay_path,
+    )
+    not_found_path = re.search(
+        r"if\s*\(\s*!found\s*\)\s*\{.*?STATUS_NOT_FOUND",
+        overlay_path,
+        re.S,
+    )
+    new_len_path = re.search(
+        r"RtlCopyMemory\s*\([^;]+\)\s*;\s*\*newLen\s*=\s*usedLen\s*;",
+        overlay_path,
+        re.S,
+    )
 
     # --- 0x50 SdpWalkStream (090126-18750 / 090126-17390) ---
     n = hid_len() if HID_C.is_file() else -1
@@ -284,9 +319,25 @@ def main() -> int:
         f"sizeof={n} dumps=090126-17390-01,090126-18750-01",
     )
     run.check(
-        "BSOD_50_C_ASSERT_0x87",
-        "0x87" in hid_c and "C_ASSERT" in hid_c,
-        "HidDescriptor.c C_ASSERT sizeof == 0x87",
+        "BSOD_50_RTLCOPY_ONLY",
+        copy_path is not None
+        and re.search(
+            r"#define\s+SDP_HID_OVERLAY_LEN\s+0x87\b", ih_code
+        )
+        is not None,
+        "SdpRewrite_Process copies g_HidDescriptor to buf+descOffset (0x87)",
+    )
+    run.check(
+        "BSOD_50_PREFIX_IN_C",
+        prefix_path is not None and not_found_path is not None
+        and "0x09, 0x02, 0x06" in ih
+        and "0x25, 0x87" in ih,
+        "SdpRewrite_Process scans g_SdpHidPrefix and rejects missing prefix",
+    )
+    run.check(
+        "BSOD_50_NEWLEN_UNCHANGED",
+        new_len_path is not None,
+        "SdpRewrite_Process leaves *newLen equal to usedLen after copy",
     )
     run.check(
         "BSOD_50_NO_BUF4_STORE",
@@ -302,21 +353,6 @@ def main() -> int:
         "BSOD_50_NO_BUF_ASSIGN",
         re.search(r"buf\s*\[[^\]]+\]\s*=", ih) is None,
         "InputHandler.c writes only via RtlCopyMemory",
-    )
-    run.check(
-        "BSOD_50_RTLCOPY_ONLY",
-        "RtlCopyMemory" in ih and "g_HidDescriptor" in ih,
-        "memcpy overlay of g_HidDescriptor",
-    )
-    run.check(
-        "BSOD_50_PREFIX_IN_C",
-        "0x09, 0x02, 0x06" in ih and "0x25, 0x87" in ih,
-        "native prefix 09 02 06 … 25 87 (do not rewrite 0x25)",
-    )
-    run.check(
-        "BSOD_50_NEWLEN_UNCHANGED",
-        "*newLen=usedLen" in ih.replace(" ", "").replace("\t", ""),
-        "Δ=0; *newLen stays usedLen",
     )
 
     # --- Event 41 ---

@@ -110,7 +110,9 @@ if ! command -v flock >/dev/null 2>&1; then
   echo "$0: flock (util-linux) is required to serialize queue submissions." >&2
   exit 1
 fi
-LOCK_DIR="${TMPDIR:-/tmp}/mm-queue-submit.$(id -u)"
+LOCK_DIR="$QUEUE_DIR/.mm-queue-submit"
+# Keep the lock beside request.txt/result.txt so every invocation targeting
+# this queue slot shares one lock regardless of TMPDIR or effective UID.
 # mkdir -p does NOT chmod a directory that already exists, and -d/-L on the
 # directory still passes when an attacker pre-created it world-writable and
 # planted a symlink at lock/ - `exec 9>` would then follow it and truncate the

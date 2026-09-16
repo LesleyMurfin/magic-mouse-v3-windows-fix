@@ -2,15 +2,15 @@
 
 This PC is the only lab. Do not lose the restore package.
 
-## What is proven (2026-09-15, current package)
+## What is proven (2026-09-16, current package)
 
 | | |
 |--|--|
 | Version | **2.0.4.3** — `DriverVer 09/15/2026,2.0.4.3` |
 | Product on **this** PC | Pointer, battery `0x90`, **2-finger** Wheel/AC Pan, 1-finger glass does not scroll |
-| Loaded | dest `MagicMouseDriver-kmdf-204-scroll.sys` signed SHA256 `FE7CF014C806D99B92DA864124090790CA38F0763F6802DE8F06037DA5F54DB2`, cert **16940C0F** |
-| Unsigned freeze | `08E91E37AF3B7B9A56E793ADB876BA48FBD61DDFEE446C89A6A1751CABABD6AC` (25600 bytes) |
-| Detent | registry `ScrollStep` (default 8, clamp `[1,224]`); `Diag!ScrollStep=8` |
+| Loaded | dest `MagicMouseDriver-kmdf-204-scroll.sys` signed SHA256 `0CC4458B2D70C58BDFB89AD3C4D5BCDB594D6EE34DEFD0E6C831E56FE22540ED`, cert **16940C0F** |
+| Unsigned freeze | `25A3287AE7FBF62873354B71F32B16F7DC47CEA65C165C760A9AFBC28C74F6B2` (26112 bytes) |
+| Detent | registry `ScrollStep` (default 8, accepted range `[1,224]`; out-of-range values retain default 8); `Diag!ScrollStep=8` |
 | oem16 | `AD5D244B` — never delete |
 | Gestures | **Not** in this package (mouse+wheel, not PTP) |
 
@@ -26,7 +26,7 @@ below.
 Known-good **16940C0F** unique package — this folder still holds the **2026-09-01 2.0.4.1** build
 and is kept as dated rollback evidence, not as the shipped version:
 
-```
+```text
 C:\mm-dev-queue\kmdf-204-sign\
   MagicMouseDriver-kmdf-204-scroll.sys
   MagicMouseDriver-kmdf-204-scroll.inf

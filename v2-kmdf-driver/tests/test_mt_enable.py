@@ -48,11 +48,10 @@ def _has_ordered_hex(code: str, seq: tuple[int, ...], window: int = 400) -> bool
     return False
 
 
-def _near(code: str, a: str, b: str, window: int = 1200) -> bool:
+def _follows(code: str, a: str, b: str, window: int = 1200) -> bool:
+    """True only if `b` appears after `a`, inside a bounded window."""
     for m in re.finditer(re.escape(a), code):
-        lo = max(0, m.start() - window)
-        hi = min(len(code), m.end() + window)
-        if b in code[lo:hi]:
+        if b in code[m.end() : m.end() + window]:
             return True
     return False
 
@@ -89,9 +88,9 @@ def main() -> int:
     has_sdp = "SdpPatchSuccess" in code
     has_sym = has_send or has_mt or has_pkt
     after_sdp = has_sdp and has_sym and (
-        _near(code, "SdpPatchSuccess", "MmSendMtEnable")
-        or _near(code, "SdpPatchSuccess", "MtEnable")
-        or _near(code, "SdpPatchSuccess", "MtPkt")
+        _follows(code, "SdpPatchSuccess", "MmSendMtEnable")
+        or _follows(code, "SdpPatchSuccess", "MtEnable")
+        or _follows(code, "SdpPatchSuccess", "MtPkt")
     )
 
     run.check(

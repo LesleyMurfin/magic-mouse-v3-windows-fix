@@ -10,6 +10,7 @@ set -euo pipefail
 # work dir C:\mm-dev-queue\kmdf-204-bld-<version without dots> we read back.
 MM_VERSION='2.0.4.3'
 MM_VERTAG="${MM_VERSION//./}"
+QUEUE_DIR="${MM_QUEUE_DIR:-/mnt/c/mm-dev-queue}"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 DRIVER="$(cd "$HERE/.." && pwd)"
@@ -29,4 +30,4 @@ MM_QUEUE_TIMEOUT="${MM_QUEUE_TIMEOUT:-480}" "$SUBMIT" KMDF-204-BUILD rebuild
 echo "live oem16 hash (must stay AD5D244B):"
 sha256sum /mnt/c/Windows/System32/drivers/MagicMouseDriver.sys
 echo "frozen unsigned:"
-cat "/mnt/c/mm-dev-queue/kmdf-204-bld-${MM_VERTAG}/FROZEN-UNSIGNED.txt"
+cat "$QUEUE_DIR/kmdf-204-bld-${MM_VERTAG}/FROZEN-UNSIGNED.txt"
