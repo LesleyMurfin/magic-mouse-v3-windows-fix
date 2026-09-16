@@ -1,6 +1,7 @@
 # SHA256 checksums — Apple driver route (v1-binary-patch)
-# Verify with: certutil -hashfile <file> SHA256  (Windows)
-#              sha256sum <file>                   (Linux/macOS)
+# Paths are relative to v1-binary-patch/ (this file lives in installer/), so:
+#   cd v1-binary-patch && sha256sum -c installer/SHA256SUMS.txt     (Linux/macOS)
+#   certutil -hashfile apple-driver\applewirelessmouse.sys SHA256   (Windows)
 #
 # ---------------------------------------------------------------------------
 # SHIPPED: Apple's applewirelessmouse.sys, UNMODIFIED, in ../apple-driver/
@@ -22,14 +23,19 @@
 # ---------------------------------------------------------------------------
 # LEGACY: byte-patched copy re-signed as CN=MagicMouseFix. Patching breaks
 # Apple's Microsoft countersignature, so this variant REQUIRES Test Mode with
-# Secure Boot and Memory Integrity off. Not shipped; listed so an existing
-# copy can be identified.
+# Secure Boot and Memory Integrity off. Not shipped; the hash is recorded as a
+# comment — not as a checksum line — so that an existing copy can be
+# identified without breaking `sha256sum -c` on this file:
+#
+#   370a5555aebf673c3156ea5b5fbabd8030f2ee7a3a6bd0fcb1b4b6c93fa56a03
+#     legacy applewirelessmouse.sys, patched + re-signed, 66,288 bytes
 # ---------------------------------------------------------------------------
-370a5555aebf673c3156ea5b5fbabd8030f2ee7a3a6bd0fcb1b4b6c93fa56a03  applewirelessmouse.sys  (legacy, patched + re-signed)
 
 # ---------------------------------------------------------------------------
 # KNOWN BAD — do not install. Patched but never re-signed: Authenticode
 # reports HashMismatch against Microsoft's countersignature. The installer
-# refuses it.
+# refuses it. Recorded as a comment for the same reason as above:
+#
+#   d22eb163d03a0830ee4ed9c9265044cdd4099974412fa62f4c249bef971129ec
+#     rejected: tampered, signature invalid
 # ---------------------------------------------------------------------------
-d22eb163d03a0830ee4ed9c9265044cdd4099974412fa62f4c249bef971129ec  (rejected: tampered, signature invalid)

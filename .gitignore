@@ -39,15 +39,11 @@ Thumbs.db
 # DMCA-NOTICE.md).
 *.sys
 !v1-binary-patch/apple-driver/applewirelessmouse.sys
-!v1-binary-patch/applewirelessmouse.sys
-!v1-binary-patch/installer/applewirelessmouse.sys
 
-# Certificates EXCEPT release/
+# Certificates — none are tracked in this repository
 *.cer
 *.pfx
 *.p12
-!v1-binary-patch/MagicMouseFix.cer
-!v1-binary-patch/installer/MagicMouseFix.cer
 
 # Python (if used for scripts)
 __pycache__/

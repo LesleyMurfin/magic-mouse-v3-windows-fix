@@ -53,10 +53,12 @@ KMDF driver source will remain published — they are independent works that emb
 
 ## KMDF driver independence
 
-The KMDF driver in `/v2-kmdf-driver/` is an independent implementation written from scratch in C
-against the public Windows Driver Kit. It is **not** derived from Apple's binary, contains no Apple
-code, and does not depend on Apple's driver being installed. It is a separate driver, not a
-replacement for the Apple-driver route; both are maintained.
+The KMDF driver is an independent implementation written from scratch in C against the public
+Windows Driver Kit. It is **not** derived from Apple's binary, contains no Apple code, and does not
+depend on Apple's driver being installed. It is a separate driver, not a replacement for the
+Apple-driver route; both are maintained. Its source and documentation are published in
+`v2-kmdf-driver/`, under this project's MIT licence; at the time of writing that directory holds
+the driver's documentation only, the C source being under review in a separate pull request.
 
 ## DMCA Contact
 
