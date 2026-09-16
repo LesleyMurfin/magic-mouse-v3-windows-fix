@@ -2,38 +2,75 @@
 
 <#
 .SYNOPSIS
-Installs the Magic Mouse v3 scroll fix (PATH-A binary patch) on Windows.
+Installs the Apple multi-touch filter driver (applewirelessmouse.sys) so scroll works
+on an Apple Magic Mouse paired over Bluetooth.
 
 .DESCRIPTION
-Installs a lower-filter kernel driver (applewirelessmouse.sys) that restores scroll
-functionality on Apple Magic Mouse v3 (PID 0x0323) when paired over Bluetooth.
+Windows ships no multi-touch filter for the Magic Mouse, so the touch surface produces
+no scroll. Apple's own Boot Camp driver does that translation, but Apple's INF has no
+entry for the Bluetooth PID this mouse reports (0x0323), so the driver is registered
+manually as a LowerFilter on the device instead.
 
-Logic is extracted from the production-tested install route
-(PATHA-V5-DIRECTCOPY-INSTALL) and adapted for a pre-signed public binary.
+Two binary variants are supported and auto-detected by Authenticode signer:
+
+  AppleSigned      Apple's driver, UNMODIFIED. Apple-signed and Microsoft
+                   WHQL-countersigned, so the signature is intact.
+                   -> No Test Mode. Secure Boot and memory integrity may stay ON.
+                   This is the recommended variant.
+
+  PatchedResigned  Legacy: a byte-patched copy re-signed with this project's own
+                   certificate (CN=MagicMouseFix). Patching breaks Apple's
+                   countersignature, and a self-signed cert outside Root cannot
+                   satisfy kernel code integrity.
+                   -> REQUIRES test signing, Secure Boot off, memory integrity off.
 
 Workflow:
   1. Elevation + Windows build (>= 14393) check
   2. HiberbootEnabled (Fast Startup) must be 0
-  3. Test Signing mode must be ON (self-signed kernel driver)
-  4. HVCI / Memory Integrity warning (Win11 22H2+ blocks self-signed drivers)
-  5. SHA256 + size verify of shipped applewirelessmouse.sys
-  6. Import MagicMouseFix.cer to LocalMachine\TrustedPublisher (NOT Root)
+  3. Locate the driver: -DriverPath, then beside this script, then the local DriverStore
+  4. Identify the variant from its signature, and verify it
+  5. Code-integrity gates applied ONLY for PatchedResigned (test signing, HVCI)
+  6. Import MagicMouseFix.cer to LocalMachine\TrustedPublisher (PatchedResigned only,
+     and NOT to Root)
   7. Backup existing driver to C:\ProgramData\MagicMousePatch\backup\
-  8. Detect v3 device via BTHENUM PID&0323
+  8. Detect the mouse via BTHENUM PID&0323
   9. Clear BTHPORT cache (CachedServices, DynamicCachedServices) for the MAC
  10. Stop service -> disable device -> copy -> register service -> write
      LowerFilters at the device-instance level (REG_MULTI_SZ) -> enable device
- 11. Post-install verify: SHA256 + size + Authenticode + signer thumbprint
+ 11. Post-install verify: hash matches source, size, Authenticode, expected signer
  12. Reboot instruction
+
+.PARAMETER DriverPath
+Explicit path to applewirelessmouse.sys. Use this to install Apple's unmodified driver
+from wherever you extracted it.
+
+.PARAMETER FromDriverStore
+Search %SystemRoot%\System32\DriverStore\FileRepository for Apple's driver (present if
+Apple Software Update / Boot Camp support software was ever installed) and use that.
 
 .EXAMPLE
 .\Install-MagicMousePatch.ps1
+
+.EXAMPLE
+.\Install-MagicMousePatch.ps1 -FromDriverStore
+
+.EXAMPLE
+.\Install-MagicMousePatch.ps1 -DriverPath D:\bootcamp\applewirelessmouse.sys
 
 .NOTES
 Author:  Revive Business Solutions
 License: MIT
 Contact: riley@revivebusiness.ca
+
+applewirelessmouse.sys is Apple's proprietary driver and is subject to Apple's software
+licence terms. See DMCA-NOTICE.md.
 #>
+
+[CmdletBinding()]
+param(
+    [string]$DriverPath,
+    [switch]$FromDriverStore
+)
 
 # ============================================================================
 # Configuration
@@ -43,22 +80,27 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference    = "SilentlyContinue"
 
 if ($PSVersionTable.PSVersion.Major -lt 5) {
-    Write-Host "PowerShell 5.0 or later required. Current: $($PSVersionTable.PSVersion)" -ForegroundColor Red
+    Write-Host "PowerShell 5.1 or later is required." -ForegroundColor Red
     exit 1
 }
 
 $ScriptRoot   = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$DriverSrc    = Join-Path $ScriptRoot "applewirelessmouse.sys"
 $CertPath     = Join-Path $ScriptRoot "MagicMouseFix.cer"
 $BackupDir    = "C:\ProgramData\MagicMousePatch\backup"
 $TargetDriver = "C:\Windows\System32\drivers\applewirelessmouse.sys"
 $ServiceName  = "applewirelessmouse"
 
-# Expected facts (empirically established)
-$ExpectedSha256       = "370A5555AEBF673C3156EA5B5FBABD8030F2EE7A3A6BD0FCB1B4B6C93FA56A03"
-$ExpectedSize         = 66288
-$CertThumbprint       = "16940C0F937D569363560D5FEC5CD8FA6D6D9BCE"
-$MagicMouseDeviceRe   = 'BTHENUM.*00001124.*PID&0323'
+# Legacy patched+re-signed variant: exact artifact this installer shipped as v1.0.0.
+$PatchedSha256  = "370A5555AEBF673C3156EA5B5FBABD8030F2EE7A3A6BD0FCB1B4B6C93FA56A03"
+$PatchedSize    = 66288
+$CertThumbprint = "16940C0F937D569363560D5FEC5CD8FA6D6D9BCE"
+
+# Apple's unmodified driver is identified by its countersigning chain, not by hash:
+# Apple has shipped more than one Boot Camp build, and pinning a hash here would
+# reject a legitimately signed newer copy.
+$AppleSignerPattern = 'Microsoft Windows Hardware Compatibility Publisher|Apple Inc'
+
+$MagicMouseDeviceRe = 'BTHENUM.*00001124.*PID&0323'
 
 # ============================================================================
 # Helpers
@@ -122,9 +164,14 @@ function Test-TestSigning {
         Write-Status "Test Signing is ON" "OK"
         return $true
     }
-    Write-Status "Test Signing is OFF - self-signed kernel driver will not load" "ERROR"
+    Write-Status "Test Signing is OFF - a self-signed kernel driver will not load" "ERROR"
     Write-Host ""
-    Write-Host "  REMEDIATE:" -ForegroundColor Yellow
+    Write-Host "  This is only required for the legacy patched+re-signed driver." -ForegroundColor Yellow
+    Write-Host "  Apple's UNMODIFIED driver needs none of this - it is Microsoft-" -ForegroundColor Yellow
+    Write-Host "  countersigned. Re-run with -FromDriverStore or -DriverPath <path>" -ForegroundColor Yellow
+    Write-Host "  pointing at Apple's own applewirelessmouse.sys." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  Otherwise, to use the patched variant:" -ForegroundColor Yellow
     Write-Host "    1. Run (Admin):  bcdedit /set testsigning on" -ForegroundColor Gray
     Write-Host "    2. Reboot" -ForegroundColor Gray
     Write-Host "    3. Re-run this installer" -ForegroundColor Gray
@@ -155,37 +202,147 @@ function Test-HvciState {
 }
 
 # ============================================================================
+# Driver discovery + variant identification
+# ============================================================================
+
+# Apple's driver is present in the DriverStore on any machine where Apple
+# Software Update or Boot Camp support software was installed.
+function Find-DriverStoreCopy {
+    $repo = Join-Path $env:SystemRoot 'System32\DriverStore\FileRepository'
+    if (-not (Test-Path $repo)) { return $null }
+    Get-ChildItem -Path $repo -Filter 'applewirelessmouse.inf_*' -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Get-ChildItem -Path $_.FullName -Filter 'applewirelessmouse.sys' -File -ErrorAction SilentlyContinue
+        } |
+        Sort-Object -Property Length -Descending |
+        Select-Object -First 1 -ExpandProperty FullName
+}
+
+function Resolve-DriverSource {
+    Write-Section "Locating driver binary..."
+
+    if ($DriverPath) {
+        if (-not (Test-Path -LiteralPath $DriverPath)) {
+            Write-Status "-DriverPath not found: $DriverPath" "ERROR"
+            return $null
+        }
+        Write-Status "Using -DriverPath: $DriverPath" "OK"
+        return (Resolve-Path -LiteralPath $DriverPath).Path
+    }
+
+    if ($FromDriverStore) {
+        $ds = Find-DriverStoreCopy
+        if (-not $ds) {
+            Write-Status "No applewirelessmouse.sys in the local DriverStore" "ERROR"
+            Write-Host "  Install Apple Software Update for Windows, or extract the driver from" -ForegroundColor Yellow
+            Write-Host "  Boot Camp Support Software, then use -DriverPath." -ForegroundColor Yellow
+            return $null
+        }
+        Write-Status "Found in DriverStore: $ds" "OK"
+        return $ds
+    }
+
+    $local = Join-Path $ScriptRoot 'applewirelessmouse.sys'
+    if (Test-Path -LiteralPath $local) {
+        Write-Status "Using driver beside this script: $local" "OK"
+        return $local
+    }
+
+    $ds = Find-DriverStoreCopy
+    if ($ds) {
+        Write-Status "No local copy; using DriverStore: $ds" "OK"
+        return $ds
+    }
+
+    Write-Status "applewirelessmouse.sys not found" "ERROR"
+    Write-Host "  Options:" -ForegroundColor Yellow
+    Write-Host "    - place applewirelessmouse.sys beside this script" -ForegroundColor Gray
+    Write-Host "    - or pass -DriverPath <path>" -ForegroundColor Gray
+    Write-Host "    - or install Apple Software Update and pass -FromDriverStore" -ForegroundColor Gray
+    return $null
+}
+
+# Identify which binary we were handed, from its signature. Hash pinning is used
+# only for the legacy patched artifact; Apple has shipped multiple Boot Camp
+# builds, so a hash pin would reject a legitimately signed newer copy.
+function Get-DriverVariant {
+    param([string]$Path)
+
+    $sig   = Get-AuthenticodeSignature -LiteralPath $Path
+    $thumb = ''
+    $subj  = ''
+    if ($sig.SignerCertificate) {
+        $thumb = $sig.SignerCertificate.Thumbprint.ToUpper()
+        $subj  = $sig.SignerCertificate.Subject
+    }
+
+    $info = [ordered]@{
+        Path      = $Path
+        Size      = (Get-Item -LiteralPath $Path).Length
+        Sha256    = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToUpper()
+        SigStatus = $sig.Status
+        Signer    = $subj
+        Thumb     = $thumb
+        Variant   = 'Unknown'
+    }
+
+    if ($thumb -eq $CertThumbprint) {
+        $info.Variant = 'PatchedResigned'
+    } elseif ($sig.Status -eq 'Valid' -and $subj -match $AppleSignerPattern) {
+        $info.Variant = 'AppleSigned'
+    }
+
+    return [pscustomobject]$info
+}
+
+# ============================================================================
 # Binary + cert verify
 # ============================================================================
 
 function Test-DriverBinary {
-    Write-Section "Verifying shipped driver binary..."
-    if (-not (Test-Path $DriverSrc)) {
-        Write-Status "Driver binary not found: $DriverSrc" "ERROR"
-        return $false
+    param([pscustomobject]$Info)
+
+    Write-Section "Verifying driver binary..."
+    Write-Host ("  Path    : {0}" -f $Info.Path)      -ForegroundColor Gray
+    Write-Host ("  Size    : {0} bytes" -f $Info.Size) -ForegroundColor Gray
+    Write-Host ("  SHA256  : {0}" -f $Info.Sha256)     -ForegroundColor Gray
+    Write-Host ("  Auth    : {0}" -f $Info.SigStatus)  -ForegroundColor Gray
+    Write-Host ("  Signer  : {0}" -f $Info.Signer)     -ForegroundColor Gray
+
+    switch ($Info.Variant) {
+        'AppleSigned' {
+            Write-Status "Apple's UNMODIFIED driver - Microsoft-countersigned" "OK"
+            Write-Host "  No Test Mode needed. Secure Boot and Memory Integrity may stay ON." -ForegroundColor Green
+            return $true
+        }
+        'PatchedResigned' {
+            Write-Status "Legacy patched driver, re-signed as MagicMouseFix" "WARN"
+            if ($Info.Size -ne $PatchedSize) {
+                Write-Status "Size mismatch. Expected $PatchedSize, got $($Info.Size)" "ERROR"
+                return $false
+            }
+            if ($Info.Sha256 -ne $PatchedSha256.ToUpper()) {
+                Write-Status "SHA256 mismatch. Expected $PatchedSha256" "ERROR"
+                return $false
+            }
+            if ($Info.SigStatus -ne 'Valid') {
+                Write-Status "Authenticode status is $($Info.SigStatus), expected Valid" "ERROR"
+                return $false
+            }
+            Write-Status "Patched driver verified against pinned hash" "OK"
+            Write-Host "  This variant REQUIRES Test Mode. Apple's unmodified driver does not -" -ForegroundColor Yellow
+            Write-Host "  see -FromDriverStore / -DriverPath." -ForegroundColor Yellow
+            return $true
+        }
+        default {
+            Write-Status "Unrecognised driver binary - refusing to install" "ERROR"
+            Write-Host "  Expected either:" -ForegroundColor Yellow
+            Write-Host "    - Apple's unmodified driver (Authenticode Valid, Microsoft/Apple signer)" -ForegroundColor Gray
+            Write-Host "    - the legacy patched driver signed by MagicMouseFix ($CertThumbprint)" -ForegroundColor Gray
+            Write-Host "  A driver whose signature does not verify has been modified or corrupted." -ForegroundColor Yellow
+            return $false
+        }
     }
-    $size = (Get-Item $DriverSrc).Length
-    Write-Host "  Path:  $DriverSrc" -ForegroundColor Gray
-    Write-Host "  Size:  $size bytes" -ForegroundColor Gray
-    if ($size -ne $ExpectedSize) {
-        Write-Status "Size mismatch. Expected $ExpectedSize, got $size" "ERROR"
-        return $false
-    }
-    $sha = (Get-FileHash $DriverSrc -Algorithm SHA256).Hash.ToUpper()
-    Write-Host "  SHA256: $sha" -ForegroundColor Gray
-    if ($sha -ne $ExpectedSha256.ToUpper()) {
-        Write-Status "SHA256 mismatch. Expected $ExpectedSha256" "ERROR"
-        return $false
-    }
-    $sig = Get-AuthenticodeSignature $DriverSrc
-    if ($sig.SignerCertificate -and ($sig.SignerCertificate.Thumbprint -eq $CertThumbprint)) {
-        Write-Status "Driver pre-signed by MagicMouseFix (thumbprint OK)" "OK"
-    } else {
-        Write-Status "Driver is not signed by expected cert" "ERROR"
-        return $false
-    }
-    Write-Status "Driver binary verified" "OK"
-    return $true
 }
 
 function Import-MagicMouseCert {
@@ -352,14 +509,17 @@ function Stop-MagicMouseService {
 }
 
 function Invoke-DirectCopyInstall {
-    param([string]$InstanceId)
+    param(
+        [string]$InstanceId,
+        [pscustomobject]$Info
+    )
 
     Write-Section "Installing driver (disable -> copy -> enable)..."
 
     & pnputil /disable-device "$InstanceId" 2>&1 | Out-Null
     Start-Sleep -Seconds 5
 
-    Copy-Item -Path $DriverSrc -Destination $TargetDriver -Force -ErrorAction Stop
+    Copy-Item -LiteralPath $Info.Path -Destination $TargetDriver -Force -ErrorAction Stop
     Write-Status "Copied driver to $TargetDriver" "OK"
 
     & pnputil /enable-device "$InstanceId" 2>&1 | Out-Null
@@ -368,22 +528,34 @@ function Invoke-DirectCopyInstall {
 }
 
 function Test-PostInstall {
+    param([pscustomobject]$Info)
+
     Write-Section "Verifying post-install state..."
 
-    $postHash = (Get-FileHash $TargetDriver -Algorithm SHA256).Hash.ToLower()
-    $srcHash  = (Get-FileHash $DriverSrc    -Algorithm SHA256).Hash.ToLower()
+    $postHash = (Get-FileHash $TargetDriver -Algorithm SHA256).Hash.ToUpper()
     $postSize = (Get-Item $TargetDriver).Length
     $sig      = Get-AuthenticodeSignature $TargetDriver
+    $postThumb = ''
+    if ($sig.SignerCertificate) { $postThumb = $sig.SignerCertificate.Thumbprint.ToUpper() }
 
-    $hashOk   = ($postHash -eq $srcHash)
-    $sizeOk   = ($postSize -eq $ExpectedSize)
-    $sigOk    = ($sig.Status -eq 'Valid')
-    $signerOk = ($sig.SignerCertificate -and $sig.SignerCertificate.Thumbprint -eq $CertThumbprint)
+    # Compare against what we installed, not against a baked-in constant: the
+    # source may legitimately be Apple's driver of any Boot Camp vintage.
+    $hashOk = ($postHash -eq $Info.Sha256)
+    $sizeOk = ($postSize -eq $Info.Size)
+    $sigOk  = ($sig.Status -eq 'Valid')
 
-    Write-Host ("  SHA256   : {0} ({1})" -f $postHash, (@{$true='OK';$false='FAIL'}[$hashOk]))   -ForegroundColor Gray
-    Write-Host ("  Size     : {0} ({1})" -f $postSize, (@{$true='OK';$false='FAIL'}[$sizeOk]))   -ForegroundColor Gray
-    Write-Host ("  Auth Sig : {0} ({1})" -f $sig.Status, (@{$true='OK';$false='FAIL'}[$sigOk]))  -ForegroundColor Gray
-    Write-Host ("  Signer   : {0}" -f ($sig.SignerCertificate.Thumbprint))                       -ForegroundColor Gray
+    $signerOk = switch ($Info.Variant) {
+        'PatchedResigned' { $postThumb -eq $CertThumbprint }
+        'AppleSigned'     { $sig.SignerCertificate -and $sig.SignerCertificate.Subject -match $AppleSignerPattern }
+        default           { $false }
+    }
+
+    $fmt = @{$true='OK';$false='FAIL'}
+    Write-Host ("  Variant  : {0}" -f $Info.Variant)                                     -ForegroundColor Gray
+    Write-Host ("  SHA256   : {0} ({1})" -f $postHash, $fmt[$hashOk])                    -ForegroundColor Gray
+    Write-Host ("  Size     : {0} ({1})" -f $postSize, $fmt[$sizeOk])                    -ForegroundColor Gray
+    Write-Host ("  Auth Sig : {0} ({1})" -f $sig.Status, $fmt[$sigOk])                   -ForegroundColor Gray
+    Write-Host ("  Signer   : {0} ({1})" -f $postThumb, $fmt[[bool]$signerOk])           -ForegroundColor Gray
 
     if ($hashOk -and $sizeOk -and $sigOk -and $signerOk) {
         Write-Status "Post-install verification PASSED" "OK"
@@ -400,30 +572,45 @@ function Test-PostInstall {
 function Main {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host " Magic Mouse v3 Scroll Fix Installer"    -ForegroundColor Cyan
-    Write-Host " v1.0.0 - PATH-A Binary Patch"           -ForegroundColor Cyan
+    Write-Host " Magic Mouse Scroll Fix Installer"       -ForegroundColor Cyan
+    Write-Host " Apple applewirelessmouse.sys filter"    -ForegroundColor Cyan
     Write-Host "========================================" -ForegroundColor Cyan
 
-    if (-not (Test-WindowsVersion))  { exit 1 }
-    if (-not (Test-FastStartup))     { exit 1 }
-    if (-not (Test-TestSigning))     { exit 1 }
-    Test-HvciState | Out-Null
+    if (-not (Test-WindowsVersion)) { exit 1 }
+    if (-not (Test-FastStartup))    { exit 1 }
 
-    if (-not (Test-DriverBinary))    { exit 1 }
-    if (-not (Import-MagicMouseCert)){ exit 1 }
-    if (-not (Backup-ExistingDriver)){ exit 1 }
+    $src = Resolve-DriverSource
+    if (-not $src) { exit 1 }
 
-    Write-Section "Detecting Magic Mouse v3..."
+    $info = Get-DriverVariant -Path $src
+    if (-not (Test-DriverBinary -Info $info)) { exit 1 }
+
+    # Code-integrity gates apply ONLY to the self-signed, patched variant.
+    # Apple's unmodified driver is Microsoft-countersigned: forcing Test Mode or
+    # demanding Memory Integrity be off would be wrong, and would push users into
+    # weakening their machine for no reason.
+    if ($info.Variant -eq 'PatchedResigned') {
+        if (-not (Test-TestSigning)) { exit 1 }
+        Test-HvciState | Out-Null
+        if (-not (Import-MagicMouseCert)) { exit 1 }
+    } else {
+        Write-Section "Code-integrity requirements..."
+        Write-Status "Apple-signed driver: no Test Mode, no certificate import needed" "OK"
+        Write-Host "  Secure Boot and Memory Integrity can remain enabled." -ForegroundColor Green
+    }
+
+    if (-not (Backup-ExistingDriver)) { exit 1 }
+
+    Write-Section "Detecting Magic Mouse (PID&0323)..."
     $v3 = Get-MagicMouseV3
     if (-not $v3) {
-        Write-Status "Magic Mouse v3 (PID&0323) not currently paired" "WARN"
+        Write-Status "Magic Mouse (PID&0323) not currently paired" "WARN"
         Write-Host "  Pair the mouse over Bluetooth, then re-run this installer to" -ForegroundColor Yellow
         Write-Host "  complete LowerFilters binding. Driver file + service will still" -ForegroundColor Yellow
         Write-Host "  be installed now." -ForegroundColor Yellow
-        # Still copy + register so a later pair just works once LowerFilters is written
-        Copy-Item -Path $DriverSrc -Destination $TargetDriver -Force -ErrorAction Stop
+        Copy-Item -LiteralPath $info.Path -Destination $TargetDriver -Force -ErrorAction Stop
         Register-MagicMouseService
-        Test-PostInstall | Out-Null
+        Test-PostInstall -Info $info | Out-Null
         Write-Host ""
         Write-Host "Partial install complete. Re-run after pairing the mouse." -ForegroundColor Yellow
         exit 0
@@ -432,11 +619,11 @@ function Main {
 
     Clear-BthportCache -InstanceId $v3.InstanceId
     Stop-MagicMouseService
-    Invoke-DirectCopyInstall -InstanceId $v3.InstanceId
+    Invoke-DirectCopyInstall -InstanceId $v3.InstanceId -Info $info
     Register-MagicMouseService
     Set-LowerFiltersMultiSz | Out-Null
 
-    if (-not (Test-PostInstall)) {
+    if (-not (Test-PostInstall -Info $info)) {
         Write-Host ""
         Write-Status "Installation completed with verification errors" "ERROR"
         Write-Host "  Run Uninstall-MagicMousePatch.ps1 to revert." -ForegroundColor Yellow
@@ -447,6 +634,19 @@ function Main {
     Write-Host "========================================" -ForegroundColor Green
     Write-Host " Installation Complete"                   -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
+    Write-Host ""
+    Write-Host ("Installed variant: {0}" -f $info.Variant) -ForegroundColor Cyan
+    if ($info.Variant -eq 'AppleSigned') {
+        Write-Host "  Microsoft-countersigned - Test Mode is NOT required." -ForegroundColor Green
+    } else {
+        Write-Host "  Self-signed - Test Mode must stay ON for this driver to load." -ForegroundColor Yellow
+    }
+    Write-Host ""
+    Write-Host "What you get with this driver:" -ForegroundColor Cyan
+    Write-Host "  Pointer  : works" -ForegroundColor Gray
+    Write-Host "  Scroll   : two-finger scroll via Apple's multi-touch filter" -ForegroundColor Gray
+    Write-Host "  Battery  : use Magic Tray (https://magictray.app/) - it detects this" -ForegroundColor Gray
+    Write-Host "             driver and flips Mode A/B briefly to read the level" -ForegroundColor Gray
     Write-Host ""
     Write-Host "NEXT STEP: Reboot your computer." -ForegroundColor Yellow
     Write-Host ""
