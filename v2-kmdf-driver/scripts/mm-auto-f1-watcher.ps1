@@ -10,8 +10,8 @@
 # BRB_L2CA_OPEN_CHANNEL was snooped for MtControlHandle, and that does not
 # always happen on reconnect (see STATUS.md "Why the kernel doesn't
 # already auto-send F1"). The proven userspace fix is re-running
-# HidD_SetFeature([0xF1,0x02,0x01]) on COL01 - exactly what
-# C:\mm-dev-queue\mm-f1-once.ps1 already does.
+# HidD_SetFeature([0xF1,0x02,0x01]) on COL01 - exactly what the sibling
+# mm-f1-once.ps1 already does.
 #
 # This script does NOT touch the driver, the service, or any .sys file.
 # It watches for PID_0323 PnP entity arrival (WMI __InstanceCreationEvent
@@ -22,11 +22,29 @@
 # mm-auto-f1-watcher-install.ps1 (runs at startup, SYSTEM, restarts on
 # failure).
 
+# PSAvoidGlobalVars: the $action scriptblock below is handed to
+# Register-WmiEvent -Action and runs in the event subscriber's own runspace
+# context, where this script's scope is not visible. The log path, the F1
+# script path and the debounce state therefore have to live in global scope -
+# demoting them to $script: would leave the arrival handler writing to a null
+# log path and running no F1 at all. Same reason Write-MmWatcherLog and
+# Invoke-MmF1 are declared `function global:`.
+#
+# PSAvoidUsingWMICmdlet: Register-CimIndicationEvent is not a drop-in for
+# Register-WmiEvent here - the indication delivered to -Action is a
+# CimIndicationEventArgs, not a management event, so the
+# $Event.SourceEventArgs.NewEvent.TargetInstance access below changes shape.
+# This is the hardware-confirmed reconnect-recovery path and cannot be
+# retested from this repo, so the working WMI subscription stays.
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidGlobalVars', '')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWMICmdlet', '')]
+param()
+
 $ErrorActionPreference = 'Continue'
 
 $global:MmWatcherLogDir          = 'C:\ProgramData\MagicMouseDriver'
 $global:MmWatcherLogFile         = Join-Path $global:MmWatcherLogDir 'auto-f1-watcher.log'
-$global:MmWatcherF1Script        = 'C:\mm-dev-queue\mm-f1-once.ps1'
+$global:MmWatcherF1Script        = Join-Path $PSScriptRoot 'mm-f1-once.ps1'
 $global:MmWatcherDebounceSeconds = 5
 $global:MmWatcherLastFire        = [DateTime]'2000-01-01'
 
@@ -117,7 +135,11 @@ function global:Test-MmCol01Present {
 
 $action = {
     $devId = 'unknown'
-    try { $devId = $Event.SourceEventArgs.NewEvent.TargetInstance.PNPDeviceID } catch {}
+    try {
+        $devId = $Event.SourceEventArgs.NewEvent.TargetInstance.PNPDeviceID
+    } catch {
+        Write-MmWatcherLog ('arrival event carried no readable PNPDeviceID: ' + $_)
+    }
     Write-MmWatcherLog ('PID_0323 PnP entity arrival: ' + $devId)
 
     # Give HidBth a moment to finish re-creating COL01/COL02 before

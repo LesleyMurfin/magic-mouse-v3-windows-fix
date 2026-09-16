@@ -8,11 +8,11 @@ From this WSL (after `WSL-FACTORY-MIRROR`):
 bash v2-kmdf-driver/scripts/kmdf-204-from-wsl.sh
 ```
 
-That syncs sources to `C:\mm-dev-queue\kmdf-204-src` and runs named phases `KMDF-204-SYNC` / `KMDF-204-BUILD` (unsigned unique `2.0.4.1` only). It does **not** `pnputil` or `INSTALL-DRIVER`.
+That syncs sources to `C:\mm-dev-queue\kmdf-204-src` and runs named phases `KMDF-204-SYNC` / `KMDF-204-BUILD` (unsigned unique `2.0.4.3` only). It does **not** `pnputil` or `INSTALL-DRIVER`.
 
 Build on Windows 10/11 x64 with Visual Studio + WDK, or a mounted Enterprise WDK.
 
-`msbuild` emits **`MagicMouseDriver-kmdf-204-scroll.sys`** (unique INF dest / ServiceBinary). Then freeze it as **`MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys`**. FileVersion / DriverVer is **2.0.4.1**.
+`msbuild` emits **`MagicMouseDriver-kmdf-204-scroll.sys`** (unique INF dest / ServiceBinary). Then freeze it as **`MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys`**. FileVersion / DriverVer is **2.0.4.3** (`DriverVer 09/15/2026,2.0.4.3`).
 
 Do **not** emit `MagicMouseDriver.sys`. That filename is the Apr 30 restore binary (`AD5D244B…`, oem16 `f7bf31c7`). Never name a KMDF build `applewirelessmouse*.sys`.
 

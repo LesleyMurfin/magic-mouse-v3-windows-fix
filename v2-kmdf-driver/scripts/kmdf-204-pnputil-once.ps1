@@ -12,6 +12,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$Here = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $Here 'Kmdf-Common.ps1')
+
 $Inf = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.inf'
 $Sys = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.sys'
 $Cat = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.cat'
@@ -33,11 +36,11 @@ $infText = Get-Content -LiteralPath $Inf -Raw
 if ($infText -match 'AddService\s*=\s*MagicMouseDriver\s*,') { Fail 3 'INF AddService hijacks live MagicMouseDriver' }
 if ($infText -notmatch 'AddService\s*=\s*MagicMouseDriver204Scroll\s*,') { Fail 3 'INF AddService must be MagicMouseDriver204Scroll' }
 
-$sig = Get-AuthenticodeSignature -LiteralPath $Sys
-if ($sig.Status -ne 'Valid') { Fail 3 ('REFUSE unsigned or invalid sys ' + $sig.Status) }
-$th = ''
-if ($sig.SignerCertificate) { $th = $sig.SignerCertificate.Thumbprint.ToUpperInvariant() }
-if ($th -notmatch '^16940C0F') { Fail 3 ('REFUSE signer thumb ' + $th) }
+# Same gate Install-KMDF.ps1 applies: full 40-char thumbprint, and the
+# documented self-signed 'UnknownError' status accepted alongside 'Valid'.
+if (-not (Test-KmdfSignedByThumb -Path $Sys -Thumb $script:KmdfSignThumb)) {
+    Fail 3 ('REFUSE ' + $Sys + ' - not signed by ' + $script:KmdfSignThumb)
+}
 
 Write-Output '=== remove unique oem only (not oem16) ==='
 $pnpRaw = & pnputil.exe /enum-drivers 2>$null | Out-String
@@ -59,7 +62,14 @@ Write-Output '=== pnputil /add-driver unique INF ==='
 & pnputil.exe /add-driver $Inf /install
 $add = $LASTEXITCODE
 Write-Output ('add_exit=' + $add)
-if ($add -ne 0) { Fail $add 'pnputil /add-driver failed' }
+# 3010 is success-with-reboot-required, not failure (same as mm-scroll-tune.ps1).
+$rebootRequired = $false
+if ($add -eq 3010) {
+    Write-Output 'add_exit=3010 is success-with-reboot-required - package staged, reboot to finish'
+    $rebootRequired = $true
+} elseif ($add -ne 0) {
+    Fail $add 'pnputil /add-driver failed'
+}
 
 
 $inst = 'BTHENUM\{00001124-0000-1000-8000-00805F9B34FB}_VID&0001004C_PID&0323'
@@ -75,7 +85,7 @@ if (Test-Path -LiteralPath $f1) {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $f1
     Write-Output ('f1_exit=' + $LASTEXITCODE)
 } else {
-    Write-Output 'F1 script missing — LastAclReceived will stay 9 until HidD_SetFeature F1'
+    Write-Output 'F1 script missing - LastAclReceived will stay 9 until HidD_SetFeature F1'
 }
 
 
@@ -94,4 +104,8 @@ if (Test-Path -LiteralPath $dest) {
 }
 
 Write-Output ('===== PNPUTIL done stage=' + $Stage + ' =====')
+if ($rebootRequired) {
+    Write-Output 'add-driver reported 3010 - reboot required to finish'
+    exit 3010
+}
 exit 0

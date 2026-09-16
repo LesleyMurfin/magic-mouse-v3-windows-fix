@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Spec 4 executable gate — unique 2.0.4.1 KMDF scroll + 135-byte SDP overlay.
+"""Spec 4 executable gate — unique 2.0.4.3 KMDF scroll + 135-byte SDP overlay.
 
 RED-first. Unique INF / kernel already at 7087f4b is not a pass (tautology).
 Keyword presence in a Python self-model is not a pass.

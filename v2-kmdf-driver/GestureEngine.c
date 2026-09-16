@@ -144,9 +144,15 @@ AccumulateSurfaceScroll(
             continue;
         }
 
-        // TWO_FINGER + SCROLL_STEP_8: 1-finger START/DRAG must not emit Wheel.
+        // TWO_FINGER + SCROLL_STEP_8 baseline (detent = registry ScrollStep,
+        // default MM_SCROLL_STEP 8): one finger (START or DRAG) never emits
+        // Wheel. Refresh the anchor so one-finger travel is discarded instead
+        // of accumulating into a spurious notch when a second finger lands and
+        // the two-finger step calculation begins.
         if (down < 2)
         {
+            ctx->TouchAnchorX[id] = (INT16)x;
+            ctx->TouchAnchorY[id] = (INT16)y;
             continue;
         }
 

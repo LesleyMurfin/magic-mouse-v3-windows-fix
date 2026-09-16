@@ -17,13 +17,13 @@ $script:KmdfUniqueInf     = 'MagicMouseDriver-kmdf-204-scroll.inf'
 $script:KmdfUniqueCat     = 'MagicMouseDriver-kmdf-204-scroll.cat'
 $script:KmdfUniqueSys     = 'MagicMouseDriver-kmdf-204-scroll.sys'
 $script:KmdfArtifactGlob  = 'MagicMouseDriver-kmdf-2.0.4-scroll-*.sys'
-$script:KmdfLiveSysName   = 'MagicMouseDriver.sys'   # Apr 30 restore name — do not ship a second copy
-$script:KmdfRetiredInf    = 'MagicMouseDriver.inf'   # failed oem26 identity — do not pnputil
+$script:KmdfLiveSysName   = 'MagicMouseDriver.sys'   # Apr 30 restore name - do not ship a second copy
+$script:KmdfRetiredInf    = 'MagicMouseDriver.inf'   # failed oem26 identity - do not pnputil
 
 # Human sign cert (private key on the PC, not in git). Never commit PFX.
 $script:KmdfSignThumb = '16940C0F937D569363560D5FEC5CD8FA6D6D9BCE'
 
-# Freeze-hash gate — refuse these as THIS package.
+# Freeze-hash gate - refuse these as THIS package.
 $script:KmdfShaApr30     = 'AD5D244B176D650961594EDED153C46F9A52004C424DABFD86E50844E447546B'
 $script:KmdfShaMay20     = '559B136AEB869D1B85EE21583BB7BFD72782A31EE476A2622014D87CE6762F30'
 $script:KmdfShaFailed204 = '845435CEF0DABAF2FD0638717E44F6A774556CECE47F00C8B12328B5B2B3FDE3'
@@ -87,7 +87,7 @@ function Get-KmdfFileSha256 {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToUpperInvariant()
 }
 
-function Test-KmdfForbiddenSys {
+function Test-KmdfForbiddenSysFile {
     param([Parameter(Mandatory)][string]$Path)
     $name = [System.IO.Path]::GetFileName($Path)
     if ($name -eq $script:KmdfLiveSysName) {
@@ -138,8 +138,16 @@ function Test-KmdfSignedByThumb {
         Write-KmdfLog -Message "$Path signed by $got - required thumb is $want (16940C0F)." -Level 'ERROR'
         return $false
     }
-    if ($sig.Status -ne 'Valid' -and $sig.Status -ne 'UnknownError') {
-        Write-KmdfLog -Message "$Path signature status $($sig.Status)." -Level 'WARN'
+    # A matching thumbprint alone is not proof of integrity: HashMismatch means
+    # the bytes no longer match the signature. Only a trusted chain ('Valid')
+    # or the documented self-signed 16940C0F case ('UnknownError' - cert not
+    # chain-trusted on this PC) may pass.
+    if ($sig.Status -eq 'UnknownError') {
+        Write-KmdfLog -Message "$Path status UnknownError (self-signed 16940C0F chain not trusted on this PC) - thumb matched." -Level 'WARN'
+    }
+    elseif ($sig.Status -ne 'Valid') {
+        Write-KmdfLog -Message "$Path signature status $($sig.Status) - refusing (content may not match the signature)." -Level 'ERROR'
+        return $false
     }
     Write-KmdfLog -Message "$Path signed by $got status=$($sig.Status)" -Level 'OK'
     return $true

@@ -79,11 +79,11 @@ if (-not $col01) { Write-Output 'NO_COL01'; exit 2 }
 
 # Signals success through $script:MmF1Ok, NOT a return value: every
 # Write-Output line below is part of this function's output stream, so
-# `if (Try-F1 0)` would test a non-empty string array and be true even on
+# `if (Invoke-F1 0)` would test a non-empty string array and be true even on
 # failure. The log lines have to stay on stdout - the watcher captures them.
 $script:MmF1Ok = $false
 
-function Try-F1([uint32]$access) {
+function Invoke-F1([uint32]$access) {
     $script:MmF1Ok = $false
     Write-Output ("open_access=0x{0:X}" -f $access)
     $h = [MmF1]::CreateFile($col01, $access, 3, [IntPtr]::Zero, 3, 0, [IntPtr]::Zero)
@@ -124,8 +124,8 @@ function Try-F1([uint32]$access) {
 # to escalate access rights.
 #
 # Escalating does not work at all: GENERIC_READ|GENERIC_WRITE on this
-# collection is refused outright with CreateFile err=5 (ACCESS_DENIED) —
-# observed live 2026-09-15 17:36:03 — because Windows reserves R/W opens of
+# collection is refused outright with CreateFile err=5 (ACCESS_DENIED) -
+# observed live 2026-09-15 17:36:03 - because Windows reserves R/W opens of
 # mouse/keyboard top-level collections. It is kept only as a last-ditch
 # attempt after the retries are exhausted, and is expected to fail.
 #
@@ -136,13 +136,13 @@ $maxAttempts = 3
 $settleSeconds = 3
 for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
     Write-Output "attempt=$attempt/$maxAttempts"
-    Try-F1 0
+    Invoke-F1 0
     if ($script:MmF1Ok) { Write-Output 'F1_OK'; exit 0 }
     if ($attempt -lt $maxAttempts) { Start-Sleep -Seconds $settleSeconds }
 }
 
 Write-Output 'zero-access attempts exhausted, trying full-access (expected ACCESS_DENIED)'
-Try-F1 0xC0000000L
+Invoke-F1 0xC0000000L
 if ($script:MmF1Ok) { Write-Output 'F1_OK'; exit 0 }
 
 Write-Output 'F1_FAILED'

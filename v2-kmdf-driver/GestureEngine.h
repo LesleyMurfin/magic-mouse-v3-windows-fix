@@ -48,9 +48,6 @@
 #define MM_SCROLL_STEP_MIN 1
 #define MM_SCROLL_STEP_MAX 224
 
-#define SCROLL_HR_THRESHOLD 90
-
-
 // TranslateMouse2ToHid
 //
 // Accepts RID 0x12 (MOUSE2) or RID 0x27. Always produces an 8-byte RID 0x12

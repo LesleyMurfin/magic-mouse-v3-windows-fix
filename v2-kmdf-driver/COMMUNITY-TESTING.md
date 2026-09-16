@@ -1,6 +1,6 @@
-# Community testing — Magic Mouse v3 (PID 0323) KMDF 2.0.4.1
+# Community testing — Magic Mouse v3 (PID 0323) KMDF 2.0.4.3
 
-Help wanted. This is a **test-signed kernel filter**, not WHQL. It will **not** load on a stock PC with Secure Boot on.
+Help wanted. This is a **test-signed kernel filter**, not WHQL. It will **not** load on a stock PC with Secure Boot on. The package under test is **2.0.4.3** (`DriverVer 09/15/2026,2.0.4.3`); anything older is not the build being tested.
 
 ## What should work today
 
@@ -25,6 +25,7 @@ You need **all** of:
 - **Secure Boot OFF** (firmware)
 - **Memory integrity OFF** (Windows Security → Device security → Core isolation)
 - Willingness to enable **testsigning** (the script does `bcdedit /set testsigning on` and you **reboot once**)
+- **`Inf2Cat.exe` from the Windows Driver Kit.** Setup builds the driver catalog with Inf2Cat and has no fallback — without the WDK it stops and tells you to install it.
 
 If Secure Boot stays on, stop. The driver will not load. That is a Windows rule, not a bug.
 
@@ -53,8 +54,10 @@ If 1-finger still scrolls, or 2-finger never scrolls, we need a Diag dump (below
 ### Scroll too sensitive or too sluggish?
 
 It is tunable — no rebuild, no reinstall. `ScrollStep` is how far (in touch units) you must drag
-per scroll notch, so **higher = less sensitive**. Default 8, valid `1`–`224`, and out-of-range
-values are ignored in favour of the default.
+per scroll notch, so **higher = less sensitive**. Default 8, valid `1`–`224`. Out of range is
+**not** symmetric: below `1` falls back to the default `8`, but **above `224` is clamped to `224`**
+— not to the default. `ScrollStep` is a `REG_DWORD` read as an unsigned 32-bit value, so a
+"negative" number arrives as a huge positive one and also clamps to `224`.
 
 ```powershell
 # admin PowerShell, from the package directory
@@ -64,7 +67,9 @@ scripts\mm-scroll-tune.ps1 -ScrollStep 16
 It writes the value, restarts the 0323 device, re-sends F1, then prints what the driver actually
 loaded (`driver_ScrollStep`) so you can tell a real change from a silent no-op. Reference points on
 the original hardware: `8` is the proven default, and `224` (the Linux `hid-magicmouse` default)
-produced **zero** wheel — so treat the high end with suspicion and move in small steps.
+produced **zero** wheel — so treat the high end with suspicion and move in small steps. That fits
+the clamp above: asking for anything over `224` lands you exactly on `224`, i.e. on the detent that
+scrolled nothing here. A typo like `500` does **not** bounce back to the safe default.
 
 ## What to send if it fails
 

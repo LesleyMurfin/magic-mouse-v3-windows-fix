@@ -30,7 +30,7 @@ $ErrorActionPreference = 'Stop'
 $ParamsKey = 'HKLM:\SYSTEM\CurrentControlSet\Services\MagicMouseDriver204Scroll\Parameters'
 $DiagKey   = 'HKLM:\SYSTEM\CurrentControlSet\Services\MagicMouseDriver204Scroll\Diag'
 $Instance  = 'BTHENUM\{00001124-0000-1000-8000-00805F9B34FB}_VID&0001004C_PID&0323'
-$F1        = 'C:\mm-dev-queue\mm-f1-once.ps1'
+$F1        = Join-Path $PSScriptRoot 'mm-f1-once.ps1'
 
 function Fail([int]$c, [string]$m) { Write-Output $m; exit $c }
 
@@ -54,16 +54,35 @@ Write-Output ('wrote ScrollStep=' + $ScrollStep)
 
 Write-Output '=== restart 0323 instance so EvtDeviceAdd re-reads it ==='
 & pnputil.exe /restart-device $Instance
-Write-Output ('restart_exit=' + $LASTEXITCODE)
+$restartExit = $LASTEXITCODE
+Write-Output ('restart_exit=' + $restartExit)
+# 3010 is success-with-reboot-required, not failure.
+$rebootRequired = ($restartExit -eq 3010)
+if ($restartExit -ne 0 -and -not $rebootRequired) {
+    Fail 4 ('pnputil /restart-device exited ' + $restartExit + ' - ScrollStep was written but the driver has not re-read it')
+}
 
 Start-Sleep -Seconds 3
 
 Write-Output '=== F1 SetFeature (restore MT after the restart) ==='
-if (Test-Path -LiteralPath $F1) {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $F1
-    Write-Output ('f1_exit=' + $LASTEXITCODE)
-} else {
-    Write-Output ('F1 script missing ' + $F1 + ' - multitouch will stay in compact mode')
+if (-not (Test-Path -LiteralPath $F1)) {
+    Fail 5 ('F1 script missing ' + $F1 + ' - multitouch would stay in compact mode')
+}
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $F1
+$f1Exit = $LASTEXITCODE
+Write-Output ('f1_exit=' + $f1Exit)
+if ($f1Exit -ne 0) {
+    $f1Msg = 'mm-f1-once.ps1 exited ' + $f1Exit + ' - multitouch is still in compact 9-byte mode, two-finger scroll will not work'
+    # A pending reboot from /restart-device is the likely cause: the device was
+    # never re-initialized, so F1 had nothing in MT mode to talk to. Report the
+    # banked 3010 instead of Fail 6 - the only action either code asks for is
+    # "reboot, then re-run", and 3010 says which one it is.
+    if ($rebootRequired) {
+        Write-Output ($f1Msg + ' - the device restart reported 3010, so a reboot is pending and is the likely cause')
+        Write-Output 'reboot and re-run this script to verify'
+        exit 3010
+    }
+    Fail 6 $f1Msg
 }
 
 # The driver echoes the value it actually loaded into its Diag key, so this
@@ -78,9 +97,19 @@ if ($null -eq $diag) {
     Write-Output ('LastAclReceived='   + $diag.LastAclReceived + '  (>=14 means multitouch, 9 means compact)')
     Write-Output ('LastOutHdr='        + $diag.LastOutHdr)
     if ($null -ne $diag.ScrollStep -and [int]$diag.ScrollStep -ne $ScrollStep) {
-        Fail 3 ('driver still reports ScrollStep=' + $diag.ScrollStep + ' - restart did not pick up the new value')
+        $diagMsg = 'driver still reports ScrollStep=' + $diag.ScrollStep + ' - restart did not pick up the new value'
+        if ($rebootRequired) {
+            Write-Output ($diagMsg + ' - the device restart reported 3010, so the re-read is deferred to the reboot')
+            Write-Output 'reboot and re-run this script to verify'
+            exit 3010
+        }
+        Fail 3 $diagMsg
     }
 }
 
 Write-Output '===== scroll tune done ====='
+if ($rebootRequired) {
+    Write-Output 'restart reported 3010 - reboot required to finish'
+    exit 3010
+}
 exit 0

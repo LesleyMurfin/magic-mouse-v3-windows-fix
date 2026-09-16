@@ -1,10 +1,12 @@
-# Spec 4 — KMDF unique 2.0.4.1 scroll package (PID 0323)
+# Spec 4 — KMDF unique 2.0.4.3 scroll package (PID 0323)
 
 ## Current State
 
-**2026-09-01 hardware proof (user: it's working).** Pointer. Battery `0x90`. **2-finger** surface scroll. 1-finger glass does not scroll. oem16 `AD5D244B`. Checkpoint: `v2-kmdf-driver/CHECKPOINT-2026-09-01-SCROLL.md`.
+**2026-09-15 hardware proof (user: "scroll is much better").** Shipped package is **2.0.4.3** (`DriverVer 09/15/2026,2.0.4.3`). Pointer. Battery `0x90`. **2-finger** surface scroll. 1-finger glass does not scroll. oem16 `AD5D244B`. Signed `.sys` SHA256 `FE7CF014…`, unsigned freeze `08E91E37…` (25600 bytes), cert thumb `16940C0F`, `Diag!ScrollStep=8`.
 
-Loaded unique dest `MagicMouseDriver-kmdf-204-scroll.sys` unsigned `E73EC0A8…`, signed `9901390e…`, SCM `MagicMouseDriver204Scroll`, oem50. `MM_SCROLL_STEP` **8** + `TWO_FINGER` (`down < 2`). Do not ship detent 224. After pnputil, sleep 3s then `HidD_SetFeature(F1)` or `LastAclReceived` stays 9.
+*Dated historical evidence — not current state:* the **2026-09-01** run of package **2.0.4.1** (unsigned `E73EC0A8…`, signed `9901390e…`) produced the same pointer / 2-finger / 1-finger-no-scroll result and is the documented rollback target. Checkpoint: `v2-kmdf-driver/CHECKPOINT-2026-09-01-SCROLL.md`.
+
+Loaded unique dest `MagicMouseDriver-kmdf-204-scroll.sys`, SCM `MagicMouseDriver204Scroll`, oem50. Wheel is emitted only while **two or more** contacts are down (`down >= 2`); one finger (START or DRAG) never emits wheel, at any step magnitude. The detent is the registry tunable `ScrollStep` (`Services\MagicMouseDriver204Scroll\Parameters`, REG_DWORD), default `MM_SCROLL_STEP` **8**, clamped to `[MM_SCROLL_STEP_MIN=1, MM_SCROLL_STEP_MAX=224]` — **224 is the clamp ceiling, not the detent**; do not ship detent 224. Exactly **one reference finger** (lowest active DRAG slot with a valid anchor) drives the wheel; non-reference contacts only re-anchor. While `down < 2` an active DRAG contact's anchor is refreshed to the current x/y, so one-finger movement never accumulates and a second finger landing starts the step calculation from current positions. After pnputil, sleep 3s then `HidD_SetFeature(F1)` or `LastAclReceived` stays 9.
 
 Gestures = Wheel + AC Pan only (not PTP / macOS). PTP needs a later virtual device, not a larger SDP overlay (0x50). v1/v2 = `PidInfo` after dumps; never 0323 overlay on 030D/0269.
 
@@ -15,7 +17,7 @@ This section is authoritative.
 
 ## Summary
 
-Done = unique 2.0.4.1 KMDF source with a **135-byte same-size SDP overlay** (`memcpy` 135 HID bytes only; native prefix `09 02 06 35 8D 35 8B 08 22 25 87` unchanged) + executable gate (`specs/gate_4.py`) + host tests (`v2-kmdf-driver/tests/test_sdp_overlay.py`, `v2-kmdf-driver/tests/test_hid_acl.py`) proving overlay + battery `0x90` passthrough **and** scroll `0x12`+Wheel fail-closed, without PATH-A / live SCM hijack / `SdpWalkStream`.
+Done = unique 2.0.4.3 KMDF source with a **135-byte same-size SDP overlay** (`memcpy` 135 HID bytes only; native prefix `09 02 06 35 8D 35 8B 08 22 25 87` unchanged) + executable gate (`specs/gate_4.py`) + host tests (`v2-kmdf-driver/tests/test_sdp_overlay.py`, `v2-kmdf-driver/tests/test_hid_acl.py`) proving overlay + battery `0x90` passthrough **and** scroll `0x12`+Wheel fail-closed, without PATH-A / live SCM hijack / `SdpWalkStream`.
 
 Unique dest `MagicMouseDriver-kmdf-204-scroll.sys`. Unique SCM `MagicMouseDriver204Scroll`. HID: RID `0x12` X/Y `0x0030`/`0x0031` then **Count 1** Consumer AC Pan `0x0238` (byte 6) then Count 1 Wheel `0x0038` (byte 7); battery Input `0x90` COL02 (`HidD_GetInputReport`; percent at byte[2], 0–100); Feature `0xF1` Count 2 vendor `0xFF00` Usage `0x01` (not GD Wheel); never Feature `0x47`; never RID `0x02`. `g_HidDescriptor` is 135 bytes (`sizeof == 0x87`). Overlay is memcpy-only: no length rewrite. Do **not** leave Wheel inheriting X/Y Count 2.
 
@@ -45,9 +47,9 @@ MT enable (BUILD owns; spec-overlay must not edit kernel in this node):
 
 4c. `v2-kmdf-driver/tests/test_mt_enable.py` — `LastAclBytes` copied from interrupt ACL IN. Missing `MT_ENABLE_ACL_BYTES` is `gate_4.py` RED.
 
-4d. **Removed.** `check_two_finger` is deleted from `specs/gate_4.py`. `TWO_FINGER` / `down < 2` must not be a pass condition. Missing `TWO_FINGER` is not RED (trackpad/PTP-only; Linux mouse is 1-finger).
+4d. `TWO_FINGER` / `down >= 2` is a **pass condition**, not a removed one. `specs/gate_4.py` requires `GestureEngine.c` to carry both `SCROLL_STEP_8` and `TWO_FINGER`; missing either is RED. One finger must never emit wheel.
 
-4e. `v2-kmdf-driver/tests/test_scroll_threshold.py` — quotes `SCROLL_STEP_224` against `GestureEngine.c`. Missing `SCROLL_STEP_224` is `gate_4.py` RED. Host: 14+8 one-slot DRAG `|stepY|=20` → wheel 0; `90` → 0; `224` → ±1; compact 8-byte `[6]/[7]` → 0; 1-finger 224 must be non-zero.
+4e. `v2-kmdf-driver/tests/test_scroll_threshold.py` — quotes `SCROLL_STEP_8` against `GestureEngine.c`. Missing `SCROLL_STEP_8` is `gate_4.py` RED. Host: 14+16 two-slot DRAG with `|stepY| >= ScrollStep` → exactly one notch, emitted by the single reference finger (never one per finger); compact 8-byte `[6]/[7]` → 0; **1-finger DRAG emits wheel 0 at every magnitude exercised** — `down >= 2` gates the whole emit path, so no magnitude makes one finger scroll.
 
 4b. `v2-kmdf-driver/tests/test_bsod_regress.py` — fail-closed vs C/INF/install for the three crash classes: `0x50` dumps `090126-17390-01` / `090126-18750-01` (no length rewrite, HID not 108, no `buf[4]`, `RtlCopyMemory` only); Event 41 (6→8 refused without `SdpPatchSuccess`/capacity; unique SCM; install refuses unsigned); `0xD1` (no PATH-A dest). Delete `test_sdp_walk.py` — it cloned `SdpWalkStream` and gated the 108-byte rewrite.
 
@@ -66,7 +68,7 @@ Do not touch: live `MagicMouseDriver.sys` (SHA `AD5D244B`), `MagicMouseDriver.in
 ## Step-by-Step
 
 1. Keep live Apr 30 `MagicMouseDriver.sys` SHA `AD5D244B176D650961594EDED153C46F9A52004C424DABFD86E50844E447546B` installed. Fail closed if any script would `Copy-Item` onto System32 or DriverStore, or `/delete-driver` oem16. Do not bind the existing unique DriverStore folder, the System32 unique `ea1f80b4…` sys, or PATH-A. Do not load a kernel driver from this spec-overlay slice. Do not HID-open.
-2. Unique identity stays: INF `MagicMouseDriver-kmdf-204-scroll.inf`, dest/ServiceBinary `MagicMouseDriver-kmdf-204-scroll.sys`, DriverVer `09/01/2026,2.0.4.1`. Fail if DriverVer is `08/30/2026,2.0.4.0` or `08/31/2026,2.0.4.0` (oem26 / PR #3 collision).
+2. Unique identity stays: INF `MagicMouseDriver-kmdf-204-scroll.inf`, dest/ServiceBinary `MagicMouseDriver-kmdf-204-scroll.sys`, DriverVer `09/15/2026,2.0.4.3`. Fail if DriverVer is `08/30/2026,2.0.4.0` or `08/31/2026,2.0.4.0` (oem26 / PR #3 collision).
 3. Unique SCM: AddService and LowerFilters MUST be `MagicMouseDriver204Scroll`. MUST NOT be `MagicMouseDriver` — that is live oem16. Hijack rewrites ImagePath without replacing `AD5D244B` on disk; a bugcheck is Event 41 / BSOD. SHOWSTOPPER if INF still names `MagicMouseDriver`.
 4. Refuse PATH-A `applewirelessmouse.sys` (known BSOD `0xD1`). Refuse SHA `845435CEF0DABAF2FD0638717E44F6A774556CECE47F00C8B12328B5B2B3FDE3`. Refuse dest `MagicMouseDriver.sys` / `MagicMouseDriver.inf`. Refuse unsigned activate (`pr3-activate`). Event 41 / 0x50 / 0xD1 → restore **oem16 `AD5D244B`**, not PATH-A.
 5. HID blob = 135 bytes, not 108. `g_HidDescriptor[]` so `sizeof == 0x87`. Keep native COL01 RID `0x12` buttons + X/Y `0x0030`/`0x0031`. After X/Y Input, **reset Report Count to 1** and Logical Min/Max to **-127..127**, then Consumer AC Pan `0A 38 02` (report byte 6) then Generic Desktop Wheel `09 38` (report byte 7). Stay 135: drop X/Y Physical Min/Max/Unit/Exponent and shrink Feature `0x55` (`15 00` + `75 08` + `26 FF 00`→`25 FF`). Keep COL02 RID `0x90` Input percent at byte[2]; never Feature `0x47`; never RID `0x02`. If short, add valid HID items (not `0x00`). Do **not** ship `75 08 09 38 81 06` with Count still 2.
@@ -106,17 +108,16 @@ SDP same-size overlay (Linux; required before any new `.sys` load). Fixture is n
 python3 v2-kmdf-driver/tests/test_sdp_overlay.py
 ```
 
-Host scroll detent (Linux; `check_two_finger` removed — TWO_FINGER is not a pass). Host-only until director queues WDK. Overlay 135 still green. Unique SCM `MagicMouseDriver204Scroll`. No PTP overlay. No 030D/0269 this slice. No oem16 overwrite.
+Host scroll detent (Linux; `TWO_FINGER` / `down >= 2` is required — one finger never emits wheel). Host-only until director queues WDK. Overlay 135 still green. Unique SCM `MagicMouseDriver204Scroll`. No PTP overlay. No 030D/0269 this slice. No oem16 overwrite.
 
 ```bash
 python3 v2-kmdf-driver/tests/test_scroll_threshold.py
 ```
 
-- 1-slot DRAG `|stepY|=20` → wheel 0
-- 1-slot DRAG `|stepY|=90` → wheel 0 (`SCROLL_HR_THRESHOLD` redundant on 8-bit)
-- 1-slot DRAG `|stepY|=224` → wheel ±1
+- 2-slot DRAG `|stepY| >= ScrollStep` → exactly one notch on that frame, emitted only by the reference finger (the second contact just re-anchors, so a two-finger drag is one notch per `step` of travel, not two)
 - compact 8-byte garbage `[6]/[7]` → wheel/hwheel 0
-- 1-finger 224 **non-zero** (proves TWO_FINGER is gone)
+- 1-finger DRAG → wheel **0** at every magnitude exercised (below the detent, at the detent, and well past it in both directions); `down >= 2` gates the emit path, so one finger never scrolls at any magnitude
+- `ScrollStep` below `MM_SCROLL_STEP_MIN` 1 → falls back to the default **8**; above `MM_SCROLL_STEP_MAX` 224 → **clamped to 224**, not to the default. `step` is a `ULONG`, so a negative `REG_DWORD` arrives as a huge unsigned value and clamps to 224 as well
 
 Host tests must fail closed:
 
