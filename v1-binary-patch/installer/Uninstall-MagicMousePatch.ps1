@@ -22,6 +22,11 @@ Workflow:
      the installed driver when there is no backup to restore
   6. Delete the service key (HKLM\SYSTEM\CurrentControlSet\Services\
      applewirelessmouse)
+
+     Steps 5 and 6 remove state that every bound instance points at, so they
+     run only when step 4 confirmed every instance is clean. If PnP enumeration
+     fails there, the driver and the service are deliberately left in place
+     rather than leaving a filter naming something that no longer exists.
   7. Remove the MagicMouseFix certificate from LocalMachine\TrustedPublisher
      by thumbprint - a no-op on an Apple-signed install, which imports none
   8. Re-enable the device, but only when step 3 actually disabled it
@@ -127,10 +132,15 @@ function Write-Section {
 
 # -AllModels ignores -TargetPid: the LowerFilters cleanup has to see every patched
 # instance, not just the one being disabled.
+#
+# Throws when PnP enumeration itself fails. That has to stay distinguishable from
+# "enumerated fine, nothing paired": the first means a device may still carry our filter
+# and the shared service and driver must NOT be deleted yet, the second means there is
+# nothing to clean.
 function Get-MagicMouseDevice {
     param([switch]$AllModels)
     $re = if ($AllModels) { $MagicMouseAnyRe } else { $MagicMouseDeviceRe }
-    Get-PnpDevice -ErrorAction SilentlyContinue |
+    Get-PnpDevice -ErrorAction Stop |
         Where-Object { $_.InstanceId -match $re }
 }
 
@@ -182,7 +192,14 @@ function Stop-MagicMouseService {
 # does not use this id: it visits every supported instance.
 function Disable-MagicMouseDevice {
     Write-Section "Finding the Magic Mouse..."
-    $found = @(Get-MagicMouseDevice)
+    # Disabling is optional, so an enumeration failure here is only a lost optimisation.
+    # The cleanup that must not proceed on a failed enumeration is the filter removal.
+    try {
+        $found = @(Get-MagicMouseDevice)
+    } catch {
+        Write-Status "Could not enumerate PnP devices: $($_.Exception.Message); skipping device steps" "WARN"
+        return $null
+    }
     if ($found.Count -eq 0) {
         $scope = if ($TargetPid) { "PID $TargetPid" } else { "PID 0323 / 0269 / 0310 / 030D" }
         Write-Status "No Magic Mouse paired ($scope) -- skipping device steps" "OK"
@@ -266,12 +283,24 @@ function Restore-DriverBackup {
 # install run twice with different -TargetPid values leaves its name in the LowerFilters
 # of two device instances, and every one of them has to lose it before the service key
 # and the driver file go away - otherwise Windows keeps resolving a filter that is gone.
+#
+# Returns $true only when every patched instance was visited. A PnP enumeration failure
+# returns $false: the filter may still be bound somewhere, so the caller must not go on to
+# delete the shared service key and driver file and leave a dangling filter behind.
 function Remove-MagicMouseFilterBinding {
     Write-Section "Removing 'applewirelessmouse' from LowerFilters..."
-    $found = @(Get-MagicMouseDevice -AllModels)
+    try {
+        $found = @(Get-MagicMouseDevice -AllModels)
+    } catch {
+        Write-Failure "Could not enumerate PnP devices: $($_.Exception.Message)"
+        Write-Host "  Without that list the filter cannot be confirmed removed from every" -ForegroundColor Yellow
+        Write-Host "  Magic Mouse, so the service and the driver are being left in place." -ForegroundColor Yellow
+        Write-Host "  Reboot and run this uninstaller again." -ForegroundColor Yellow
+        return $false
+    }
     if ($found.Count -eq 0) {
         Write-Status "No Magic Mouse paired -- no LowerFilters to clean" "OK"
-        return
+        return $true
     }
     foreach ($d in $found) {
         $model = Get-MagicMouseModel -InstanceId $d.InstanceId
@@ -279,6 +308,7 @@ function Remove-MagicMouseFilterBinding {
         Write-Host "  $name" -ForegroundColor Gray
         Remove-LowerFiltersEntry -InstanceId $d.InstanceId
     }
+    return $true
 }
 
 # One device instance. An instance that never listed our filter is reported and left
@@ -444,10 +474,14 @@ function Main {
     $iid = Disable-MagicMouseDevice
     # Unbind the filter from every patched instance first: after this point the service
     # key and the driver file go away, and a LowerFilters entry naming either of them
-    # would be left for Windows to resolve at every boot.
-    Remove-MagicMouseFilterBinding
-    Restore-DriverBackup
-    Remove-MagicMouseService
+    # would be left for Windows to resolve at every boot. So the shared removals only
+    # happen once every instance has been confirmed clean.
+    if (Remove-MagicMouseFilterBinding) {
+        Restore-DriverBackup
+        Remove-MagicMouseService
+    } else {
+        Write-Status "Keeping the driver file and the service key until the filter is confirmed removed" "WARN"
+    }
     Remove-MagicMouseCert
     Enable-MagicMouseDevice -InstanceId $iid
     Remove-DataDirectory
