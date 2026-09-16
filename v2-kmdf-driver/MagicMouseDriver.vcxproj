@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  KMDF MagicMouseDriver — PID 0x0323 only.
+
+  Build (Windows + WDK or mounted EWDK):
+    msbuild MagicMouseDriver.vcxproj /p:Configuration=Release /p:Platform=x64 /p:SignMode=Off
+
+  Then run Freeze-KmdfArtifact.ps1 (names MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys).
+  Human signs with cert thumb 16940C0F. pnputil /add-driver the unique INF only.
+
+  Linux cannot produce a .sys. WDK TargetName is MagicMouseDriver-kmdf-204-scroll
+  (INF dest). Never emit MagicMouseDriver.sys (Apr 30 restore name).
+  Never name a KMDF build applewirelessmouse*.sys.
+-->
+<Project DefaultTargets="Build" ToolsVersion="15.0"
+         xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</ProjectGuid>
+    <TargetName>MagicMouseDriver-kmdf-204-scroll</TargetName>
+    <TargetExt>.sys</TargetExt>
+    <DriverType>KMDF</DriverType>
+    <KmdfVersionMajor>1</KmdfVersionMajor>
+    <KmdfVersionMinor>33</KmdfVersionMinor>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Driver</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <TargetVersion>Windows10</TargetVersion>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+    <SignMode>Off</SignMode>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Driver</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <TargetVersion>Windows10</TargetVersion>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+    <SignMode>Off</SignMode>
+    <StampInf>false</StampInf>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsError>true</TreatWarningAsError>
+    </ClCompile>
+    <Link>
+      <SubSystem>Native</SubSystem>
+      <Driver>WDM</Driver>
+      <AdditionalDependencies>wdmguid.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClCompile Include="Driver.c" />
+    <ClCompile Include="GestureEngine.c" />
+    <ClCompile Include="HidDescriptor.c" />
+    <ClCompile Include="InputHandler.c" />
+    <ClCompile Include="AclTranslate.c" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClInclude Include="Driver.h" />
+    <ClInclude Include="GestureEngine.h" />
+    <ClInclude Include="HidDescriptor.h" />
+    <ClInclude Include="InputHandler.h" />
+    <ClInclude Include="AclTranslate.h" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Inf Include="MagicMouseDriver-kmdf-204-scroll.inf" />
+    <ResourceCompile Include="MagicMouseDriver.rc" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="$(WDKContentRoot)\build\WindowsDriver.targets"
+          Condition="Exists('$(WDKContentRoot)\build\WindowsDriver.targets')" />
+
+</Project>
