@@ -2,7 +2,32 @@
 
 **STATUS: Production Ready**
 
-This directory contains the PATH-A binary patch approach: a pre-built, patched applewirelessmouse.sys kernel driver and PowerShell installer/uninstaller.
+This directory contains the patched-Apple-driver approach: a pre-built, patched
+`applewirelessmouse.sys` kernel driver and PowerShell installer/uninstaller. It is one of the two
+drivers in this repo; the other is the from-scratch KMDF driver in [`../v2-kmdf-driver/`](../v2-kmdf-driver/).
+Install one, not both — they attach to the same Bluetooth HID stack.
+
+## Before you start — Windows Test Mode is required
+
+This driver is signed by this project's own certificate (`MagicMouseFix.cer`), not by Microsoft, so
+Windows will not load it unless Test Mode is on. `Install-MagicMousePatch.ps1` **checks this and
+stops** if it is off.
+
+```powershell
+# Admin PowerShell, then reboot
+bcdedit /set testsigning on
+```
+
+Also required: **Secure Boot off** and **memory integrity (HVCI) off** — the installer verifies
+both. A "Test Mode" watermark will appear on the desktop; that is expected.
+
+The installer imports the certificate into `LocalMachine\TrustedPublisher` only, **not** `Root`:
+putting it in `Root` would let anything signed with that key load on your machine. Because the
+certificate is not a trusted root, it cannot satisfy kernel code integrity by itself, which is why
+Test Mode is needed. Patching the binary also invalidates Apple's original Microsoft signature.
+
+Removing this requirement needs paid Microsoft driver signing (EV certificate + Partner Center
+attestation, renewed annually) — see [funding](https://magictray.app/funding.html).
 
 ## Quick Start
 

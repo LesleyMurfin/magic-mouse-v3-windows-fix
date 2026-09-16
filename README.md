@@ -37,8 +37,11 @@ documentation. Install **one**, not both: they both attach to the same Bluetooth
 |---|---|---|
 | File | `applewirelessmouse.sys` (patched Apple binary) | `MagicMouseDriver-kmdf-204-scroll.sys` (written from scratch) |
 | Folder | [`v1-binary-patch/`](v1-binary-patch/) | [`v2-kmdf-driver/`](v2-kmdf-driver/) |
-| Install | Prebuilt binary + PowerShell installer, then reboot | `pnputil` a signed driver package |
-| Build needed | No — ships prebuilt | No for users; source + build scripts included |
+| Install | Prebuilt signed binary + PowerShell installer, then reboot | Self-sign script, then `pnputil` the driver package |
+| Build needed | No — ships prebuilt | Source + build scripts included; building needs the EWDK |
+| Signing | Prebuilt, signed by `MagicMouseFix.cer` (imported to `TrustedPublisher`) | You generate your own local cert — `Setup-Community.ps1` does it |
+| **Windows Test Mode** | **Required** — installer aborts if `testsigning` is off | **Required** — `Setup-Community.ps1` can enable it for you |
+| Secure Boot / memory integrity | Must be off | Must be off |
 | Attaches as | Lower filter on the Bluetooth HID stack | Lower filter, as its **own** driver package beside Apple's |
 | Touches Apple's driver? | It **is** a patched copy of Apple's driver | No — Apple's `MagicMouseDriver.sys` is left untouched |
 | Two-finger scroll | Protects scroll from dying after Bluetooth idle disconnect | Generates scroll directly from the touch surface (Wheel + AC Pan) |
@@ -46,15 +49,43 @@ documentation. Install **one**, not both: they both attach to the same Bluetooth
 | Survives reconnect / reboot | Reboot required at install; filter persists | Yes — re-arms multitouch automatically on both |
 | Status | **v1.0.0, production ready** | **2.0.4.3, live and confirmed on hardware** |
 
+### Test Mode: required by both, for the same reason
+
+Windows will not load a kernel driver unless it carries a Microsoft-recognised signature. **Neither
+driver has one yet**, so both need Test Mode:
+
+```powershell
+bcdedit /set testsigning on   # admin, then reboot
+```
+
+A "Test Mode" watermark appears on the desktop. Secure Boot and memory integrity must be off for
+`testsigning` to stick.
+
+- **Driver 1** is prebuilt and signed with this project's `MagicMouseFix.cer`, which the installer
+  imports into `LocalMachine\TrustedPublisher` (deliberately **not** `Root` — putting it in `Root`
+  would let anything signed by that key load). A self-signed cert outside `Root` cannot satisfy
+  kernel code integrity on its own, which is why `Install-MagicMousePatch.ps1` refuses to continue
+  with Test Mode off. Patching the binary also invalidates Apple's original Microsoft signature, so
+  that cannot carry it either.
+- **Driver 2** is signed on *your* machine by a cert `Setup-Community.ps1` generates
+  (`CN=MagicMouseDriver Community`, private key never leaves the PC), which it then trusts and uses
+  to sign the package before `pnputil`.
+
+**Removing the Test Mode requirement is a money problem, not a code problem:** it needs a
+commercial EV code-signing certificate plus Microsoft Partner Center attestation signing, renewed
+annually. Until that is funded, Test Mode is the cost of running either driver. See
+[funding](https://magictray.app/funding.html).
+
 **Honest expectations, per driver:**
 
-- **Driver 1** is the simpler install and needs no kernel test mode. Its measured result in v1.0 is
-  a **3.1× reduction** in scroll loss versus unpatched; multi-day elimination is not characterised.
-- **Driver 2** does more (surface scroll generation, tunable detent, automatic multitouch recovery
-  after reconnect *and* after reboot, battery data for Magic Tray), but it is **self-signed**, so
-  until EV signing it needs Windows test signing enabled and Secure Boot / memory integrity off.
+- **Driver 1** is the simpler install: nothing to build, nothing to sign, prebuilt binary. Its
+  measured result in v1.0 is a **3.1× reduction** in scroll loss versus unpatched; multi-day
+  elimination is not characterised.
+- **Driver 2** does more — surface scroll generation, tunable detent, automatic multitouch recovery
+  after reconnect *and* after reboot, battery data for Magic Tray — at the cost of generating a
+  cert and running a build if you want it from source.
 
-If you just want scroll to stop breaking with the least system change: **Driver 1**.
+If you want the least work: **Driver 1**.
 If you want full surface scroll, tunable sensitivity and automatic recovery: **Driver 2**.
 
 ## Driver 1 — patched Apple driver (`applewirelessmouse.sys`)
@@ -67,7 +98,10 @@ initialisation, which is what tears scroll down after a Bluetooth idle disconnec
 
 - **Ships prebuilt.** No build tools, no WDK. Verify the SHA256 in `v1-binary-patch/README.md`,
   run `installer/Install-MagicMousePatch.ps1`, reboot.
-- **No kernel test mode needed.**
+- **Requires Windows Test Mode** (`bcdedit /set testsigning on` + reboot, Secure Boot and memory
+  integrity off). The installer checks this and stops if it is off: the patched binary is signed by
+  this project's own certificate, not by Microsoft. Nothing to generate — the cert ships with it and
+  the installer imports it to `TrustedPublisher`.
 - **What to expect:** v1.0 measured a **3.1× reduction** in scroll loss versus unpatched. It
   substantially reduces the failure and may prevent it; multi-day elimination is not
   characterised. Uninstaller included (`installer/Uninstall-MagicMousePatch.ps1`).
@@ -89,9 +123,16 @@ scroll path, it reads the touch surface directly and generates scroll itself.
   both verified on hardware.
 - **Battery percentage** via HID Input `0x90` on COL02, surfaced by
   [Magic Tray](https://github.com/LesleyMurfin/magic-tray).
-- **What to expect:** it is **self-signed**, so until EV signing it requires Windows test signing
-  enabled, with Secure Boot and memory integrity off. That is the real cost of this option.
-  Community testing on a second PC is still wanted — see `v2-kmdf-driver/COMMUNITY-TESTING.md`.
+- **Ships its own signing tooling.** `Setup-Community.cmd` / `Setup-Community.ps1` generates a
+  local code-signing certificate (`CN=MagicMouseDriver Community`, 10-year, private key never
+  leaves your PC), trusts it, enables Test Mode if needed, signs the package and runs `pnputil`.
+  Build-from-source path is in `v2-kmdf-driver/BUILDING.md` (needs the EWDK); signing and install
+  mechanics in `v2-kmdf-driver/SIGN-AND-INSTALL.md`.
+- **What to expect:** self-signed, so it needs Windows Test Mode with Secure Boot and memory
+  integrity off — same requirement as Driver 1, just self-generated rather than shipped. That goes
+  away only with paid Microsoft driver signing (EV certificate + Partner Center attestation,
+  annual). Community testing on a second PC is still wanted — see
+  `v2-kmdf-driver/COMMUNITY-TESTING.md`.
 
 ## What This Fixes
 
@@ -130,10 +171,14 @@ Each driver in this repo addresses that differently, and they are not two stages
 
 ## System Requirements
 
+Same for both drivers:
+
 - Windows 10 build 14393 or later, or Windows 11 any version
 - Apple Magic Mouse v3 (PID `0x0323`) paired over Bluetooth
 - Administrator account for installation
 - Reboot access
+- **Windows Test Mode on** (`bcdedit /set testsigning on`), with **Secure Boot off** and
+  **memory integrity off** — neither driver carries a Microsoft signature yet
 
 ## Quick Install (3 Steps) — Driver 1, patched Apple driver
 
@@ -294,7 +339,7 @@ replacement for Driver 1 — they are different mechanisms with different requir
 **Driver 1 — patched Apple driver (`v1.0.0`, production ready)**
 - Patched `applewirelessmouse.sys` (66 KB) as a WDM lower filter
 - PowerShell installer + uninstaller, registry `LowerFilters` registration
-- Requires certificate trust; no kernel test mode
+- Signed by this project's `MagicMouseFix.cer`; requires Windows Test Mode (no Microsoft signature)
 - Open: characterise multi-day behaviour beyond the measured 3.1× reduction
 
 **Driver 2 — KMDF driver (`2.0.4.3`, live and confirmed)**
