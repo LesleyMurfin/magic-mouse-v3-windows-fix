@@ -1,8 +1,8 @@
-# Status — unique 2.0.4.1 KMDF (PID 0323)
+# Status — unique 2.0.4.3 KMDF (PID 0323)
 
 Branch `ai/kmdf-204-unique-pkg-7748` (PR #4, **draft**). This PC is the only lab. Community how-to-test: `COMMUNITY-TESTING.md`. Ship mechanics: `SHIPPING.md`.
 
-## Working (user-confirmed 2026-09-01)
+## Working (user-confirmed 2026-09-15 on 2.0.4.3)
 
 | Item | State |
 |------|--------|
@@ -10,11 +10,14 @@ Branch `ai/kmdf-204-unique-pkg-7748` (PR #4, **draft**). This PC is the only lab
 | Battery | COL02 `HidD_GetInputReport(0x90)` |
 | Surface scroll | **2-finger** → HID Wheel + AC Pan |
 | 1-finger on glass | Does **not** scroll (`TWO_FINGER` / `down < 2`) |
-| Detent | `MM_SCROLL_STEP` **8** (224 produced zero wheel) |
+| Detent | One **reference finger** (lowest DRAG slot) emits; `ScrollStep` tunable, default **8**, clamp `[1,224]` (224 produced zero wheel) |
+| Sensitivity tuning | `Parameters!ScrollStep` + device restart via `scripts/mm-scroll-tune.ps1` — no rebuild/re-sign/reinstall |
+| Reconnect + boot | `MmAutoF1Watcher` arrival events **and** startup reconcile |
 | Overlay | 135-byte memcpy; prefix `09 02 06 35 8D 35 8B 08 22 25 87` |
 | ACL | HidBth IN cap 9; scratch to see 23–31 byte `A1 12`; write 8-byte `0x12` back |
 | Bind | oem50, SCM `MagicMouseDriver204Scroll`, dest `MagicMouseDriver-kmdf-204-scroll.sys` |
-| Loaded SHA | signed `9901390e…` / unsigned freeze `E73EC0A8…` / thumb **16940C0F** |
+| Loaded SHA | signed `FE7CF014…` 2.0.4.3 / unsigned freeze `08E91E37…` / thumb **16940C0F** |
+| Previous good | signed `9901390E…` 2.0.4.1 — rollback stage `C:\mm-dev-queue\kmdf-204-sign\` |
 | oem16 | `AD5D244B` **not** overwritten |
 | After bind | `HidD_SetFeature(F1)` → HidBth 4-byte `0x53` |
 | Host gates | `specs/gate_4.py`, overlay/hid_acl/bsod/scroll_threshold, `validate-package.sh` |
@@ -167,34 +170,83 @@ against. The overnight agent's stated reason for withholding install (async fail
 no install-time check can prove it) was correct and should have been treated as a hold, not a
 condition to override once a human was present.
 
-## Verified 2026-09-15 (one week later, read-only checks only)
+## 2026-09-15 — Windows Update reboot killed MT; scroll sensitivity root-caused and fixed
 
-Nothing was installed or restarted. Evidence:
+### Reboot does NOT preserve multitouch (answers old leftover #2)
 
-- Live `MagicMouseDriver-kmdf-204-scroll.sys` = `9901390ECA723517…` (2.0.4.1) and oem16
-  `MagicMouseDriver.sys` = `AD5D244B1767…`, both byte-identical to the 2026-09-08 rollback state.
-- `MmAutoF1Watcher` alive continuously since the rollback: `C:\ProgramData\MagicMouseDriver\auto-f1-watcher.log`
-  has unbroken 5-minute heartbeats 2026-09-08 → 2026-09-15, task re-armed 14:27/14:30 today,
-  single instance heartbeating after.
-- **No PID_0323 arrival and no F1 fire since `2026-09-08 10:40:48`** — the link has not
-  re-enumerated in a week, so leftover #2 (does MT survive a reboot without F1?) is still
-  unanswered: no reboot has happened to test it.
+Windows updated and restarted (boot `14:29:44`). User: pointer fine, **scroll dead**. No PID_0323
+arrival and no F1 fire appear in `C:\ProgramData\MagicMouseDriver\auto-f1-watcher.log` after the
+reboot, because the mouse is already paired and enumerated by the time the watcher's WMI
+subscription is registered (`14:30:16`, 28s after boot). Arrival events **cannot** cover boot.
 
-### Fixed: `mm-f1-once.ps1` full-access fallback was dead code
+Note on reading that log: its 5-minute heartbeats are append-only and run straight through a
+reboot, so heartbeat continuity is NOT uptime evidence. Use `LastBootUpTime`.
 
-`Try-F1 0xC0000000` (line 109) threw `ParameterBindingArgumentTransformationException` on every
-single invocation — PowerShell parses bare `0xC0000000` as **Int32** (`-1073741824`), which cannot
-bind to `[uint32]$access`. Visible in every watcher log entry since the watcher shipped. Effect:
-attempt 2 (`GENERIC_READ|GENERIC_WRITE`) **never ran**, so whenever attempt 1's zero-access
-`HidD_SetFeature` failed — e.g. `SetFeature ok=False err=121` (`ERROR_SEM_TIMEOUT`) at
-`2026-09-08 10:40:44` — the recovery script silently had no retry left.
+Recovery was `mm-f1-once.ps1` (`SetFeature ok=True err=203`, `LastAclReceived` back to 23).
 
-Fix: `Try-F1 0xC0000000L` (Int64 literal, converts cleanly to UInt32). Verified on this host's
-PowerShell 5.1: bare literal is `Int32` and the binding fails, `0xC0000000L` binds as `0xC0000000`;
-`[Parser]::ParseFile` on the live `C:\mm-dev-queue\mm-f1-once.ps1` returns no errors. Repo copy and
-live queue copy are byte-identical. The fallback path itself was **not** exercised against the live
-device — forcing attempt 1 to fail means degrading a currently-working mouse; it stays untested
-until a real reconnect exercises it.
+**Fix:** `mm-auto-f1-watcher.ps1` now reconciles state at startup — if COL01 is already present
+when it starts, it fires F1 once, then enters the arrival wait loop. Verified live `17:36:02`:
+`COL01 present … → F1 fire (startup reconcile) → SetFeature ok=True err=203`.
+
+Deliberately unconditional when COL01 is present, rather than gated on `Diag!LastAclReceived`:
+that counter is registry-persisted and survives a reboot still reading the previous session's
+healthy 23, which would report MT as live when it is not. `HidD_SetFeature(F1)` is idempotent.
+
+The presence probe matches `PID[_&]0323` by **regex**. The first version used
+`-like '*PID_0323*'` and reported "COL01 not present" on a present device: WQL treats `_` as a
+single-character wildcard (which is why the event query's `%PID_0323%` does match the real
+`PID&0323`), but PowerShell `-like` treats it as a literal.
+
+### `mm-f1-once.ps1` had no working retry
+
+`Try-F1 0xC0000000` threw `ParameterBindingArgumentTransformationException` on every invocation —
+PowerShell parses the bare literal as **Int32** (`-1073741824`), which cannot bind to
+`[uint32]$access`. That error is in every watcher log entry since the watcher shipped.
+
+Escalating access was never the right fallback anyway: `GENERIC_READ|GENERIC_WRITE` on this
+collection is refused outright with `CreateFile err=5` (ACCESS_DENIED, observed live `17:36:03`) —
+Windows reserves R/W opens of mouse/keyboard top-level collections. What actually recovers is
+**retrying the same zero-access call**: on 2026-09-08 it failed `err=121` (`ERROR_SEM_TIMEOUT`) and
+succeeded 4s later.
+
+Now retries zero-access 3x/3s, then makes one last-ditch full-access attempt. Success is signalled
+via `$script:MmF1Ok`, not a return value — the log lines share the function's output stream, so
+`if (Try-F1 0)` would test a non-empty array and always be true. **Proved itself during the
+2.0.4.3 install:** `attempt=1/3` → `ok=False err=121`, `attempt=2/3` → `ok=True`, `F1_OK`.
+
+### Scroll was ~2x too sensitive all week — 2.0.4.3
+
+`AccumulateSurfaceScroll` looped over every touch point and did `*outWheel += ±1` for each, so a
+normal two-finger drag emitted **two** notches per `MM_SCROLL_STEP` of travel: the detent was
+effectively 4, not 8. `down < 2` gates entry only; it never stopped the double count.
+
+2.0.4.3: one **reference finger** (lowest active DRAG slot, ids are stable for a contact's life)
+drives the wheel. Other contacts still re-anchor on the same threshold, so whichever finger takes
+over at lift-off starts fresh instead of dumping a burst of notches from a stale anchor.
+
+`ScrollStep` is now read from `Services\MagicMouseDriver204Scroll\Parameters` (REG_DWORD, clamp
+`[1,224]`, default 8) and echoed into `Diag!ScrollStep`, so **sensitivity is tunable without a
+rebuild**: `scripts/mm-scroll-tune.ps1 -ScrollStep N` writes the value, restarts the device,
+re-runs F1, and fails loudly if the driver still reports the old number. Out-of-range values fall
+back to the proven default rather than being honoured.
+
+Installed live 2026-09-15: signed `FE7CF014…`, `dest_version=2.0.4.3`, oem16 still `AD5D244B`, all
+four PnP nodes `CM_PROB_NONE`, `LastAclReceived=23`, `Diag!ScrollStep=8`. **User confirmed: "scroll
+is much better."** Left at the default 8; tune coarser/finer with the script, no reinstall.
+
+### The 2.0.4.2 kernel F1 path is gone, not parked
+
+Building it is now a **build failure**, not a judgement call: `kmdf-204-scroll-build.ps1` refuses
+`Driver.c` containing `MmHidSetFeatureWorkItemFunc`/`IoRegisterPlugPlayNotification`. Code gates
+run against comment-stripped source, so the incident write-up in `Driver.c`'s header cannot trip
+them (it did, first try). The never-validated velocity-scaling diff went with it — a tunable
+constant step makes guessed gain/ceiling curves pointless. Git history keeps both.
+
+Build/sign scripts now take `-Version` and derive per-version work/stage dirs; sign reads its
+expected pre-sign hash from that build's `FROZEN-UNSIGNED.txt` instead of a pasted constant (the
+old hardcoded hash rotted into "REFUSE hash not frozen" on any new build).
+`kmdf-204-pnputil-once.ps1` takes `-Stage` and still **defaults to the 2.0.4.1 restore**, so a bare
+run remains the rollback.
 
 ## Not in this package
 
@@ -203,12 +255,23 @@ Windows/macOS **gestures** (no PTP). v1 `0x030D` / v2 `0x0269`. PATH-A (`0xD1`).
 ## Left to do
 
 1. Community **swap-test** (`SHIPPING.md`) — pnputil of self-signed package not run on this PC.
-2. **Reboot:** does MT survive without F1? **Still open as of 2026-09-15** — watcher heartbeats show
-   no reboot and no PID_0323 re-enumeration since the 09-08 rollback, so nothing has tested it.
-   Next real reboot answers it: check `auto-f1-watcher.log` for an arrival + F1 fire, and whether
-   2-finger scroll works *before* that F1 lands.
-3. **RESOLVED, do not repeat:** `DriverVer` bump was done for `2.0.4.2` — but see morning incident: that build is parked, not for live use, until the self-contention bug is fixed.
-4. **Tray/reconnect F1 — SOLVED for now.** `MmAutoF1Watcher` scheduled task (userspace, `v2-kmdf-driver/scripts/mm-auto-f1-watcher*.ps1`) auto-recovers MT on any PID_0323 reconnect, proven 2026-09-08 (3/3 overnight cycles + this morning's rollback reconnect). The in-kernel version (`MmHidSetFeatureWorkItemFunc`) is **parked** — self-contends with this filter's own BRB channel state, broke pointer+scroll live. Do not reinstall until redesigned to route through the existing `MtControlHandle` instead of an independent I/O target. `MagicMouseTray/DeviceEnable.cs` calling F1 directly is now optional belt-and-suspenders, not required.
-5. Virtual PTP (gestures) — new spec, not this overlay.
-6. EV + Partner Center if Secure Boot “just works” is the goal.
-7. Keep PR #4 draft until swap-test. Do not merge PR #3.
+2. **ANSWERED 2026-09-15, do not re-ask:** MT does **not** survive a reboot. The 09-15 Windows
+   Update restart killed 2-finger scroll, and the watcher never saw an arrival event because the
+   device was already enumerated before its subscription existed. Covered by the startup reconcile.
+   The *next* reboot is now a regression check, not an open question: `auto-f1-watcher.log` must
+   show `F1 fire (startup reconcile…)` shortly after boot.
+3. **RESOLVED, do not repeat:** `DriverVer` is bumped per build; 2.0.4.3 is live and user-confirmed.
+   Build/sign scripts derive everything from `-Version`, so the next bump needs no script edits.
+4. **Reconnect + boot F1 — SOLVED.** `MmAutoF1Watcher` covers reconnects (arrival events, proven
+   3/3 overnight 09-08) and boot (startup reconcile, proven live 09-15). The in-kernel version is
+   **deleted**, and the build refuses to compile it back in. `MagicMouseTray/DeviceEnable.cs`
+   calling F1 directly is optional belt-and-suspenders, not required.
+5. **Scroll sensitivity — SOLVED, and tunable.** Fixed the per-touch-point double count in 2.0.4.3;
+   `ScrollStep` (default 8) is live-tunable via `scripts/mm-scroll-tune.ps1`, no reinstall. If the
+   user ever wants it coarser/finer, that is a one-command change, not a build.
+6. Virtual PTP (gestures) — new spec, not this overlay.
+7. EV + Partner Center if Secure Boot “just works” is the goal.
+8. Keep PR #4 draft until swap-test. Do not merge PR #3.
+9. `dump-204-diag.ps1` lives only in `C:\mm-dev-queue`, not in this repo, and its value list has to
+   be edited by hand when the driver gains a Diag field (`ScrollStep` was added 09-15). Worth
+   pulling into `scripts/` and driving off the key's actual values.

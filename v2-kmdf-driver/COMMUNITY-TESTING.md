@@ -44,11 +44,27 @@ After install, wait a few seconds (the script sends Feature **F1**; timeout/erro
 1. **Pointer** — move on the desk. Must work.
 2. **One finger** — rest or drag one finger on the glass. Must **not** scroll.
 3. **Two fingers** — swipe two fingers. Must scroll.
-4. **Reconnect** — turn the mouse off/on or unpair/pair. Repeat 1–3. If scroll dies until you re-run `scripts\mm-f1-once.ps1`, say so (that is a known gap).
-4b. **Magic Tray "Enabled on this PC" checkbox** — confirmed 2026-09-08: toggling it off then on kills 2-finger scroll (pointer keeps working) until `mm-f1-once.ps1` runs again. Not a corrupted install, no reinstall needed — just re-run the F1 script. Report it anyway so the tray gets fixed to do this automatically.
-5. **Reboot Windows** — repeat 1–3. Tell us if two-finger scroll survived without running anything.
+4. **Reconnect** — turn the mouse off/on or unpair/pair. Repeat 1–3. Scroll should keep working: `MmAutoF1Watcher` (installed as a Scheduled Task) re-sends F1 on every PID_0323 arrival. If scroll dies until you re-run `scripts\mm-f1-once.ps1` by hand, say so.
+4b. **Magic Tray "Enabled on this PC" checkbox** — confirmed 2026-09-08: toggling it off then on kills 2-finger scroll (pointer keeps working) until F1 runs again. Not a corrupted install, no reinstall needed. The watcher should now catch this automatically; report it if it does not.
+5. **Reboot Windows** — repeat 1–3. A reboot **does** drop multitouch on its own (confirmed 2026-09-15: the mouse is already enumerated before the watcher starts, so no arrival event fires), which is why the watcher re-checks state at startup and sends F1 then. Scroll should work without you running anything. If it does not, check `C:\ProgramData\MagicMouseDriver\auto-f1-watcher.log` for a line containing `startup reconcile` and send it.
 
 If 1-finger still scrolls, or 2-finger never scrolls, we need a Diag dump (below).
+
+### Scroll too sensitive or too sluggish?
+
+It is tunable — no rebuild, no reinstall. `ScrollStep` is how far (in touch units) you must drag
+per scroll notch, so **higher = less sensitive**. Default 8, valid `1`–`224`, and out-of-range
+values are ignored in favour of the default.
+
+```powershell
+# admin PowerShell, from the package directory
+scripts\mm-scroll-tune.ps1 -ScrollStep 16
+```
+
+It writes the value, restarts the 0323 device, re-sends F1, then prints what the driver actually
+loaded (`driver_ScrollStep`) so you can tell a real change from a silent no-op. Reference points on
+the original hardware: `8` is the proven default, and `224` (the Linux `hid-magicmouse` default)
+produced **zero** wheel — so treat the high end with suspicion and move in small steps.
 
 ## What to send if it fails
 
@@ -57,7 +73,7 @@ Admin PowerShell:
 ```powershell
 Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\MagicMouseDriver204Scroll\Diag' |
   Select-Object SdpPatchSuccess, LastAclReceived, LastAclCapacity, Rid12Count,
-                LastOutHdr, LastOutBufferSize, MtEnableStatus
+                LastOutHdr, LastOutBufferSize, MtEnableStatus, ScrollStep
 ```
 
 While **two fingers are on the glass**:

@@ -1,3 +1,19 @@
+> **SUPERSEDED 2026-09-15 — historical record only.** Two things this report prepares no
+> longer exist in the tree, and neither should be revived from here:
+>
+> - The **kernel HID SetFeature-via-sibling-PDO** path (Step 2) was installed live on
+>   2026-09-08 as 2.0.4.2 and took down pointer *and* scroll. It is deleted, and
+>   `kmdf-204-scroll-build.ps1` now fails the build if `Driver.c` contains it.
+> - The **velocity-scaling scroll diff** (Step 3, `TouchLastX/Y`,
+>   `MM_SCROLL_VELOCITY_GAIN`) was removed unbuilt. Its premise — that a guessed
+>   gain/ceiling curve was needed because no data point existed between 8 and 224 — was
+>   answered instead by making the detent a registry tunable (`ScrollStep`) and fixing the
+>   real bug: scroll emitted one notch *per touch point*, so two fingers doubled every
+>   notch. See `STATUS.md`, "2026-09-15".
+>
+> The watcher (Step 1) is the part that survived, and it now also reconciles at startup —
+> arrival events alone never fire on boot.
+
 # Overnight report - 2026-09-08
 
 Branch `ai/kmdf-204-unique-pkg-7748` (PR #4, draft). User asleep, PC unattended all

@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.4.3] - 2026-09-15
+
+### Fixed
+
+- **Two-finger scroll was ~2x too sensitive.** `AccumulateSurfaceScroll` emitted a Wheel notch per *touch point*, so a normal two-finger drag produced two notches per `MM_SCROLL_STEP` of travel — the detent was effectively half its configured value. The `down < 2` check only gated entry, never the double count. One reference finger (lowest active DRAG slot) now drives the wheel; the other contacts keep re-anchoring on the same threshold so lift-off hand-over cannot dump a burst of notches. User-confirmed on hardware.
+- **A reboot silently killed multitouch.** `MmAutoF1Watcher` only reacted to PnP *arrival* events, but at boot the mouse is already paired and enumerated before the watcher's WMI subscription exists — so no event ever fired and scroll stayed dead until someone ran `mm-f1-once.ps1` by hand. The watcher now reconciles current state at startup and fires F1 when COL01 is already present. Verified live.
+- **`mm-f1-once.ps1` had no working retry.** `Try-F1 0xC0000000` threw on every invocation (PowerShell parses the bare literal as `Int32`, which cannot bind to `[uint32]`), and full-access opens of a mouse HID collection are refused outright (`ACCESS_DENIED`) — so a failed first attempt had no fallback at all. It now retries the permitted zero-access call up to 3x/3s. Proved itself during the 2.0.4.3 install: attempt 1 `err=121`, attempt 2 `ok=True`.
+
+### Added
+
+- **`ScrollStep` registry tunable** (`Services\MagicMouseDriver204Scroll\Parameters`, REG_DWORD, clamped `[1,224]`, default 8), echoed back into the driver's `Diag` key. Sensitivity is now tuned with a device restart via `scripts/mm-scroll-tune.ps1` — no rebuild, no re-sign, no reinstall. Out-of-range values fall back to the proven default.
+
+### Removed
+
+- **The kernel HID SetFeature-via-sibling-PDO path**, in full (PnP arrival hook, workitem, symlink matcher, GUIDs, `KernelHidF1*` counters). It shipped as 2.0.4.2, was installed live once, and took down pointer *and* scroll: the self-issued `IOCTL_HID_SET_FEATURE` contends with the Bluetooth control channel this filter already tracks state for. The build now **fails** if `Driver.c` contains it. MT recovery is userspace (`mm-auto-f1-watcher.ps1`).
+- The never-validated velocity-scaling scroll diff. A tunable constant step makes guessed gain/ceiling curves unnecessary.
+
+### Changed
+
+- Build/sign scripts take `-Version` and derive per-version work/stage directories; the sign step reads its expected pre-sign hash from that build's `FROZEN-UNSIGNED.txt` instead of a pasted constant. `kmdf-204-pnputil-once.ps1` takes `-Stage` and still **defaults to the known-good 2.0.4.1 restore**, so a bare run is always the rollback.
+
 ## [2.0.4.1] - 2026-09-01
 
 ### Hardware
