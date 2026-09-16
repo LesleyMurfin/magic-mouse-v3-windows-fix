@@ -122,111 +122,275 @@
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <header>
-    <p class="kicker">Install &middot; shipped route &middot; PID 0323</p>
-  <nav aria-label="Site">
-    <a href="./">Windows driver</a>
-    <a href="install.html" aria-current="page">Install</a>
-    <a href="scroll-fix.html">Scroll fix</a>
-    <a href="battery.html">Battery %</a>
-    <a href="faq.html">FAQ</a>
-    <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
-    <a href="https://magictray.app/">Magic Tray app</a>
-  </nav>
-    <h1>How to install the Magic Mouse 2024 (v3) Windows driver</h1>
-    <p class="lead">This page installs the <strong>shipped Apple-driver route</strong>: double-click <code>Install.cmd</code> to register Apple&rsquo;s own unmodified signed driver, with <strong>no Windows Test Mode</strong>, on Magic Mouse v1, v2, v2-alt and the 2024 model. The <strong>KMDF route</strong> is development documentation only; this branch contains no installable package, compiled driver or installer for it. Both routes must not be combined.</p>
-    <p class="cta">
-      <a class="primary" href="#choose">What can I install?</a>
-      <a class="ghost" href="scroll-fix.html">Scroll still dead? Read the fix</a>
-    </p>
+  <header class="site">
+    <div class="wrap">
+      <p class="kicker"><svg class="icon"><use href="img/icons.svg#download"/></svg> Install &middot; shipped route &middot; PID 0323</p>
+      <nav class="site" aria-label="Site">
+        <a href="./">Windows driver</a>
+        <a href="install.html" aria-current="page">Install</a>
+        <a href="scroll-fix.html">Scroll fix</a>
+        <a href="battery.html">Battery %</a>
+        <a href="faq.html">FAQ</a>
+        <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
+        <a href="https://magictray.app/">Magic Tray app</a>
+      </nav>
+      <h1>How to install the Magic Mouse 2024 (v3) Windows driver</h1>
+      <p class="lead">This page installs the <strong>shipped Apple-driver route</strong>: double-click <code>Install.cmd</code> to register Apple&rsquo;s own unmodified signed driver, with <strong>no Windows Test Mode</strong>, on Magic Mouse v1, v2, v2-alt and the 2024 model. The <strong>KMDF route</strong> is development documentation only; this branch contains no installable package, compiled driver or installer for it. Both routes must not be combined.</p>
+      <p class="cta">
+        <a class="btn btn-primary" href="#choose"><svg class="icon"><use href="img/icons.svg#check-circle"/></svg> What can I install?</a>
+        <a class="btn btn-ghost" href="scroll-fix.html">Scroll still dead? Read the fix</a>
+      </p>
+    </div>
   </header>
   <main id="content">
-    <h2 id="choose">What can I install from this branch?</h2>
-    <p>The Apple-driver route is shipped and installable here. The KMDF route is development work only: this branch contains its README/status material, not an installable package, compiled <code>.sys</code>, or installer. Do not try to install the KMDF route from this branch.</p>
-    <table>
-      <caption>Shipped Apple-driver route and KMDF development status</caption>
-      <thead>
-        <tr><th scope="col"></th><th scope="col">Apple-driver route</th><th scope="col">KMDF route</th></tr>
-      </thead>
-      <tbody>
-        <tr><th scope="row">Package</th><td><code>v1-binary-patch/</code>, v1.0.0, shipped</td><td><code>v2-kmdf-driver/</code>, README/status only; not shipped</td></tr>
-        <tr><th scope="row">Supported PIDs</th><td><code>0x030D</code>, <code>0x0269</code>, <code>0x0310</code>, <code>0x0323</code></td><td>Planned for <code>0x0323</code> only</td></tr>
-        <tr><th scope="row">System change</th><td>No Test Mode; Secure Boot and memory integrity can stay on</td><td>Planned Test Mode requirement; no package is available to install</td></tr>
-        <tr><th scope="row">Install</th><td>Turn Fast Startup off, then double-click <code>Install.cmd</code></td><td>Not available from this branch</td></tr>
-        <tr><th scope="row">Scroll feel</th><td>Apple/Mac-style, sensitivity fixed</td><td>Planned generated scroll; not available to users</td></tr>
-        <tr><th scope="row">Battery percentage</th><td>Magic Tray uses a temporary mode flip</td><td>Not applicable until the route ships</td></tr>
-      </tbody>
-    </table>
-    <p class="note">Install the shipped Apple-driver route only. Its full steps and rollback are below.</p>
+    <div class="wrap">
 
-    <h2 id="apple-route">Route 1: the Apple-driver route (no Test Mode)</h2>
-    <dl class="faq">
-      <dt>Package to install</dt>
-      <dd><code>v1-binary-patch</code> &mdash; Apple&rsquo;s <code>applewirelessmouse.sys</code>, unmodified. Installer: <code>Install.cmd</code>.</dd>
-      <dt>Devices</dt>
-      <dd>Magic Mouse v1 <code>0x030D</code>, v2 <code>0x0269</code>, v2-alt <code>0x0310</code>, and the 2024 model (v3) <code>0x0323</code>.</dd>
-      <dt>Signing</dt>
-      <dd>Apple&rsquo;s binary is untouched and no catalog is installed, so <strong>no Windows Test Mode is required</strong> and Secure Boot and memory integrity can stay on.</dd>
-      <dt>Reboots</dt>
-      <dd>Two if Fast Startup is on: one after <code>powercfg /h off</code>, one after the installer. One if Fast Startup is already off.</dd>
-      <dt>Scroll</dt>
-      <dd>Apple&rsquo;s own Mac-style translation. Sensitivity is fixed, not tunable.</dd>
-    </dl>
-    <p>This route is not a patch and it does not modify anything Apple shipped. The fix is <strong>registration</strong>: copy the <code>.sys</code> to <code>System32\drivers</code>, create the <code>applewirelessmouse</code> kernel service, add <code>applewirelessmouse</code> to the device&rsquo;s <code>LowerFilters</code>, and restart the Bluetooth HID device. Installing Apple&rsquo;s Boot Camp software on its own does not give you scroll: Apple&rsquo;s installer refuses to run on non-Apple hardware, and even with the file present Windows will not attach the filter until something registers it. This is the approach <a href="https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows">sbagirici proved on Magic Mouse v1 and v2</a>.</p>
-    <p class="note"><strong>Before you start:</strong> turn Fast Startup off, or the installer refuses to run. From an elevated prompt run <code>powercfg /h off</code>, then reboot. Fast Startup is on by default on Windows, and with it on the driver registration silently fails to take effect.</p>
-    <h3>Apple-route install steps</h3>
-    <ol class="steps">
-      <li id="a-step-1"><strong>Check which Magic Mouse you have.</strong> <strong>Device Manager</strong> &rarr; <strong>Human Interface Devices</strong> &rarr; <strong>Apple Magic Mouse</strong> &rarr; Properties &rarr; Details &rarr; <strong>Hardware Ids</strong>. This route supports <code>PID_030D</code>, <code>PID_0269</code>, <code>PID_0310</code> and <code>PID_0323</code>.</li>
-      <li id="a-step-2"><strong>Download the repo and verify the bundled Apple driver.</strong> Get the <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">magic-mouse-v3-windows-fix repository on GitHub</a>. The bundled <code>applewirelessmouse.sys</code> is Apple&rsquo;s own binary, byte for byte: SHA256 <code>08F33D7E3ECE2C73950A9706F1C4C9057894EAEAF1C4FB355F261F3C2333378F</code>, 78,424 bytes, file version 6.1.7700.0, Authenticode signature <strong>Valid</strong>, signer <code>CN=Microsoft Windows Hardware Compatibility Publisher</code>. Check it with <code>Get-FileHash -Algorithm SHA256 applewirelessmouse.sys</code> and <code>Get-AuthenticodeSignature applewirelessmouse.sys</code>.</li>
-      <li id="a-step-3"><strong>Double-click <code>Install.cmd</code>.</strong> In <code>v1-binary-patch\</code>, double-click <code>Install.cmd</code>. It asks for Administrator itself, uses the bundled Apple driver, and needs no PowerShell window and no execution-policy change. It does the registration described above.</li>
-      <li id="a-step-4"><strong>Reboot and test two-finger scroll.</strong> Reboot to finish, then swipe two fingers on the glass. If you later unpair and re-pair the mouse, run <code>Install.cmd</code> again &mdash; the filter is registered against the device InstanceId, and re-pairing can change it. If you want to know why scroll broke in the first place, read <a href="scroll-fix.html">why Magic Mouse scroll stops working on Windows 11</a>.</li>
-      <li id="a-step-5"><strong>Uninstall or roll back.</strong> Run <code>installer\Uninstall-MagicMousePatch.ps1</code> as administrator. It stops the <code>applewirelessmouse</code> service, restores the backed-up driver, removes <code>applewirelessmouse</code> from <code>LowerFilters</code>, deletes the service registry key, re-enables the device, and prompts for a reboot.</li>
-    </ol>
+      <section id="choose">
+        <h2>What can I install from this branch?</h2>
+        <p class="prose">The Apple-driver route is shipped and installable here. The KMDF route is development work only: this branch contains its README/status material, not an installable package, compiled <code>.sys</code>, or installer.</p>
+        <div class="grid grid-2">
+          <div class="route-card is-shipped">
+            <div class="head">
+              <h3>Apple-driver route</h3>
+              <span class="badge badge-success"><svg class="icon"><use href="img/icons.svg#check-circle"/></svg> Shipped</span>
+            </div>
+            <p>Registers Apple&rsquo;s own unmodified signed driver as a lower filter. This is the route to install.</p>
+            <ul>
+              <li><strong>Package:</strong> <code>v1-binary-patch/</code>, v1.0.0</li>
+              <li><strong>Supported PIDs:</strong> <code>0x030D</code>, <code>0x0269</code>, <code>0x0310</code>, <code>0x0323</code></li>
+              <li><strong>System change:</strong> no Test Mode; Secure Boot and memory integrity can stay on</li>
+              <li><strong>Install:</strong> turn Fast Startup off, then double-click <code>Install.cmd</code></li>
+              <li><strong>Scroll feel:</strong> Apple/Mac-style, sensitivity fixed</li>
+              <li><strong>Battery %:</strong> Magic Tray uses a temporary mode flip</li>
+            </ul>
+            <a class="btn btn-ghost" href="#apple-route">Full install steps</a>
+          </div>
+          <div class="route-card is-dev">
+            <div class="head">
+              <h3>KMDF route</h3>
+              <span class="badge badge-warning"><svg class="icon"><use href="img/icons.svg#warning-triangle"/></svg> Dev only</span>
+            </div>
+            <p>Development work only. This branch has no installable package, compiled <code>.sys</code>, or installer for it.</p>
+            <ul>
+              <li><strong>Package:</strong> <code>v2-kmdf-driver/</code>, README/status only</li>
+              <li><strong>Supported PIDs:</strong> planned for <code>0x0323</code> only</li>
+              <li><strong>System change:</strong> planned Test Mode requirement; no package available</li>
+              <li><strong>Install:</strong> not available from this branch</li>
+              <li><strong>Scroll feel:</strong> planned generated scroll; not available to users</li>
+              <li><strong>Battery %:</strong> not applicable until the route ships</li>
+            </ul>
+            <a class="btn btn-ghost" href="#kmdf-route">Development status</a>
+          </div>
+        </div>
+      </section>
 
-    <h3 id="apple-advanced">Advanced: the PowerShell installer</h3>
-    <p><code>Install.cmd</code> is a wrapper. If you would rather drive it directly, run <code>installer\Install-MagicMousePatch.ps1</code> as administrator. Useful switches:</p>
-    <ul class="plain">
-      <li><code>-DriverPath</code> &mdash; use a specific <code>applewirelessmouse.sys</code> instead of the bundled one.</li>
-      <li><code>-FromDriverStore</code> &mdash; take the driver from the Windows driver store.</li>
-      <li><code>-TargetPid &lt;030D|0310|0269|0323&gt;</code> &mdash; register against a specific Magic Mouse model.</li>
-      <li><code>-DryRun</code> &mdash; report what would happen and change nothing.</li>
-    </ul>
-    <p class="note">The installer identifies which binary it was handed from the Authenticode signature. A binary whose signature does not verify &mdash; patched but never re-signed, or a corrupted download &mdash; is refused. A legacy byte-patched and re-signed variant (SHA256 <code>370A5555&hellip;</code>, signed with this project&rsquo;s own <code>MagicMouseFix</code> certificate) is no longer shipped; it is documented only so an existing install can be identified, and that variant <em>does</em> require Test Mode.</p>
+      <section id="apple-route">
+        <h2>Route 1: the Apple-driver route (no Test Mode)</h2>
+        <p class="prose">This route is not a patch: it does not modify anything Apple shipped. The fix is <strong>registration</strong> &mdash; copying Apple&rsquo;s <code>.sys</code> into <code>System32\drivers</code>, creating the <code>applewirelessmouse</code> kernel service, adding it to the device&rsquo;s <code>LowerFilters</code>, and restarting the Bluetooth HID device. This is the approach <a href="https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows">sbagirici proved on Magic Mouse v1 and v2</a>.</p>
 
-    <h2 id="kmdf-route">KMDF route: development status only</h2>
-    <p>The KMDF route is not currently installable. This branch contains its README/status material, but no compiled <code>.sys</code>, signed package, or installer. Do not follow KMDF installation instructions or enable Test Mode for this branch. A complete, tested package must be published before this route can be offered to users.</p>
-    <dl class="faq">
-      <dt>Planned device</dt>
-      <dd>Apple Magic Mouse 2024 (USB-C), Bluetooth VID <code>05AC</code>, PID <code>0x0323</code>.</dd>
-      <dt>Planned signing</dt>
-      <dd>Development work is self-signed and would require Test Mode; no installable package is present here.</dd>
-      <dt>Planned behaviour</dt>
-      <dd>Generated scroll and automatic recovery are documented as development goals, not shipped behaviour.</dd>
-    </dl>
+        <details class="tech">
+          <summary>Why doesn&rsquo;t Apple&rsquo;s Boot Camp installer just work?</summary>
+          <p>Installing Apple&rsquo;s Boot Camp software on its own does not give you scroll: Apple&rsquo;s installer refuses to run on non-Apple hardware, and even with the file present Windows will not attach the filter until something registers it.</p>
+        </details>
 
-    <h2 id="test-mode">What does Test Mode mean for this project?</h2>
-    <p>Test Mode is relevant only to the unreleased KMDF development work. It tells Windows to load kernel drivers signed with a certificate Windows does not trust by default, and normally requires Secure Boot and memory integrity to be off. Do not enable it to install the shipped Apple-driver route.</p>
-    <p>The shipped Apple-driver route uses Apple&rsquo;s own signed binary without altering a byte and installs no catalog, so it needs no Test Mode. The KMDF route will need a complete package and production signing plan before it can be documented as an install option.</p>
-    <p class="note">Do not disable driver signature enforcement on a machine you do not control, and do not install kernel drivers you have not hash-checked.</p>
+        <h3>Supported Magic Mouse models</h3>
+        <div class="device-grid">
+          <div class="device-card">
+            <div class="thumb">
+              <picture>
+                <source srcset="img/magic-mouse-v1-underside-aa-door.webp" type="image/webp">
+                <img src="img/magic-mouse-v1-underside-aa-door.jpg" alt="Underside of Magic Mouse v1, AA battery door open">
+              </picture>
+            </div>
+            <div class="meta">
+              <div class="name">Magic Mouse (v1)</div>
+              <div class="pid">PID <code>0x030D</code></div>
+              <div class="status">AA batteries &mdash; Apple-driver route</div>
+            </div>
+          </div>
+          <div class="device-card">
+            <div class="thumb">
+              <picture>
+                <source srcset="img/magic-mouse-v2-underside-lightning-alt.webp" type="image/webp">
+                <img src="img/magic-mouse-v2-underside-lightning-alt.jpg" alt="Underside of Magic Mouse 2 (v2), Lightning port">
+              </picture>
+            </div>
+            <div class="meta">
+              <div class="name">Magic Mouse 2 (v2)</div>
+              <div class="pid">PID <code>0x0269</code></div>
+              <div class="status">Lightning &mdash; Apple-driver route</div>
+            </div>
+          </div>
+          <div class="device-card">
+            <div class="thumb"></div>
+            <div class="meta">
+              <div class="name">Magic Mouse 2 (v2-alt)</div>
+              <div class="pid">PID <code>0x0310</code></div>
+              <div class="status">Apple Wireless Mouse &mdash; Apple-driver route</div>
+            </div>
+          </div>
+          <div class="device-card">
+            <div class="thumb">
+              <picture>
+                <source srcset="img/magic-mouse-v3-underside-usbc.webp" type="image/webp">
+                <img src="img/magic-mouse-v3-underside-usbc.jpg" alt="Underside of Magic Mouse 2024 (v3), USB-C port">
+              </picture>
+            </div>
+            <div class="meta">
+              <div class="name">Magic Mouse 2024 (v3)</div>
+              <div class="pid">PID <code>0x0323</code></div>
+              <div class="status">USB-C &mdash; Apple-driver route</div>
+            </div>
+          </div>
+        </div>
 
-    <h2>What should I read next?</h2>
-    <p>Magic Tray is Windows software &mdash; a system-tray utility &mdash; not a desk accessory, stand, or 3D-printed tray. This branch ships the Apple-driver route; its battery read uses a temporary mode flip.</p>
-    <ul class="plain">
-      <li><a href="scroll-fix.html">Magic Mouse 2024 (v3) scroll not working on Windows 11</a> &mdash; symptoms, cause, and the PID lookup table.</li>
-      <li><a href="battery.html">Magic Mouse battery percentage on Windows 11</a> &mdash; what reads the battery on the shipped route.</li>
-      <li><a href="faq.html">Magic Mouse v3 Windows driver FAQ</a> &mdash; signing, Boot Camp, v1 and v2 support.</li>
-      <li><a href="https://magictray.app/">Magic Tray (Windows app)</a> &mdash; Windows system-tray battery utility.</li>
-    </ul>
+        <div class="accordion">
+          <details>
+            <summary>Signing and Test Mode <svg class="icon chev"><use href="img/icons.svg#chevron-down"/></svg></summary>
+            <div class="a-body"><p>Apple&rsquo;s binary is untouched and no catalog is installed, so <strong>no Windows Test Mode is required</strong> and Secure Boot and memory integrity can stay on.</p></div>
+          </details>
+          <details>
+            <summary>Reboots required <svg class="icon chev"><use href="img/icons.svg#chevron-down"/></svg></summary>
+            <div class="a-body"><p>Two if Fast Startup is on: one after <code>powercfg /h off</code>, one after the installer. One if Fast Startup is already off.</p></div>
+          </details>
+          <details>
+            <summary>Scroll feel <svg class="icon chev"><use href="img/icons.svg#chevron-down"/></svg></summary>
+            <div class="a-body"><p>Apple&rsquo;s own Mac-style translation. Sensitivity is fixed, not tunable.</p></div>
+          </details>
+        </div>
 
+        <div class="callout callout-warning">
+          <svg class="icon"><use href="img/icons.svg#warning-triangle"/></svg>
+          <div>
+            <p><strong>Before you start:</strong> turn Fast Startup off, or the installer refuses to run. From an elevated prompt run <code>powercfg /h off</code>, then reboot. Fast Startup is on by default on Windows, and with it on the driver registration silently fails to take effect.</p>
+          </div>
+        </div>
+
+        <h3>Apple-route install steps</h3>
+        <ol class="stepper">
+          <li class="step" id="a-step-1">
+            <span class="num">1</span>
+            <div class="body">
+              <h3><svg class="icon"><use href="img/icons.svg#mouse"/></svg> Check which mouse you have</h3>
+              <p><strong>Device Manager</strong> &rarr; <strong>Human Interface Devices</strong> &rarr; <strong>Apple Magic Mouse</strong> &rarr; Properties &rarr; Details &rarr; <strong>Hardware Ids</strong>. This route covers <code>PID_030D</code>, <code>PID_0269</code>, <code>PID_0310</code> and <code>PID_0323</code>.</p>
+            </div>
+          </li>
+          <li class="step" id="a-step-2">
+            <span class="num">2</span>
+            <div class="body">
+              <h3><svg class="icon"><use href="img/icons.svg#download"/></svg> Download and verify the driver</h3>
+              <p>Get the <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">magic-mouse-v3-windows-fix repository on GitHub</a>. The bundled <code>applewirelessmouse.sys</code> is Apple&rsquo;s own binary, byte for byte.</p>
+              <details class="tech">
+                <summary>Hash, version and signer to verify</summary>
+                <p>SHA256 <code>08F33D7E3ECE2C73950A9706F1C4C9057894EAEAF1C4FB355F261F3C2333378F</code>, 78,424 bytes, file version 6.1.7700.0, Authenticode signature <strong>Valid</strong>, signer <code>CN=Microsoft Windows Hardware Compatibility Publisher</code>. Check it with <code>Get-FileHash -Algorithm SHA256 applewirelessmouse.sys</code> and <code>Get-AuthenticodeSignature applewirelessmouse.sys</code>.</p>
+              </details>
+            </div>
+          </li>
+          <li class="step" id="a-step-3">
+            <span class="num">3</span>
+            <div class="body">
+              <h3><svg class="icon"><use href="img/icons.svg#terminal"/></svg> Double-click Install.cmd</h3>
+              <p>In <code>v1-binary-patch\</code>, double-click <code>Install.cmd</code>. It asks for Administrator itself &mdash; no PowerShell window, no execution-policy change &mdash; and performs the registration above.</p>
+            </div>
+          </li>
+          <li class="step" id="a-step-4">
+            <span class="num">4</span>
+            <div class="body">
+              <h3><svg class="icon"><use href="img/icons.svg#restart"/></svg> Reboot and test two-finger scroll</h3>
+              <p>Reboot to finish, then swipe two fingers on the glass. Unpairing and re-pairing changes the device InstanceId &mdash; run <code>Install.cmd</code> again if scroll stops. See <a href="scroll-fix.html">why Magic Mouse scroll stops working on Windows 11</a>.</p>
+            </div>
+          </li>
+          <li class="step" id="a-step-5">
+            <span class="num">5</span>
+            <div class="body">
+              <h3><svg class="icon"><use href="img/icons.svg#wrench"/></svg> Uninstall or roll back</h3>
+              <p>Run <code>installer\Uninstall-MagicMousePatch.ps1</code> as administrator to restore the backed-up driver and remove the filter.</p>
+              <details class="tech">
+                <summary>Exactly what rollback does</summary>
+                <p>It stops the <code>applewirelessmouse</code> service, restores the backed-up driver, removes <code>applewirelessmouse</code> from <code>LowerFilters</code>, deletes the service registry key, re-enables the device, and prompts for a reboot.</p>
+              </details>
+            </div>
+          </li>
+        </ol>
+
+        <h3 id="apple-advanced">Advanced: the PowerShell installer</h3>
+        <p class="prose"><code>Install.cmd</code> is a wrapper. To drive it directly, run <code>installer\Install-MagicMousePatch.ps1</code> as administrator with any of these switches:</p>
+        <table>
+          <caption>PowerShell installer switches</caption>
+          <thead>
+            <tr><th scope="col">Switch</th><th scope="col">Effect</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>-DriverPath</code></td><td>Use a specific <code>applewirelessmouse.sys</code> instead of the bundled one.</td></tr>
+            <tr><td><code>-FromDriverStore</code></td><td>Take the driver from the Windows driver store.</td></tr>
+            <tr><td><code>-TargetPid &lt;030D|0310|0269|0323&gt;</code></td><td>Register against a specific Magic Mouse model.</td></tr>
+            <tr><td><code>-DryRun</code></td><td>Report what would happen and change nothing.</td></tr>
+          </tbody>
+        </table>
+        <details class="tech">
+          <summary>Signature verification and the legacy signed variant</summary>
+          <p>The installer identifies which binary it was handed from the Authenticode signature. A binary whose signature does not verify &mdash; patched but never re-signed, or a corrupted download &mdash; is refused. A legacy byte-patched and re-signed variant (SHA256 <code>370A5555&hellip;</code>, signed with this project&rsquo;s own <code>MagicMouseFix</code> certificate) is no longer shipped; it is documented only so an existing install can be identified, and that variant <em>does</em> require Test Mode.</p>
+        </details>
+      </section>
+
+      <section id="kmdf-route">
+        <h2>KMDF route: development status only</h2>
+        <div class="callout callout-info">
+          <svg class="icon"><use href="img/icons.svg#shield-check"/></svg>
+          <div>
+            <p>The KMDF route is <strong>not currently installable</strong>. This branch contains its README/status material only &mdash; no compiled <code>.sys</code>, signed package, or installer. Do not follow KMDF installation instructions or enable Test Mode for this branch.</p>
+          </div>
+        </div>
+        <div class="accordion">
+          <details>
+            <summary>Planned device <svg class="icon chev"><use href="img/icons.svg#chevron-down"/></svg></summary>
+            <div class="a-body"><p>Apple Magic Mouse 2024 (USB-C), Bluetooth VID <code>05AC</code>, PID <code>0x0323</code>.</p></div>
+          </details>
+          <details>
+            <summary>Planned signing <svg class="icon chev"><use href="img/icons.svg#chevron-down"/></svg></summary>
+            <div class="a-body"><p>Development work is self-signed and would require Test Mode; no installable package is present here.</p></div>
+          </details>
+          <details>
+            <summary>Planned behaviour <svg class="icon chev"><use href="img/icons.svg#chevron-down"/></svg></summary>
+            <div class="a-body"><p>Generated scroll and automatic recovery are documented as development goals, not shipped behaviour.</p></div>
+          </details>
+        </div>
+      </section>
+
+      <section id="test-mode">
+        <h2>What does Test Mode mean for this project?</h2>
+        <p class="prose">Test Mode is relevant only to the unreleased KMDF development work. It tells Windows to load kernel drivers signed with a certificate Windows does not trust by default, and normally requires Secure Boot and memory integrity to be off. The shipped Apple-driver route uses Apple&rsquo;s own signed binary without altering a byte and installs no catalog, so it needs <strong>no Test Mode</strong>.</p>
+        <div class="callout callout-warning">
+          <svg class="icon"><use href="img/icons.svg#lock-open"/></svg>
+          <div><p>Do not enable Test Mode to install the shipped Apple-driver route. Do not disable driver signature enforcement on a machine you do not control, and do not install kernel drivers you have not hash-checked.</p></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>What should I read next?</h2>
+        <p class="prose">Magic Tray is Windows software &mdash; a system-tray utility &mdash; not a desk accessory, stand, or 3D-printed tray. This branch ships the Apple-driver route; its battery read uses a temporary mode flip.</p>
+        <ul class="pick">
+          <li><a href="scroll-fix.html">Magic Mouse 2024 (v3) scroll not working on Windows 11<small>Symptoms, cause, and the PID lookup table.</small></a></li>
+          <li><a href="battery.html">Magic Mouse battery percentage on Windows 11<small>What reads the battery on the shipped route.</small></a></li>
+          <li><a href="faq.html">Magic Mouse v3 Windows driver FAQ<small>Signing, Boot Camp, v1 and v2 support.</small></a></li>
+          <li><a href="https://magictray.app/">Magic Tray (Windows app)<small>Windows system-tray battery utility.</small></a></li>
+        </ul>
+      </section>
+
+    </div>
   </main>
-  <footer>
-    <p><strong>Magic Mouse 2024 (v3) Windows driver</strong> — MIT licensed, free, no subscription.
-      Maintained by Revive Business Solutions / Lesley Murfin.</p>
-    <p><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver repo</a> ·
-      <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a> ·
-      <a href="https://magictray.app/drivers.html">Which driver do I need</a> ·
-      <a href="llms.txt">llms.txt</a></p>
-    <p>Not affiliated with Apple Inc. Apple, Magic Mouse, and Boot Camp are trademarks of Apple Inc.</p>
+  <footer class="site">
+    <div class="wrap">
+      <p><strong>Magic Mouse 2024 (v3) Windows driver</strong> &mdash; MIT licensed, free, no subscription.
+        Maintained by Revive Business Solutions / Lesley Murfin.</p>
+      <nav aria-label="Footer">
+        <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver repo</a>
+        <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a>
+        <a href="https://magictray.app/drivers.html">Which driver do I need</a>
+        <a href="llms.txt">llms.txt</a>
+      </nav>
+      <p>Not affiliated with Apple Inc. Apple, Magic Mouse, and Boot Camp are trademarks of Apple Inc.</p>
+    </div>
   </footer>
 </body>
 </html>
