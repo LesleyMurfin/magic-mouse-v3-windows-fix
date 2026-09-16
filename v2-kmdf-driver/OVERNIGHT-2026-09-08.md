@@ -49,7 +49,7 @@ untouched. Nothing was flashed, reinstalled, or reloaded on the kernel side.
 **Installed live:** yes. Ran
 `mm-auto-f1-watcher-install.ps1` via `mm-queue-submit.sh RUN`:
 
-```
+```text
 registered scheduled task MmAutoF1Watcher
 === starting task now (do not wait for next reboot) ===
 LastTaskResult=267009 State=Running
@@ -73,7 +73,7 @@ disabled/enabled (the 9 other HID/USB entries correctly failed
 "not connected" - expected, matches `STATUS.md`'s phantom-node note).
 Watcher log:
 
-```
+```text
 [2026-09-08 03:24:23] PID_0323 PnP entity arrival: HID\...&COL01\...
 [2026-09-08 03:24:32] F1 script exit=0
 [2026-09-08 03:24:32] F1: SetFeature ok=False err=121 len=3
@@ -82,9 +82,10 @@ Watcher log:
 [2026-09-08 03:24:36] F1: SetFeature ok=True err=203 len=3
 ```
 
-(`err=121` then `ok=True err=203` on retry is the documented
-`STATUS.md` "harmless known PowerShell-uint32 retry" pattern - the same
-signature that accompanied the manual fix earlier tonight.)
+(`COL01` triggered an F1 invocation that returned `err=121`; the later
+`COL02` arrival triggered a separate invocation that returned
+`ok=True err=203`. The old `Try-F1` UInt32 binding error prevented the
+internal retry path from running.)
 
 Diag ~10s later: `LastAclReceived=23 LastAclCapacity=9 MtEnableStatus=0
 LastOutHdr=83 LastOutBufferSize=4` - `LastOutHdr=83`/`LastOutBufferSize=4`
@@ -241,7 +242,7 @@ the morning instead."* That is what I did.
 **Live PC state confirmed unchanged after the build+sign work**
 (`probe-0323.ps1`, run last, after everything above):
 
-```
+```text
 oem16=AD5D244B176D650961594EDED153C46F9A52004C424DABFD86E50844E447546B
 unique_sys=9901390ECA723517E1C33B92769846584BC0F6B900C694F50A0C3D5597B1A5C9 size=32496
 MagicMouseDriver Status=Stopped Start=Manual
@@ -295,7 +296,7 @@ on the glass.
 `TouchAnchorX/Y`). The effective detent for the *next* notch grows with
 how far the finger moved since that previous report:
 
-```
+```text
 effStep = MM_SCROLL_STEP + |velocity| * MM_SCROLL_VELOCITY_GAIN,
           clamped to MM_SCROLL_STEP_MAX (3x MM_SCROLL_STEP)
 ```
@@ -315,7 +316,7 @@ host gate scans for.
 
 **Gate run against this diff:**
 
-```
+```text
 $ python3 specs/gate_4.py
 ...
 PASS: test_scroll_threshold.py quotes SCROLL_STEP_8 against GestureEngine.c

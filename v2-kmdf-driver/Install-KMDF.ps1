@@ -70,6 +70,13 @@ function Uninstall-KmdfUniquePackage {
         # Windows PowerShell 5.1, which would abort this loop and report FAIL for a
         # removal that actually worked.
         & pnputil.exe /delete-driver $oem /uninstall 2>$null | ForEach-Object { Write-KmdfLog -Message "$_" -Level 'INFO' }
+        $rc = $LASTEXITCODE
+        if ($rc -eq 3010) {
+            $script:KmdfRebootRequired = $true
+        }
+        elseif ($rc -ne 0) {
+            throw "pnputil /delete-driver $oem exited $rc"
+        }
     }
 }
 
@@ -125,16 +132,14 @@ function Install-KmdfUniquePackage {
 
     $sha = Get-KmdfFileSha256 -Path $sys
     $sums = Join-Path $Here 'SHA256SUMS.txt'
-    if (Test-Path -LiteralPath $sums) {
-        $sumText = Get-Content -LiteralPath $sums -Raw
-        if ($sumText -notmatch [regex]::Escape($sha)) {
-            throw "Freeze-hash gate: $sys SHA256 $sha is not in SHA256SUMS.txt."
-        }
-        Write-KmdfLog -Message "Freeze-hash gate matched $sha" -Level 'OK'
+    if (-not (Test-Path -LiteralPath $sums)) {
+        throw "Integrity failure: missing $sums."
     }
-    else {
-        Write-KmdfLog -Message "SHA256SUMS.txt missing - hash this build as MagicMouseDriver-kmdf-2.0.4-scroll-$($sha.Substring(0,8)).sys before treating it as frozen." -Level 'WARN'
+    $sumText = Get-Content -LiteralPath $sums -Raw
+    if ($sumText -notmatch [regex]::Escape($sha)) {
+        throw "Freeze-hash gate: $sys SHA256 $sha is not in SHA256SUMS.txt."
     }
+    Write-KmdfLog -Message "Freeze-hash gate matched $sha" -Level 'OK'
 
     if (-not (Test-KmdfSignedByThumb -Path $sys -Thumb $script:KmdfSignThumb)) {
         throw "Unsigned or wrong-thumb .sys. Sign with 16940C0F. Do not run pr3-activate / copy-over."
@@ -177,6 +182,11 @@ if (-not (Test-KmdfIsAdmin)) {
 try {
     if ($Uninstall) {
         Uninstall-KmdfUniquePackage
+        if ($script:KmdfRebootRequired) {
+            Write-KmdfResult -Status 'PENDING' -Detail 'Unique 2.0.4 scroll package removed. Reboot required to finish (3010). Apr 30 oem16 / MagicMouseDriver.sys was not deleted.'
+            Write-Host 'Unique package removed. Reboot to finish (3010).' -ForegroundColor Yellow
+            exit 3010
+        }
         Write-KmdfResult -Status 'PASS' -Detail 'Unique 2.0.4 scroll package removed. Apr 30 oem16 / MagicMouseDriver.sys was not deleted.'
         exit 0
     }

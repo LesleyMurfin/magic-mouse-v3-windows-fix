@@ -23,7 +23,7 @@ Install story is **signed `pnputil /add-driver` only**.
 | DriverVer | `09/15/2026,2.0.4.3` | `08/30/2026,2.0.4.0` | pointer-only |
 | Dest `.sys` | `MagicMouseDriver-kmdf-204-scroll.sys` | `MagicMouseDriver.sys` (hardlink) | `MagicMouseDriver.sys` |
 | DriverStore | new `…204-scroll.inf_amd64_<hash>` | `magicmousedriver.inf_amd64_79beb68f1da25da4` | oem16 `f7bf31c7` |
-| SHA256 | signed `FE7CF014…` / unsigned freeze `08E91E37…` (25600 bytes) | `845435CE…` refuse | `AD5D244B…` restore baseline |
+| SHA256 | signed `0CC4458B…` / unsigned freeze `25A3287A…` (26112 bytes) | `845435CE…` refuse | `AD5D244B…` restore baseline |
 
 Windows then creates a **new** DriverStore folder beside oem16. System32 keeps Apr 30 `MagicMouseDriver.sys` for Safe Mode restore.
 
@@ -31,7 +31,7 @@ Windows then creates a **new** DriverStore folder beside oem16. System32 keeps A
 
 Private key stays on the PC. Cert thumb:
 
-```
+```text
 16940C0F937D569363560D5FEC5CD8FA6D6D9BCE
 ```
 

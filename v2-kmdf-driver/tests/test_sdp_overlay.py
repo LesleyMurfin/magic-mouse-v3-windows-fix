@@ -21,7 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HID_C = ROOT / "HidDescriptor.c"
-
+INPUT_C = ROOT / "InputHandler.c"
 # Native v3 prefix (do not change these 11 bytes):
 # 09 02 06 35 8D 35 8B 08 22 25 87
 PREFIX = bytes.fromhex("09 02 06 35 8D 35 8B 08 22 25 87")
@@ -59,19 +59,109 @@ def hid_descriptor_bytes() -> bytes:
     nums = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]{2})\b", stripped)]
     return bytes(nums)
 
+def _code(text: str) -> str:
+    """Strip comments before inspecting the production implementation."""
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    return re.sub(r"//.*?$", "", text, flags=re.M)
 
-def apply_overlay(buf: bytearray, hid: bytes) -> bool:
-    """Memcpy-only overlay. No length-field writes. No SdpWalkStream."""
-    if len(hid) != HID_LEN:
+
+def _function_body(code: str, name: str) -> str:
+    """Return one production C function body, including nested blocks."""
+    match = re.search(r"\b" + re.escape(name) + r"\s*\([^;{}]*\)\s*\{", code, re.S)
+    if not match:
+        return ""
+    depth = 1
+    pos = match.end()
+    while depth and pos < len(code):
+        if code[pos] == "{":
+            depth += 1
+        elif code[pos] == "}":
+            depth -= 1
+        pos += 1
+    return code[match.end() : pos - 1] if depth == 0 else ""
+
+
+def _production_overlay_contract() -> tuple[bytes, int] | None:
+    """Get constants only when the real SdpRewrite_Process path is intact.
+
+    The test remains host-mode (there is no WDK on the test host), but vectors
+    use the same prefix, length, guard, destination, source, and copy length
+    that the production C function exposes. A control/data-flow regression
+    therefore disables the vector rather than allowing an independent model to
+    pass.
+    """
+    if not INPUT_C.is_file():
+        return None
+    code = _code(INPUT_C.read_text(encoding="utf-8"))
+    body = _function_body(code, "SdpRewrite_Process")
+    prefix_match = re.search(
+        r"g_SdpHidPrefix\s*\[[^\]]+\]\s*=\s*\{([^}]*)\}", code, re.S
+    )
+    size_match = re.search(
+        r"#define\s+SDP_HID_OVERLAY_LEN\s+0x([0-9A-Fa-f]+)\b", code
+    )
+    copy_ok = re.search(
+        r"RtlCopyMemory\s*\(\s*buf\s*\+\s*descOffset\s*,\s*"
+        r"g_HidDescriptor\s*,\s*SDP_HID_OVERLAY_LEN\s*\)",
+        body,
+    )
+    prefix_ok = re.search(
+        r"buf\s*\[\s*i\s*\+\s*n\s*\]\s*!=\s*g_SdpHidPrefix\s*\[\s*n\s*\]",
+        body,
+    )
+    not_found_ok = re.search(
+        r"if\s*\(\s*!found\s*\)\s*\{.*?STATUS_NOT_FOUND", body, re.S
+    )
+    fit_ok = re.search(
+        r"descOffset\s*\+\s*SDP_HID_OVERLAY_LEN\s*>\s*usedLen"
+        r".*?descOffset\s*\+\s*SDP_HID_OVERLAY_LEN\s*>\s*allocLen",
+        body,
+        re.S,
+    )
+    new_len_ok = re.search(
+        r"RtlCopyMemory\s*\([^;]+\)\s*;\s*\*newLen\s*=\s*usedLen\s*;",
+        body,
+        re.S,
+    )
+    if not (
+        prefix_match
+        and size_match
+        and copy_ok
+        and prefix_ok
+        and not_found_ok
+        and fit_ok
+        and new_len_ok
+    ):
+        return None
+    prefix = bytes(
+        int(value, 16)
+        for value in re.findall(r"0x([0-9A-Fa-f]{2})\b", prefix_match.group(1))
+    )
+    overlay_len = int(size_match.group(1), 16)
+    if len(prefix) != len(PREFIX) or overlay_len != HID_LEN:
+        return None
+    return prefix, overlay_len
+
+
+def apply_production_overlay(
+    buf: bytearray, hid: bytes, contract: tuple[bytes, int] | None
+) -> bool:
+    """Host execution of the guarded SdpRewrite_Process copy path."""
+    if contract is None:
         return False
-    idx = bytes(buf).find(PREFIX)
+    prefix, overlay_len = contract
+    if len(hid) != overlay_len:
+        return False
+    idx = bytes(buf).find(prefix)
     if idx < 0:
         return False
-    start = idx + len(PREFIX)
-    if start + HID_LEN > len(buf):
+    start = idx + len(prefix)
+    if start + overlay_len > len(buf):
         return False
-    buf[start : start + HID_LEN] = hid
+    buf[start : start + overlay_len] = hid
     return True
+
+
 
 
 def hid_count1_acpan_wheel(hid: bytes) -> tuple[bool, bool, bool, str]:
@@ -154,7 +244,9 @@ def main() -> int:
     run.check("HID_ACPAN_THEN_WHEEL", order, detail)
 
     overlaid = bytearray(native)
-    applied = apply_overlay(overlaid, hid)
+    applied = apply_production_overlay(
+        overlaid, hid, _production_overlay_contract()
+    )
     run.check(
         "OVERLAY_APPLIED",
         applied,
@@ -216,7 +308,9 @@ def main() -> int:
     if idx >= 0:
         missing[idx] ^= 0xFF
     before = bytes(missing)
-    missing_applied = apply_overlay(missing, hid)
+    missing_applied = apply_production_overlay(
+        missing, hid, _production_overlay_contract()
+    )
     run.check(
         "MISSING_PREFIX_NO_MUTATION",
         (not missing_applied) and bytes(missing) == before,

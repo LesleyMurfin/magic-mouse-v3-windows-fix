@@ -105,9 +105,10 @@ typedef struct _DEVICE_CONTEXT
     BOOLEAN TouchAnchorValid[MM_TOUCH_SLOTS];
     // Surface drag distance per Wheel detent, live-tunable via
     // Services\MagicMouseDriver204Scroll\Parameters!ScrollStep (REG_DWORD).
-    // Clamped to [MM_SCROLL_STEP_MIN, MM_SCROLL_STEP_MAX]; defaults to
-    // MM_SCROLL_STEP. Higher = less sensitive. Read once in EvtDeviceAdd,
-    // so a change needs a device restart, not a driver reinstall.
+    // Honoured only inside [MM_SCROLL_STEP_MIN, MM_SCROLL_STEP_MAX]; values
+    // outside that range leave MM_SCROLL_STEP unchanged. Higher = less
+    // sensitive. Read once in EvtDeviceAdd, so a change needs a device
+    // restart, not a driver reinstall.
     ULONG   ScrollStep;
 
     WDFTIMER    DiagTimer;
@@ -138,5 +139,7 @@ EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnSdpQueryComplete;
 EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnReadComplete;
 EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnAclTransferComplete;
 EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnOpenChannelComplete;
+EVT_WDF_REQUEST_COMPLETION_ROUTINE      OnCloseChannelComplete;
+EVT_WDF_OBJECT_CONTEXT_CLEANUP          EvtDeviceContextCleanup;
 EVT_WDF_TIMER                           MmDiagTimerFunc;
 EVT_WDF_WORKITEM                        MmDiagWorkItemFunc;

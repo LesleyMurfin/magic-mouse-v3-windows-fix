@@ -119,8 +119,11 @@ else
 fi
 if grep -R -n -E --include='*.ps1' 'delete-driver[^\n]*MagicMouseDriver\.inf|/delete-driver \$oem' "$ROOT/scripts" "$ROOT/Install-KMDF.ps1" >/dev/null 2>&1; then
   # allow unique-package-only delete; only real pnputil invocations count, not doc prose
-  if grep -R -n -E --include='*.ps1' 'pnputil[^\n]*/delete-driver' "$ROOT/scripts" "$ROOT/Install-KMDF.ps1" \
-       | grep -v '204-scroll' | grep -qE 'MagicMouseDriver\.inf|oem16'; then
+  forbidden_delete="$(
+    grep -R -n -E --include='*.ps1' 'pnputil[^\n]*/delete-driver' "$ROOT/scripts" "$ROOT/Install-KMDF.ps1" 2>/dev/null |
+      grep -v '204-scroll' || true
+  )"
+  if grep -qE 'MagicMouseDriver\.inf|oem16' <<<"$forbidden_delete"; then
     bad "uninstall must not delete Apr 30 MagicMouseDriver.inf / oem16"
   else
     ok "uninstall does not delete Apr 30 MagicMouseDriver.inf"
@@ -276,7 +279,8 @@ if grep -q '16940C0F' "$ROOT/SIGN-AND-INSTALL.md" && grep -q 'pnputil /add-drive
 else
   bad "SIGN-AND-INSTALL.md documents human sign + pnputil"
 fi
-if find "$REPO" -iname '*.pfx' -o -iname '*.p12' | grep -v '/\.git/' | grep -q .; then
+private_key_file="$(find "$REPO" \( -iname '*.pfx' -o -iname '*.p12' \) -not -path '*/.git/*' -print -quit)"
+if test -n "$private_key_file"; then
   bad "no PFX / private keys in tree"
 else
   ok "no PFX / private keys in tree"

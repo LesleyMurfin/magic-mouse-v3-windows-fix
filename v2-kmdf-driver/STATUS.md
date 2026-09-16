@@ -1,8 +1,8 @@
 # Status — unique 2.0.4.3 KMDF (PID 0323)
 
-Branch `ai/kmdf-204-unique-pkg-7748` (PR #4, **draft**). This PC is the only lab. Community how-to-test: `COMMUNITY-TESTING.md`. Ship mechanics: `SHIPPING.md`.
+Branch `ai/kmdf-204-unique-pkg-7748` (PR #4, **open**). This PC is the only lab. Community how-to-test: `COMMUNITY-TESTING.md`. Ship mechanics: `SHIPPING.md`.
 
-## Working (user-confirmed 2026-09-15 on 2.0.4.3)
+## Working (user-confirmed 2026-09-15; rebuilt package hardware-smoke 2026-09-16)
 
 | Item | State |
 |------|--------|
@@ -16,7 +16,7 @@ Branch `ai/kmdf-204-unique-pkg-7748` (PR #4, **draft**). This PC is the only lab
 | Overlay | 135-byte memcpy; prefix `09 02 06 35 8D 35 8B 08 22 25 87` |
 | ACL | HidBth IN cap 9; scratch to see 23–31 byte `A1 12`; write 8-byte `0x12` back |
 | Bind | oem50, SCM `MagicMouseDriver204Scroll`, dest `MagicMouseDriver-kmdf-204-scroll.sys` |
-| Loaded SHA | signed `FE7CF014…` 2.0.4.3 / unsigned freeze `08E91E37…` / thumb **16940C0F** |
+| Loaded SHA | signed `0CC4458B2D70C58BDFB89AD3C4D5BCDB594D6EE34DEFD0E6C831E56FE22540ED` 2.0.4.3 / unsigned freeze `25A3287AE7FBF62873354B71F32B16F7DC47CEA65C165C760A9AFBC28C74F6B2` / thumb **16940C0F** |
 | Previous good | signed `9901390E…` 2.0.4.1 — rollback stage `C:\mm-dev-queue\kmdf-204-sign\` |
 | oem16 | `AD5D244B` **not** overwritten |
 | After bind | `HidD_SetFeature(F1)` → HidBth 4-byte `0x53` |
@@ -230,9 +230,10 @@ rebuild**: `scripts/mm-scroll-tune.ps1 -ScrollStep N` writes the value, restarts
 re-runs F1, and fails loudly if the driver still reports the old number. Out-of-range values fall
 back to the proven default rather than being honoured.
 
-Installed live 2026-09-15: signed `FE7CF014…`, `dest_version=2.0.4.3`, oem16 still `AD5D244B`, all
-four PnP nodes `CM_PROB_NONE`, `LastAclReceived=23`, `Diag!ScrollStep=8`. **User confirmed: "scroll
-is much better."** Left at the default 8; tune coarser/finer with the script, no reinstall.
+Installed live 2026-09-16: signed `0CC4458B…`, `dest_version=2.0.4.3`, oem16 still `AD5D244B`, all
+four PnP nodes `CM_PROB_NONE`, `LastAclReceived=23`, `LastAclCapacity=9`,
+`SdpPatchSuccess=1`, `Diag!ScrollStep=8`. The rebuilt package passed the hardware smoke path;
+no new visual user confirmation was recorded in this pass.
 
 ### The 2.0.4.2 kernel F1 path is gone, not parked
 
