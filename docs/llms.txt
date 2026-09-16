@@ -15,7 +15,7 @@
 | What it is | Apple's own `applewirelessmouse.sys`, redistributed completely unmodified and registered as a lower filter | A lower-filter driver written from scratch in C against the public Windows Driver Kit; no Apple code, Apple's binary not needed |
 | Supported PIDs | `0x030D` (v1, 2009), `0x0269` (v2, 2015), `0x0310` (v2-alt), `0x0323` (v3, 2024) | `0x0323` (v3, 2024) only |
 | Windows Test Mode | Not required; Secure Boot and memory integrity can stay on | Required: `bcdedit /set testsigning on`, Secure Boot off, memory integrity off |
-| Install | Double-click `v1-binary-patch/Install.cmd`; it self-elevates, no PowerShell window, no execution-policy change, reboot to finish | `v2-kmdf-driver/Install-KMDF.cmd` as administrator, after enabling Test Mode |
+| Install | Turn Fast Startup off (`powercfg /h off`, reboot), then double-click `v1-binary-patch/Install.cmd`; it self-elevates, no PowerShell window, no execution-policy change, reboot to finish | `v2-kmdf-driver/Setup-Community.cmd` as administrator, after enabling Test Mode |
 | Scroll | Apple's own Mac-style translation; sensitivity fixed | Generated from the touch surface (HID Wheel + AC Pan); sensitivity tunable via the `ScrollStep` registry value |
 | Battery (via Magic Tray) | Brief temporary Mode A <-> Mode B flip, then flips back | Read directly from HID Input report `0x90` on COL02, no mode flip |
 
@@ -28,7 +28,7 @@
 - Q: Do I need Windows Test Mode? A: Only for the KMDF driver, which is self-signed. The Apple-driver route needs no Test Mode and lets Secure Boot and memory integrity stay on, because Apple's binary is unmodified and no catalog is installed. That is what the signature chain implies and is the intended configuration, but it has not yet been confirmed on a machine with test signing switched off.
 - Q: Does it support Magic Mouse v1 or v2? A: Yes, via the Apple-driver route (`0x030D`, `0x0269`, `0x0310`, `0x0323`), verified on a real paired v1 alongside a v3 on the same PC. The KMDF driver is `0x0323` only.
 - Q: Does either driver show battery percentage? A: No. Battery is read in userspace by the Magic Tray app: directly from HID Input report `0x90` on collection COL02 with the KMDF driver, or via a brief temporary mode flip on the Apple-driver route.
-- Q: What about battery on v1/v2? A: Not yet characterised. Those models pre-date the COL02 vendor collection read on `0x0323`; no claim either way.
+- Q: What about battery on v1/v2? A: Not yet characterised on v1 `0x030D`, v2 `0x0269` and v2-alt `0x0310`. Those models use different HID descriptor structures from the 2024 mouse, so the collection that carries report `0x90` on `0x0323` has not been mapped on them; no claim either way.
 - Q: Can I install both? A: No. Install one route; they attach to the same Bluetooth HID stack.
 - Q: Cost? A: Free, MIT licensed, no subscription.
 - Q: Which model do I have? A: Device Manager > Human Interface Devices > Apple Magic Mouse > Properties > Details > Hardware Ids: look for `PID_0323`, `PID_0269`, `PID_030D` or `PID_0310`.
@@ -65,7 +65,7 @@ Magic Tray is a Windows system-tray app that shows Apple Magic Mouse battery per
 Windows notification area. It is software, not a physical desk tray, stand, or 3D-printed accessory.
 It detects which of three states a machine is in - no fix installed, the Apple-driver route, or the
 KMDF driver - and reports whether pointer, scroll and battery are working in each. Magic Tray
-installs this repository's KMDF package (`v2-kmdf-driver/Install-KMDF.cmd`).
+installs this repository's KMDF package (`v2-kmdf-driver/Setup-Community.cmd`).
 
 - Site: https://magictray.app/
 - Repository: https://github.com/LesleyMurfin/magic-tray
@@ -85,9 +85,9 @@ installs this repository's KMDF package (`v2-kmdf-driver/Install-KMDF.cmd`).
 - Failure mode: idle Bluetooth disconnect plus DSM property sync collapses the HID collections (Mode A to Mode B); scroll stops, no self-recovery.
 - Two independent drivers ship; install one, not both.
 - Apple-driver route (`v1-binary-patch/`, v1.0.0): ships Apple's `applewirelessmouse.sys` unmodified - SHA256 `08F33D7E3ECE2C73950A9706F1C4C9057894EAEAF1C4FB355F261F3C2333378F`, 78,424 bytes, version 6.1.7700.0, Authenticode Valid, signer `CN=Microsoft Windows Hardware Compatibility Publisher`. The fix is registration, not patching: copy the `.sys` to `System32\drivers`, create the `applewirelessmouse` kernel service, add `applewirelessmouse` to the device's `LowerFilters`, restart the Bluetooth HID device. No Test Mode required.
-- Apple-driver route installer: double-click `Install.cmd` (self-elevating). Advanced usage: `installer\Install-MagicMousePatch.ps1` with `-DriverPath`, `-FromDriverStore`, `-TargetPid <030D|0310|0269|0323>`, `-ForceManual`, `-DryRun`. The installer identifies the binary from its Authenticode signature and refuses a binary whose signature does not verify.
-- KMDF driver (`v2-kmdf-driver/`, 2.0.4.3): PID `0x0323` only, requires Windows Test Mode because it is self-signed, generates scroll from the touch surface (HID Wheel + AC Pan), tunable `ScrollStep` (default 8) via `scripts/mm-scroll-tune.ps1 -ScrollStep N` applied on a device restart, and re-arms multitouch after a Bluetooth reconnect and after a reboot (scheduled task `MmAutoF1Watcher`). It installs as its own driver package alongside Apple's and never overwrites `MagicMouseDriver.sys`.
+- Apple-driver route installer: double-click `Install.cmd` (self-elevating). Requires Fast Startup off (`powercfg /h off`); the installer aborts otherwise. Re-run it if you unpair and re-pair the mouse, because the filter is registered against the device InstanceId. Advanced usage: `installer\Install-MagicMousePatch.ps1` with `-DriverPath`, `-FromDriverStore`, `-TargetPid <030D|0310|0269|0323>`, `-DryRun`. The installer identifies the binary from its Authenticode signature and refuses a binary whose signature does not verify.
+- KMDF driver (`v2-kmdf-driver/`, 2.0.4.3): PID `0x0323` only, requires Windows Test Mode because it is self-signed. No compiled `.sys` ships on GitHub, so `Setup-Community.cmd` generates a local code-signing certificate, signs the package and runs `pnputil /add-driver`; `Install-KMDF.cmd` is the `pnputil`-only step for an already-signed package. Generates scroll from the touch surface (HID Wheel + AC Pan), tunable `ScrollStep` (default 8) via `scripts/mm-scroll-tune.ps1 -ScrollStep N` applied on a device restart, and re-arms multitouch after a Bluetooth reconnect and after a reboot (scheduled task `MmAutoF1Watcher`). It installs as its own driver package alongside Apple's and never overwrites `MagicMouseDriver.sys`.
 - Signing: only the KMDF driver needs Test Mode. Removing that requirement needs an EV code-signing certificate plus Microsoft Partner Center attestation signing, renewed annually - a funding problem, not a code problem: https://magictray.app/funding.html
 - OS support: Windows 10 build 14393 or later, Windows 11 any build, x64.
-- Battery percentage is never read by either driver; Magic Tray reads it in userspace, from HID Input report `0x90` on collection COL02 (KMDF route) or via a brief temporary mode flip (Apple-driver route). Battery on v1/v2 is not yet characterised.
+- Battery percentage is never read by either driver; Magic Tray reads it in userspace, from HID Input report `0x90` on collection COL02 (KMDF route) or via a brief temporary mode flip (Apple-driver route). Battery on v1 `0x030D`, v2 `0x0269` and v2-alt `0x0310` is not yet characterised.
 - License: MIT, Copyright 2026 Revive Business Solutions. Free. Not affiliated with Apple.

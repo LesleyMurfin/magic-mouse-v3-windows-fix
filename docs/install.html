@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Install Magic Mouse 2024 (v3) Windows Driver</title>
-  <meta name="description" content="Two ways to install the Magic Mouse Windows scroll fix: double-click Install.cmd for the Apple-driver route with no Test Mode, or enable Test Mode and run Install-KMDF.cmd for PID 0323.">
+  <meta name="description" content="Two ways to install the Magic Mouse Windows scroll fix: double-click Install.cmd for the Apple-driver route with no Test Mode, or enable Test Mode and run Setup-Community.cmd for PID 0323.">
   <link rel="canonical" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html">
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
   <link rel="describedby" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/llms.txt">
@@ -12,7 +12,7 @@
   <meta property="og:site_name" content="Magic Mouse v3 Windows Driver">
   <meta property="og:locale" content="en_US">
   <meta property="og:title" content="How to install the Magic Mouse 2024 (v3) Windows driver">
-  <meta property="og:description" content="Pick one of two routes: double-click Install.cmd to register Apple's own signed driver with no Test Mode, or enable Test Mode and run Install-KMDF.cmd for PID 0323.">
+  <meta property="og:description" content="Pick one of two routes: double-click Install.cmd to register Apple's own signed driver with no Test Mode, or enable Test Mode and run Setup-Community.cmd for PID 0323.">
   <meta property="og:url" content="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html">
   <meta property="og:image" content="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/og.png">
   <meta property="og:image:width" content="1200">
@@ -28,7 +28,7 @@
       "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#webpage",
       "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html",
       "name": "How to install the Magic Mouse 2024 (v3) Windows driver",
-      "description": "Two ways to install the Magic Mouse Windows scroll fix: double-click Install.cmd for the Apple-driver route with no Test Mode, or enable Test Mode and run Install-KMDF.cmd for PID 0323.",
+      "description": "Two ways to install the Magic Mouse Windows scroll fix: double-click Install.cmd for the Apple-driver route with no Test Mode, or enable Test Mode and run Setup-Community.cmd for PID 0323.",
       "isPartOf": {
         "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#website"
       },
@@ -71,7 +71,7 @@
       "@type": "HowTo",
       "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#howto-apple",
       "name": "How to install the Apple-driver route for Magic Mouse scroll on Windows",
-      "description": "Register Apple's own unmodified applewirelessmouse.sys as a lower filter so two-finger scroll works on Magic Mouse v1 (0x030D), v2 (0x0269), v2-alt (0x0310) and the 2024 model (0x0323). No Windows Test Mode is required.",
+      "description": "Register Apple's own unmodified applewirelessmouse.sys as a lower filter so two-finger scroll works on Magic Mouse v1 (0x030D), v2 (0x0269), v2-alt (0x0310) and the 2024 model (0x0323). No Windows Test Mode is required. Fast Startup must be off first: run powercfg /h off and reboot.",
       "inLanguage": "en",
       "isPartOf": {
         "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#webpage"
@@ -105,7 +105,7 @@
           "@type": "HowToStep",
           "position": 4,
           "name": "Reboot and test two-finger scroll",
-          "text": "Reboot to finish the install, then swipe two fingers on the glass surface. Scroll uses Apple's own Mac-style translation, and the sensitivity is fixed rather than tunable.",
+          "text": "Reboot to finish the install, then swipe two fingers on the glass surface. Scroll uses Apple's own Mac-style translation, and the sensitivity is fixed rather than tunable. Run Install.cmd again if you unpair and re-pair the mouse, because the filter is registered against the device InstanceId.",
           "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#a-step-4"
         },
         {
@@ -148,7 +148,7 @@
           "@type": "HowToStep",
           "position": 3,
           "name": "Verify the SHA256 hash of the download",
-          "text": "In PowerShell, run Get-FileHash -Algorithm SHA256 against the downloaded archive and compare the result with the hash published alongside the download.",
+          "text": "In PowerShell, run Get-FileHash -Algorithm SHA256 against the downloaded archive and compare the result with the hash published in v2-kmdf-driver/FREEZE-HASH.md.",
           "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#step-3"
         },
         {
@@ -161,8 +161,8 @@
         {
           "@type": "HowToStep",
           "position": 5,
-          "name": "Install the KMDF driver package",
-          "text": "Run Install-KMDF.cmd from the v2-kmdf-driver folder as administrator, or let the Magic Tray Windows app perform the same install for you. It installs as its own driver package alongside Apple's and never overwrites MagicMouseDriver.sys.",
+          "name": "Sign the package locally and install it",
+          "text": "Run Setup-Community.cmd from the v2-kmdf-driver folder as administrator. No compiled .sys ships on GitHub, so the script generates a local code-signing certificate (CN=MagicMouseDriver Community), trusts it, signs the package and runs pnputil /add-driver. Install-KMDF.cmd is the pnputil-only step for a package that is already signed. The Magic Tray Windows app can perform the same install for you. It installs as its own driver package alongside Apple's and never overwrites MagicMouseDriver.sys.",
           "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html#step-5"
         },
         {
@@ -224,11 +224,11 @@
         <tr><th scope="row">What it is</th><td>Apple&rsquo;s own <code>applewirelessmouse.sys</code>, redistributed completely unmodified and registered as a lower filter</td><td>A lower-filter driver written from scratch in C against the public Windows Driver Kit &mdash; no Apple code, and Apple&rsquo;s binary is not needed</td></tr>
         <tr><th scope="row">Supported PIDs</th><td><code>0x030D</code> (v1, 2009), <code>0x0269</code> (v2, 2015), <code>0x0310</code> (v2-alt), <code>0x0323</code> (v3, 2024)</td><td><code>0x0323</code> (v3, 2024) only</td></tr>
         <tr><th scope="row">System change</th><td>Least: no Test Mode, so Secure Boot and memory integrity can stay on</td><td>Windows Test Mode on, Secure Boot off, memory integrity off</td></tr>
-        <tr><th scope="row">Install</th><td>Double-click <code>Install.cmd</code> &mdash; it self-elevates, then reboot</td><td>Enable Test Mode, reboot, run <code>Install-KMDF.cmd</code> as administrator, reboot</td></tr>
+        <tr><th scope="row">Install</th><td>Turn Fast Startup off (<code>powercfg /h off</code>), then double-click <code>Install.cmd</code> &mdash; it self-elevates, then reboot</td><td>Enable Test Mode, reboot, run <code>Setup-Community.cmd</code> as administrator, reboot</td></tr>
         <tr><th scope="row">Scroll feel</th><td>Apple/Mac-style, because it is Apple&rsquo;s own translation. Sensitivity is fixed</td><td>Generated from the touch surface as HID Wheel and AC Pan. Sensitivity tunable via <code>ScrollStep</code></td></tr>
-        <tr><th scope="row">After a reconnect</th><td>Handled by Apple&rsquo;s driver on the device&rsquo;s filter stack</td><td>Re-arms multitouch automatically after a Bluetooth reconnect and after a reboot</td></tr>
+        <tr><th scope="row">After a reconnect</th><td>Handled by Apple&rsquo;s driver on the device&rsquo;s filter stack. Re-run <code>Install.cmd</code> if you unpair and re-pair the mouse &mdash; the filter is registered against the device InstanceId, which can change</td><td>Re-arms multitouch automatically after a Bluetooth reconnect and after a reboot</td></tr>
         <tr><th scope="row">Battery percentage</th><td>Magic Tray reads it with a brief, temporary Mode A to Mode B flip, then flips back</td><td>Read directly from HID Input report <code>0x90</code> on COL02, no mode flip</td></tr>
-        <tr><th scope="row">Status</th><td>Shipping, verified on a real paired v1 (<code>030D</code>) alongside a v3 on the same PC</td><td>Live and user-confirmed on <code>0323</code> hardware; still a draft pull request, and community testing on a second PC is wanted</td></tr>
+        <tr><th scope="row">Status</th><td>Verified on a real paired v1 (<code>030D</code>) alongside a v3 on the same PC; not yet tested on v2 or v2-alt hardware</td><td>User-confirmed on <code>0323</code> hardware; testing on a second PC is wanted &mdash; see <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/issues/24">issue 24</a></td></tr>
       </tbody>
     </table>
     <p class="note">Install one route, not both. If you already have one installed, roll it back before installing the other &mdash; see <a href="#a-step-5">Apple-route rollback</a> or <a href="#step-8">KMDF rollback</a>.</p>
@@ -242,16 +242,18 @@
       <dt>Signing</dt>
       <dd>Apple&rsquo;s binary is untouched and no catalog is installed, so <strong>no Windows Test Mode is required</strong> and Secure Boot and memory integrity can stay on.</dd>
       <dt>Reboots</dt>
-      <dd>One, after the installer runs.</dd>
+      <dd>Two if Fast Startup is on: one after <code>powercfg /h off</code>, one after the installer. One if Fast Startup is already off.</dd>
       <dt>Scroll</dt>
       <dd>Apple&rsquo;s own Mac-style translation. Sensitivity is fixed, not tunable.</dd>
     </dl>
     <p>This route is not a patch and it does not modify anything Apple shipped. The fix is <strong>registration</strong>: copy the <code>.sys</code> to <code>System32\drivers</code>, create the <code>applewirelessmouse</code> kernel service, add <code>applewirelessmouse</code> to the device&rsquo;s <code>LowerFilters</code>, and restart the Bluetooth HID device. Installing Apple&rsquo;s Boot Camp software on its own does not give you scroll: Apple&rsquo;s installer refuses to run on non-Apple hardware, and even with the file present Windows will not attach the filter until something registers it. This is the approach <a href="https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows">sbagirici proved on Magic Mouse v1 and v2</a>.</p>
+    <p class="note"><strong>Before you start:</strong> turn Fast Startup off, or the installer refuses to run. From an elevated prompt run <code>powercfg /h off</code>, then reboot. Fast Startup is on by default on Windows, and with it on the driver registration silently fails to take effect.</p>
+    <h3>Apple-route install steps</h3>
     <ol class="steps">
       <li id="a-step-1"><strong>Check which Magic Mouse you have.</strong> <strong>Device Manager</strong> &rarr; <strong>Human Interface Devices</strong> &rarr; <strong>Apple Magic Mouse</strong> &rarr; Properties &rarr; Details &rarr; <strong>Hardware Ids</strong>. This route supports <code>PID_030D</code>, <code>PID_0269</code>, <code>PID_0310</code> and <code>PID_0323</code>.</li>
       <li id="a-step-2"><strong>Download the repo and verify the bundled Apple driver.</strong> Get the <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">magic-mouse-v3-windows-fix repository on GitHub</a>. The bundled <code>applewirelessmouse.sys</code> is Apple&rsquo;s own binary, byte for byte: SHA256 <code>08F33D7E3ECE2C73950A9706F1C4C9057894EAEAF1C4FB355F261F3C2333378F</code>, 78,424 bytes, file version 6.1.7700.0, Authenticode signature <strong>Valid</strong>, signer <code>CN=Microsoft Windows Hardware Compatibility Publisher</code>. Check it with <code>Get-FileHash -Algorithm SHA256 applewirelessmouse.sys</code> and <code>Get-AuthenticodeSignature applewirelessmouse.sys</code>.</li>
       <li id="a-step-3"><strong>Double-click <code>Install.cmd</code>.</strong> In <code>v1-binary-patch\</code>, double-click <code>Install.cmd</code>. It asks for Administrator itself, uses the bundled Apple driver, and needs no PowerShell window and no execution-policy change. It does the registration described above.</li>
-      <li id="a-step-4"><strong>Reboot and test two-finger scroll.</strong> Reboot to finish, then swipe two fingers on the glass. If you want to know why scroll broke in the first place, read <a href="scroll-fix.html">why Magic Mouse scroll stops working on Windows 11</a>.</li>
+      <li id="a-step-4"><strong>Reboot and test two-finger scroll.</strong> Reboot to finish, then swipe two fingers on the glass. If you later unpair and re-pair the mouse, run <code>Install.cmd</code> again &mdash; the filter is registered against the device InstanceId, and re-pairing can change it. If you want to know why scroll broke in the first place, read <a href="scroll-fix.html">why Magic Mouse scroll stops working on Windows 11</a>.</li>
       <li id="a-step-5"><strong>Uninstall or roll back.</strong> Run <code>installer\Uninstall-MagicMousePatch.ps1</code> as administrator. It stops the <code>applewirelessmouse</code> service, restores the backed-up driver, removes <code>applewirelessmouse</code> from <code>LowerFilters</code>, deletes the service registry key, re-enables the device, and prompts for a reboot.</li>
     </ol>
 
@@ -261,7 +263,6 @@
       <li><code>-DriverPath</code> &mdash; use a specific <code>applewirelessmouse.sys</code> instead of the bundled one.</li>
       <li><code>-FromDriverStore</code> &mdash; take the driver from the Windows driver store.</li>
       <li><code>-TargetPid &lt;030D|0310|0269|0323&gt;</code> &mdash; register against a specific Magic Mouse model.</li>
-      <li><code>-ForceManual</code> &mdash; skip auto-detection.</li>
       <li><code>-DryRun</code> &mdash; report what would happen and change nothing.</li>
     </ul>
     <p class="note">The installer identifies which binary it was handed from the Authenticode signature. A binary whose signature does not verify &mdash; patched but never re-signed, or a corrupted download &mdash; is refused. A legacy byte-patched and re-signed variant (SHA256 <code>370A5555&hellip;</code>, signed with this project&rsquo;s own <code>MagicMouseFix</code> certificate) is no longer shipped; it is documented only so an existing install can be identified, and that variant <em>does</em> require Test Mode.</p>
@@ -271,7 +272,7 @@
       <dt>Device</dt>
       <dd>Apple Magic Mouse 2024 (USB-C), called Magic Mouse v3 in this project. Bluetooth VID <code>05AC</code>, PID <code>0x0323</code>. This route does not support v1, v2 or v2-alt.</dd>
       <dt>Package to install</dt>
-      <dd><code>v2-kmdf-driver</code> &mdash; a KMDF filter driver, version 2.0.4.3. Installer: <code>Install-KMDF.cmd</code>.</dd>
+      <dd><code>v2-kmdf-driver</code> &mdash; a KMDF filter driver, version 2.0.4.3. Installer: <code>Setup-Community.cmd</code>, which signs the package locally before installing it.</dd>
       <dt>OS support</dt>
       <dd>Windows 10 build 14393 or later, and Windows 11 any build. x64 only.</dd>
       <dt>Signing</dt>
@@ -295,9 +296,9 @@
     <ol class="steps">
       <li id="step-1"><strong>Confirm your mouse reports PID 0323.</strong> Open <strong>Device Manager</strong> &rarr; <strong>Human Interface Devices</strong> &rarr; <strong>Apple Magic Mouse</strong> &rarr; Properties &rarr; Details &rarr; <strong>Hardware Ids</strong>, and look for <code>PID_0323</code>. If you see <code>PID_030D</code>, <code>PID_0269</code> or <code>PID_0310</code> you have a v1, v2 or v2-alt mouse; the KMDF driver will not bind to it, so use the <a href="#apple-route">Apple-driver route</a> instead.</li>
       <li id="step-2"><strong>Download the driver package from the GitHub repo.</strong> Get the <code>v2-kmdf-driver</code> package from the <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">magic-mouse-v3-windows-fix repository on GitHub</a>. This is the package the <a href="https://magictray.app/">Magic Tray (Windows app)</a> installs. It installs as its own driver package alongside Apple&rsquo;s and never overwrites <code>MagicMouseDriver.sys</code>.</li>
-      <li id="step-3"><strong>Verify the SHA256 hash of the download.</strong> In PowerShell, run <code>Get-FileHash -Algorithm SHA256 &lt;file&gt;</code> and compare the result with the hash published alongside the download. Do not install a kernel driver whose hash does not match.</li>
+      <li id="step-3"><strong>Verify the SHA256 hash of the download.</strong> In PowerShell, run <code>Get-FileHash -Algorithm SHA256 &lt;file&gt;</code> and compare the result with the hash published in <code>v2-kmdf-driver/FREEZE-HASH.md</code>. Do not install a kernel driver whose hash does not match.</li>
       <li id="step-4"><strong>Enable Windows Test Mode.</strong> This step belongs to the KMDF route only. The KMDF driver is self-signed, so Windows must be willing to load test-signed kernel code. From an elevated prompt: <code>bcdedit /set testsigning on</code>, then reboot. Secure Boot and memory integrity must be off, or Windows ignores the setting. See <a href="#test-mode">what Test Mode actually means</a> below.</li>
-      <li id="step-5"><strong>Install the KMDF driver package.</strong> Run <code>Install-KMDF.cmd</code> from the <code>v2-kmdf-driver</code> folder as administrator. The <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a> ships the same action, so you can let Magic Tray do this install for you instead of running the script by hand.</li>
+      <li id="step-5"><strong>Sign the package locally and install it.</strong> Run <code>Setup-Community.cmd</code> from the <code>v2-kmdf-driver</code> folder as administrator. No compiled <code>.sys</code> ships on GitHub, so the script generates a local code-signing certificate (<code>CN=MagicMouseDriver Community</code>, the private key never leaves your PC), trusts it, signs the package, and runs <code>pnputil /add-driver</code>. <code>Install-KMDF.cmd</code> is the <code>pnputil</code>-only step for a package that is already signed. The <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a> ships the same action, so you can let Magic Tray do this for you instead of running the script by hand.</li>
       <li id="step-6"><strong>Reboot and verify scroll survives a Bluetooth disconnect.</strong> Reboot. Then leave the mouse alone until Windows drops the Bluetooth link, wake it, and check two-finger scroll. That idle-then-reconnect cycle is the exact condition that used to kill the wheel, so it is the only test that matters. Two fingers on the glass scroll; one finger resting or dragging correctly does not. Background: <a href="scroll-fix.html">why Magic Mouse scroll stops working on Windows 11</a>.</li>
       <li id="step-7"><strong>Tune the scroll sensitivity.</strong> This route&rsquo;s scroll step is a registry value, <code>ScrollStep</code>, default <code>8</code>, where higher means less sensitive. Change it with <code>scripts\mm-scroll-tune.ps1 -ScrollStep N</code>. It takes effect on a device restart &mdash; no rebuild, no re-sign, no reinstall.</li>
       <li id="step-8"><strong>Uninstall or roll back.</strong> List installed packages with <code>pnputil /enum-drivers</code>, find the entry for this driver, and remove it with <code>pnputil /delete-driver &lt;oemN.inf&gt; /uninstall</code>. You can also uninstall the device under Human Interface Devices in Device Manager and tick the option to delete the driver software. Then turn Test Mode off with <code>bcdedit /set testsigning off</code> and reboot.</li>

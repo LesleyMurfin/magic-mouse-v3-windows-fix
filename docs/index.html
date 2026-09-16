@@ -171,7 +171,7 @@
         <tr><th scope="row">Folder</th><td><code>v1-binary-patch/</code>, v1.0.0</td><td><code>v2-kmdf-driver/</code>, 2.0.4.3</td></tr>
         <tr><th scope="row">Supported PIDs</th><td><code>0x030D</code> (v1), <code>0x0269</code> (v2), <code>0x0310</code> (v2-alt), <code>0x0323</code> (v3)</td><td><code>0x0323</code> (v3) only</td></tr>
         <tr><th scope="row">Windows Test Mode</th><td>Not required — Secure Boot and memory integrity can stay on</td><td>Required: <code>bcdedit /set testsigning on</code>, Secure Boot off, memory integrity off</td></tr>
-        <tr><th scope="row">Install</th><td>Double-click <code>Install.cmd</code>, it asks for Administrator itself, then reboot</td><td>Run <code>Install-KMDF.cmd</code> as administrator, after enabling Test Mode</td></tr>
+        <tr><th scope="row">Install</th><td>Turn Fast Startup off (<code>powercfg /h off</code>), then double-click <code>Install.cmd</code> — it self-elevates, then reboot</td><td>Run <code>Setup-Community.cmd</code> as administrator, after enabling Test Mode</td></tr>
         <tr><th scope="row">Scroll feel</th><td>Apple's own Mac-style translation; sensitivity is fixed</td><td>Generated from the touch surface; sensitivity tunable via <code>ScrollStep</code></td></tr>
         <tr><th scope="row">Battery percentage</th><td>Magic Tray briefly flips the device Mode A to Mode B and back to read it</td><td>Read directly from HID Input report <code>0x90</code> on COL02, no mode flip</td></tr>
       </tbody>
@@ -214,9 +214,9 @@
     <p>Step-by-step, and what is still unknown for v1 and v2: <a href="battery.html">check Magic Mouse battery percentage on Windows 11</a>.</p>
 
     <h2 id="install">How do I install the Magic Mouse 2024 (v3) Windows driver?</h2>
-    <p>It depends which route you pick. For the <strong>Apple-driver route</strong>, download the repo and double-click <code>v1-binary-patch/Install.cmd</code>: it asks for Administrator itself, uses the bundled unmodified Apple driver, needs no PowerShell window and no execution-policy change, and a reboot finishes the job. No Test Mode, and Secure Boot and memory integrity can stay on.</p>
-    <p>For the <strong>KMDF driver</strong>, enable Windows Test Mode first and then run <code>Install-KMDF.cmd</code>: that package is self-signed today, so Windows refuses to load it while signature enforcement is on. Test Mode (or a one-shot disabled-enforcement boot) is required for the KMDF route until the project can pay for an EV certificate and Microsoft attestation signing.</p>
-    <p>The full sequence for both routes, including how to undo either one, is on <a href="install.html">how to install the Magic Mouse v3 driver on Windows 11</a>.</p>
+    <p>It depends which route you pick. For the <strong>Apple-driver route</strong>, turn Fast Startup off (<code>powercfg /h off</code> from an elevated prompt, then reboot), download the repo and double-click <code>v1-binary-patch/Install.cmd</code>: it asks for Administrator itself, uses the bundled unmodified Apple driver, needs no PowerShell window and no execution-policy change, and a reboot finishes the job. No Test Mode, and Secure Boot and memory integrity can stay on.</p>
+    <p>For the <strong>KMDF driver</strong>, enable Windows Test Mode first and then run <code>Setup-Community.cmd</code>: that package is self-signed today, so Windows refuses to load it while signature enforcement is on. Test Mode is required for the KMDF route — it has to persist across reboots, so a one-shot disabled-enforcement boot is not enough — until the project can pay for an EV certificate and Microsoft attestation signing.</p>
+    <p>The full sequence for both routes, including how to undo either one, is on <a href="install.html#choose">how to install the Magic Mouse v3 driver on Windows 11</a>.</p>
 
     <h2 id="price">Is this driver free, and how does it compare to Magic Utilities?</h2>
     <p>It is free and MIT licensed, with no subscription. Magic Utilities is paid software sold on a subscription; this project is not, and nothing here expires or stops scrolling when a licence lapses. It is maintained by Revive Business Solutions / Lesley Murfin and is not affiliated with Apple.</p>

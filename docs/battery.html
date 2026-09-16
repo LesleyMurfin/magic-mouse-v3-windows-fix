@@ -99,8 +99,8 @@
       <dd>HID Input report <code>0x90</code> on collection COL02 of the Magic Mouse 2024 (PID <code>0x0323</code>), read directly. No mode flip needed.</dd>
       <dt>Where the number comes from, Apple-driver route</dt>
       <dd>Magic Tray flips the device briefly from Mode A to Mode B, reads the charge, and flips it back.</dd>
-      <dt>Magic Mouse v1 and v2</dt>
-      <dd>Not yet characterised. Those models pre-date the COL02 vendor collection this project reads on <code>0x0323</code>.</dd>
+      <dt>Magic Mouse v1, v2 and v2-alt</dt>
+      <dd>Not yet characterised. Those models use different HID descriptor structures from the 2024 mouse, so the collection that carries report <code>0x90</code> on <code>0x0323</code> has not been mapped on them.</dd>
       <dt>What does not work</dt>
       <dd>Windows Settings and WMI are not reliable sources for this mouse. Feature report <code>0x47</code> is not the battery source either.</dd>
       <dt>What the kernel drivers do</dt>
@@ -132,8 +132,8 @@
           <td>Magic Tray flips the device briefly from Mode A to Mode B, takes the reading, and flips it back. The flip is temporary by design.</td>
         </tr>
         <tr>
-          <td><strong>Magic Mouse v1 <code>0x030D</code> and v2 <code>0x0269</code></strong></td>
-          <td>Not yet characterised. These models pre-date the COL02 vendor collection this project reads on <code>0x0323</code>, so this site makes no claim either way &mdash; see <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/issues/22">issue 22</a>.</td>
+          <td><strong>Magic Mouse v1 <code>0x030D</code>, v2 <code>0x0269</code> and v2-alt <code>0x0310</code></strong></td>
+          <td>Not yet characterised. Those models use different HID descriptor structures from the 2024 mouse, so the collection that carries report <code>0x90</code> on <code>0x0323</code> has not been mapped on them and this site makes no claim either way &mdash; see <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/issues/22">issue 22</a>.</td>
         </tr>
       </tbody>
     </table>
@@ -153,7 +153,7 @@
     </ul>
 
     <h2>Does this work on Magic Mouse 1 or Magic Mouse 2?</h2>
-    <p>Scroll, yes: v1 (<code>0x030D</code>), v2 (<code>0x0269</code>) and v2-alt (<code>0x0310</code>) are supported by the <a href="install.html#apple-route">Apple-driver route</a>. Battery on those models is a different story and this project does not claim it either way yet: they pre-date the COL02 vendor collection that carries report <code>0x90</code> on the 2024 mouse, so the battery path is <strong>not yet characterised</strong> &mdash; <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/issues/22">issue 22</a> tracks it. For what Magic Tray supports, see <a href="https://magictray.app/">the Magic Tray (Windows app) site</a>.</p>
+    <p>Scroll, yes: v1 (<code>0x030D</code>), v2 (<code>0x0269</code>) and v2-alt (<code>0x0310</code>) are supported by the <a href="install.html#apple-route">Apple-driver route</a>. Battery on those models is a different story and this project does not claim it either way yet: they use different HID descriptor structures from the 2024 mouse, so the collection that carries report <code>0x90</code> on <code>0x0323</code> has not been mapped on them and the battery path is <strong>not yet characterised</strong> &mdash; <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/issues/22">issue 22</a> tracks it. For what Magic Tray supports, see <a href="https://magictray.app/">the Magic Tray (Windows app) site</a>.</p>
   </main>
   <footer>
     <p><strong>Magic Mouse 2024 (v3) Windows driver</strong> — MIT licensed, free, no subscription.
