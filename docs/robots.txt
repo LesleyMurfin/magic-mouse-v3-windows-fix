@@ -1,5 +1,5 @@
 # robots.txt — Magic Mouse 2024 (v3) Windows Driver
-# Canonical: https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/
+# Canonical: https://drivers.magictray.app/
 # Full site content is public. Search crawlers and AI/answer-engine crawlers
 # are all explicitly allowed to crawl, index, quote, and cite these pages.
 
@@ -65,4 +65,4 @@ Allow: /
 User-agent: Bytespider
 Allow: /
 
-Sitemap: https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/sitemap.xml
+Sitemap: https://drivers.magictray.app/sitemap.xml

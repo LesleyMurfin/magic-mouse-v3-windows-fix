@@ -5,164 +5,298 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Magic Mouse Battery Percentage on Windows 11</title>
   <meta name="description" content="Windows 11 will not show Magic Mouse 2024 battery percentage reliably. The free Magic Tray Windows app reads HID report 0x90, or flips the device mode on the Apple-driver route.">
-  <link rel="canonical" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/battery.html">
+  <link rel="canonical" href="https://drivers.magictray.app/battery.html">
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
-  <link rel="describedby" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/llms.txt">
+  <link rel="describedby" href="https://drivers.magictray.app/llms.txt">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Magic Mouse v3 Windows Driver">
   <meta property="og:locale" content="en_US">
   <meta property="og:title" content="Magic Mouse battery percentage on Windows 11">
   <meta property="og:description" content="Windows Settings and WMI are not reliable battery sources for this mouse. Magic Tray reads HID Input report 0x90 on COL02, or uses a brief mode flip on the Apple-driver route.">
-  <meta property="og:url" content="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/battery.html">
-  <meta property="og:image" content="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/og.png">
+  <meta property="og:url" content="https://drivers.magictray.app/battery.html">
+  <meta property="og:image" content="https://drivers.magictray.app/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Magic Mouse 2024 (v3) Windows driver &mdash; scroll fix for PID 0323">
   <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="theme-color" content="#0f0f14">
   <link rel="stylesheet" href="site.css">
-  <script type="application/ld+json">{
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "WebPage",
-      "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/battery.html#webpage",
-      "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/battery.html",
-      "name": "Magic Mouse battery percentage on Windows 11",
-      "description": "Windows 11 will not show Magic Mouse 2024 battery percentage reliably. The free Magic Tray Windows app reads HID report 0x90, or flips the device mode on the Apple-driver route.",
-      "isPartOf": {
-        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#website"
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Person",
+        "@id": "https://magictray.app/#person",
+        "name": "Lesley Murfin",
+        "url": "https://github.com/LesleyMurfin",
+        "sameAs": [
+          "https://github.com/LesleyMurfin"
+        ]
       },
-      "about": {
-        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#software"
-      },
-      "primaryImageOfPage": {
-        "@type": "ImageObject",
-        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/battery.html#primaryimage",
-        "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/og.png",
-        "width": 1200,
-        "height": 630
-      },
-      "breadcrumb": {
-        "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/battery.html#breadcrumb"
-      },
-      "datePublished": "2026-05-01",
-      "dateModified": "2026-09-15",
-      "inLanguage": "en"
-    },
-    {
-      "@type": "BreadcrumbList",
-      "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/battery.html#breadcrumb",
-      "itemListElement": [
-        {
-          "@type": "ListItem",
-          "position": 1,
-          "name": "Windows driver",
-          "item": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/"
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://magictray.app/#app",
+        "name": "Magic Tray",
+        "alternateName": [
+          "Magic Tray for Windows",
+          "MagicMouseTray"
+        ],
+        "applicationCategory": "UtilitiesApplication",
+        "applicationSubCategory": "Windows system tray utility",
+        "operatingSystem": "Windows 10, Windows 11",
+        "processorRequirements": "x64",
+        "softwareVersion": "1.1.0",
+        "url": "https://magictray.app/",
+        "downloadUrl": "https://github.com/LesleyMurfin/magic-tray/releases/latest",
+        "sameAs": [
+          "https://github.com/LesleyMurfin/magic-tray"
+        ],
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
         },
-        {
-          "@type": "ListItem",
-          "position": 2,
-          "name": "Battery %",
-          "item": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/battery.html"
+        "author": {
+          "@id": "https://magictray.app/#person"
+        },
+        "publisher": {
+          "@id": "https://magictray.app/#person"
+        },
+        "description": "Free Windows 10 and Windows 11 system tray app. It shows Apple Magic Mouse, Magic Keyboard and Magic Trackpad battery percent next to the clock.",
+        "disambiguatingDescription": "Magic Tray is downloadable Windows software. It is not a physical desk tray, stand, or 3D-printed cradle for Apple keyboards and trackpads."
+      },
+      {
+        "@type": "WebPage",
+        "@id": "https://drivers.magictray.app/battery.html#webpage",
+        "url": "https://drivers.magictray.app/battery.html",
+        "name": "Magic Mouse Battery Percentage on Windows 11",
+        "description": "Windows 11 will not show Magic Mouse 2024 battery percentage reliably. The free Magic Tray Windows app reads HID report 0x90, or flips the device mode on the Apple-driver route.",
+        "isPartOf": {
+          "@id": "https://drivers.magictray.app/#website"
+        },
+        "about": {
+          "@id": "https://magictray.app/#app"
+        },
+        "primaryImageOfPage": {
+          "@type": "ImageObject",
+          "@id": "https://drivers.magictray.app/battery.html#primaryimage",
+          "url": "https://drivers.magictray.app/og.png",
+          "width": 1200,
+          "height": 630
+        },
+        "breadcrumb": {
+          "@id": "https://drivers.magictray.app/battery.html#breadcrumb"
+        },
+        "datePublished": "2026-05-01",
+        "dateModified": "2026-09-15",
+        "inLanguage": "en",
+        "publisher": {
+          "@id": "https://magictray.app/#person"
         }
-      ]
-    }
-  ]
-}</script>
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": "https://drivers.magictray.app/battery.html#breadcrumb",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Windows driver",
+            "item": "https://drivers.magictray.app/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Battery %",
+            "item": "https://drivers.magictray.app/battery.html"
+          }
+        ]
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <header>
-    <p class="kicker">Battery % &middot; HID report 0x90 &middot; COL02</p>
-  <nav aria-label="Site">
-    <a href="./">Windows driver</a>
-    <a href="install.html">Install</a>
-    <a href="scroll-fix.html">Scroll fix</a>
-    <a href="battery.html" aria-current="page">Battery %</a>
-    <a href="faq.html">FAQ</a>
-    <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
-    <a href="https://magictray.app/">Magic Tray app</a>
-  </nav>
-    <h1>Magic Mouse battery percentage on Windows 11</h1>
-    <p class="lead">To see <strong>Magic Mouse battery percentage</strong> on <strong>Windows 11</strong>, use the free <a href="https://magictray.app/">Magic Tray (Windows app)</a>: it puts the percentage next to the Windows clock. The shipped Apple-driver route does not read battery itself; Magic Tray performs a brief, temporary Mode A to Mode B flip on the device and then flips it back. The KMDF route is development work only and is not shipped on this branch.</p>
-    <p class="cta">
-      <a class="primary" href="https://magictray.app/">Get Magic Tray (Windows app)</a>
-      <a class="ghost" href="install.html#choose">Install the scroll driver</a>
-    </p>
+  <header class="site-header">
+    <div class="bar">
+      <a class="brand" href="https://magictray.app/">Magic Tray <small>Drivers</small></a>
+      <nav aria-label="Site">
+        <a href="./">Windows driver</a>
+        <a href="install.html">Install</a>
+        <a href="scroll-fix.html">Scroll fix</a>
+        <a href="battery.html" aria-current="page">Battery %</a>
+        <a href="faq.html">FAQ</a>
+      </nav>
+    </div>
   </header>
-  <main id="content">
-    <h2>At a glance</h2>
-    <dl class="faq">
-      <dt>What shows the percentage</dt>
-      <dd>Magic Tray, a free Windows system-tray app. Userspace, not a driver.</dd>
-      <dt>Where the number comes from, shipped Apple-driver route</dt>
-      <dd>Magic Tray flips the device briefly from Mode A to Mode B, reads the charge, and flips it back.</dd>
-      <dt>KMDF route</dt>
-      <dd>Development documentation only; no installable package is shipped on this branch.</dd>
-      <dt>Magic Mouse v1, v2 and v2-alt</dt>
-      <dd>Not yet characterised. Those models use different HID descriptor structures from the 2024 mouse, so the collection that carries report <code>0x90</code> on <code>0x0323</code> has not been mapped on them.</dd>
-      <dt>What does not work</dt>
-      <dd>Windows Settings and WMI are not reliable sources for this mouse. Feature report <code>0x47</code> is not the battery source either.</dd>
-      <dt>What the kernel drivers do</dt>
-      <dd>Restore and protect two-finger scroll. Neither reports battery.</dd>
-      <dt>Price</dt>
-      <dd>Free. MIT licensed, no subscription.</dd>
-    </dl>
 
-    <h2>Does the shipped Apple-driver route show battery percentage?</h2>
-    <p>No. The shipped kernel filter does not read or report battery level. Reading the battery is userspace work, and it is done by the Magic Tray app. The unreleased KMDF route is not available from this branch.</p>
+  <main id="content" tabindex="-1">
+    <div class="wrap">
+      <p class="kicker"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#battery"/></svg> Battery % &middot; report 0x90 &middot; COL02</p>
+      <section class="hero">
+        <div>
+          <h1>Magic Mouse battery percentage on Windows 11</h1>
+          <p class="lead">This driver does not read battery. The free <a href="https://magictray.app/">Magic Tray</a> app does it in userspace: on the 2024 mouse it briefly flips <strong>Mode A to Mode B</strong>, reads Input report <code>0x90</code>, then flips the device back.</p>
+          <p class="cta">
+            <a class="btn btn-primary" href="https://magictray.app/battery.html"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#battery"/></svg> Battery on Windows: full guide</a>
+            <a class="btn btn-ghost" href="install.html#apple-route"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#wrench"/></svg> Install the scroll driver</a>
+          </p>
+        </div>
+        <figure class="hero-media">
+          <img src="img/magic-tray-screenshot.png" width="330" height="189" fetchpriority="high" decoding="async" alt="Windows 11 system tray flyout with installed tray icons, including Magic Tray, the app that shows Magic Mouse battery percentage next to the clock">
+          <span class="tag badge badge-accent">Live screenshot</span>
+        </figure>
+      </section>
 
-    <h2>How do I check Magic Mouse battery on Windows?</h2>
-    <p>Install the shipped <a href="https://magictray.app/">Magic Tray (Windows app)</a> and look next to the Windows clock. It reports battery for the Apple-driver route. Source: the <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo on GitHub</a>.</p>
-    <p class="note">Magic Tray is Windows software &mdash; a system-tray utility for Apple mice on Windows. It is not a desk accessory, a keyboard stand, or a 3D-printed or wooden tray, despite what a shopping search suggests.</p>
+      <div class="callout callout-info">
+        <svg class="icon" aria-hidden="true"><use href="img/icons.svg#battery"/></svg>
+        <p>Neither driver reports battery. The Apple-driver route you install restores scroll only, and the unfinished KMDF driver has no battery path yet. For the general story &mdash; which Apple devices report a percent, and what to do when none shows &mdash; see <a href="https://magictray.app/battery.html">battery on Windows</a>.</p>
+      </div>
 
-    <h2 id="two-routes">How does the shipped route read the battery?</h2>
-    <table>
-      <caption>Where the battery percentage comes from</caption>
-      <thead>
-        <tr><th scope="col">Route</th><th scope="col">How Magic Tray reads the charge</th></tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><strong>Apple-driver route</strong> (<code>v1-binary-patch/</code>)</td>
-          <td>Magic Tray flips the device briefly from Mode A to Mode B, takes the reading, and flips it back. The flip is temporary by design.</td>
-        </tr>
-        <tr>
-          <td><strong>KMDF route</strong></td>
-          <td>Development documentation only. No installable package is shipped on this branch, so there is no current battery path to document.</td>
-        </tr>
-        <tr>
-          <td><strong>Magic Mouse v1 <code>0x030D</code>, v2 <code>0x0269</code> and v2-alt <code>0x0310</code></strong></td>
-          <td>Not yet characterised. Those models use different HID descriptor structures from the 2024 mouse, so the collection that carries report <code>0x90</code> on <code>0x0323</code> has not been mapped on them and this site makes no claim either way &mdash; see <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/issues/22">issue 22</a>.</td>
-        </tr>
-      </tbody>
-    </table>
-    <p>The shipped route and rollback steps are in <a href="install.html#apple-route">the Apple-driver install guide</a>.</p>
+      <section>
+        <h2 id="two-routes">Which Magic Mouse has a characterised battery report?</h2>
+        <p>Only the 2024 model. Magic Tray reads Input report <code>0x90</code> on collection <code>COL02</code> of PID <code>0x0323</code>. v1, v2 and v2-alt use a different HID descriptor structure, so that collection has not been mapped on them (<a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/issues/22">issue 22</a>); this site claims nothing either way. Scroll is supported on all four PIDs.</p>
+        <div class="device-grid">
+          <div class="device-card">
+            <div class="thumb">
+              <picture>
+                <source srcset="img/magic-mouse-v3-underside-usbc.webp" type="image/webp">
+                <img src="img/magic-mouse-v3-underside-usbc.jpg" width="1144" height="1144" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2024 (v3), USB-C port">
+              </picture>
+            </div>
+            <div class="meta">
+              <div class="name">Magic Mouse 2024 (v3)</div>
+              <div class="pid">0x0323</div>
+              <div class="status"><span class="badge badge-success"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#check-circle"/></svg> Characterised</span></div>
+            </div>
+          </div>
+          <div class="device-card">
+            <div class="thumb">
+              <picture>
+                <source srcset="img/magic-mouse-v2-underside-lightning-alt.webp" type="image/webp">
+                <img src="img/magic-mouse-v2-underside-lightning-alt.jpg" width="1600" height="1200" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2), Lightning port">
+              </picture>
+            </div>
+            <div class="meta">
+              <div class="name">Magic Mouse 2 (v2)</div>
+              <div class="pid">0x0269</div>
+              <div class="status"><span class="badge badge-warning"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#warning-triangle"/></svg> Not yet</span></div>
+            </div>
+          </div>
+          <div class="device-card">
+            <div class="thumb">
+              <picture>
+                <source srcset="img/magic-mouse-v2-underside-lightning-alt.webp" type="image/webp">
+                <img src="img/magic-mouse-v2-underside-lightning-alt.jpg" width="1600" height="1200" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2-alt), Lightning port">
+              </picture>
+            </div>
+            <div class="meta">
+              <div class="name">Magic Mouse 2 (v2-alt)</div>
+              <div class="pid">0x0310</div>
+              <div class="status"><span class="badge badge-warning"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#warning-triangle"/></svg> Not yet</span></div>
+            </div>
+          </div>
+          <div class="device-card">
+            <div class="thumb">
+              <picture>
+                <source srcset="img/magic-mouse-v1-underside-aa-door.webp" type="image/webp">
+                <img src="img/magic-mouse-v1-underside-aa-door.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Underside of Magic Mouse (v1), AA battery door">
+              </picture>
+            </div>
+            <div class="meta">
+              <div class="name">Magic Mouse (v1)</div>
+              <div class="pid">0x030D</div>
+              <div class="status"><span class="badge badge-warning"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#warning-triangle"/></svg> Not yet</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <h2>Why does Windows 11 not show the battery level itself?</h2>
-    <p>Because the paths Windows normally uses are not dependable for this mouse. Windows Settings and WMI are not reliable sources for Magic Mouse 2024 battery state, and Feature report <code>0x47</code> is not where the level lives. The number is in an Input report the mouse sends on a specific collection, so something has to be listening on that collection and decoding it &mdash; which is what Magic Tray does.</p>
+      <section>
+        <h2>Why the scroll driver matters for a battery read</h2>
+        <p>The charge arrives on a HID collection, and this mouse can lose its collections. When a Bluetooth idle disconnect collapses them &mdash; <a href="scroll-fix.html">Mode A to Mode B</a> &mdash; the collection carrying report <code>0x90</code> goes down with scroll, so the percent goes stale or stops. Keeping the shipped filter healthy protects both.</p>
+        <div class="grid grid-3">
+          <div class="card">
+            <svg class="icon icon-lg" aria-hidden="true"><use href="img/icons.svg#scroll"/></svg>
+            <h3><a href="scroll-fix.html">Scroll not working</a></h3>
+            <p>The cause and its limits.</p>
+          </div>
+          <div class="card">
+            <svg class="icon icon-lg" aria-hidden="true"><use href="img/icons.svg#terminal"/></svg>
+            <h3><a href="install.html#apple-route">Install the driver</a></h3>
+            <p>Steps and rollback.</p>
+          </div>
+          <div class="card">
+            <svg class="icon icon-lg" aria-hidden="true"><use href="img/icons.svg#shield-check"/></svg>
+            <h3><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/hid-research.md">HID research notes</a></h3>
+            <p>Collection layout detail.</p>
+          </div>
+        </div>
+      </section>
 
-    <h2>Why does the scroll driver matter for a battery read?</h2>
-    <p>Because the battery report arrives on a HID collection, and this mouse can lose its collections. After a Bluetooth idle disconnect, DeviceSetupManager property synchronization can collapse the mouse&rsquo;s HID collections &mdash; Mode A &rarr; Mode B &mdash; leaving a plain mouse with a working cursor and no touch surface. When the collection layout collapses, the collection carrying report <code>0x90</code> is not there to read either, so a battery reading can go stale or stop along with scroll.</p>
-    <p>Keeping the shipped Apple-driver route healthy is what the kernel filter is for:</p>
-    <ul class="plain">
-      <li><a href="scroll-fix.html">Magic Mouse 2024 (v3) scroll not working on Windows 11</a> &mdash; the symptom, the cause, and the PID table.</li>
-      <li><a href="install.html#apple-route">How to install the shipped Apple-driver route</a> &mdash; steps and rollback.</li>
-      <li><a href="faq.html">Magic Mouse v3 Windows driver FAQ</a> &mdash; Boot Camp, signing, v1 and v2.</li>
-      <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/hid-research.md">HID research notes, including Input report 0x90</a>.</li>
-    </ul>
-
-    <h2>Does this work on Magic Mouse 1 or Magic Mouse 2?</h2>
-    <p>Scroll, yes: v1 (<code>0x030D</code>), v2 (<code>0x0269</code>) and v2-alt (<code>0x0310</code>) are supported by the <a href="install.html#apple-route">Apple-driver route</a>. Battery on those models is a different story and this project does not claim it either way yet: they use different HID descriptor structures from the 2024 mouse, so the collection that carries report <code>0x90</code> on <code>0x0323</code> has not been mapped on them and the battery path is <strong>not yet characterised</strong> &mdash; <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/issues/22">issue 22</a> tracks it. For what Magic Tray supports, see <a href="https://magictray.app/">the Magic Tray (Windows app) site</a>.</p>
+      <section>
+        <h2>Common questions</h2>
+        <div class="accordion">
+          <details>
+            <summary>Why does Windows 11 not show the level itself? <svg class="icon chev" aria-hidden="true"><use href="img/icons.svg#chevron-down"/></svg></summary>
+            <div class="a-body">
+              <p>The paths Windows normally uses are not dependable for this mouse: Windows Settings and WMI are not reliable sources for Magic Mouse 2024 battery state. The number arrives in an Input report on a specific collection, so something has to listen on that collection and decode it. That is what Magic Tray does, in userspace.</p>
+            </div>
+          </details>
+          <details>
+            <summary>Does the KMDF route show battery? <svg class="icon chev" aria-hidden="true"><use href="img/icons.svg#chevron-down"/></svg></summary>
+            <div class="a-body">
+              <p>No. The KMDF driver is unfinished &mdash; development notes only, with no compiled <code>.sys</code>, signed package or installer &mdash; so there is no battery path to document for it. Nothing about it is installable yet.</p>
+            </div>
+          </details>
+          <details>
+            <summary>Protocol detail: report 0x90, COL02, and what is not the source <svg class="icon chev" aria-hidden="true"><use href="img/icons.svg#chevron-down"/></svg></summary>
+            <div class="a-body">
+              <p>The 2024 Magic Mouse (PID <code>0x0323</code>) sends its charge state on HID <strong>Input report <code>0x90</code></strong>, on the collection referred to here as <strong>COL02</strong>. Magic Tray listens on that collection and decodes the report; it is not a kernel driver and does not modify the device.</p>
+              <p>Feature report <code>0x47</code> is <strong>not</strong> the battery source, despite looking like a plausible candidate in the descriptor &mdash; do not decode it as charge level. Windows Settings and WMI are not reliable battery sources for this mouse either. Full notes: <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/hid-research.md">HID research notes, including Input report 0x90</a>.</p>
+            </div>
+          </details>
+        </div>
+      </section>
+    </div>
   </main>
-  <footer>
-    <p><strong>Magic Mouse 2024 (v3) Windows driver</strong> — MIT licensed, free, no subscription.
-      Maintained by Revive Business Solutions / Lesley Murfin.</p>
-    <p><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver repo</a> ·
-      <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a> ·
-      <a href="https://magictray.app/drivers.html">Which driver do I need</a> ·
-      <a href="llms.txt">llms.txt</a></p>
-    <p>Not affiliated with Apple Inc. Apple, Magic Mouse, and Boot Camp are trademarks of Apple Inc.</p>
+
+  <footer class="site-footer">
+    <div class="bar">
+      <nav aria-label="All pages">
+        <p>
+          <a href="./">Windows driver</a>
+          ·
+          <a href="install.html">Install</a>
+          ·
+          <a href="scroll-fix.html">Scroll fix</a>
+          ·
+          <a href="battery.html" aria-current="page">Battery %</a>
+          ·
+          <a href="faq.html">FAQ</a>
+          ·
+          <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
+          ·
+          <a href="https://magictray.app/">Magic Tray app</a>
+        </p>
+      </nav>
+      <p><strong>Magic Mouse 2024 (v3) Windows driver</strong> — MIT licensed, free, no subscription. Maintained by Revive Business Solutions / Lesley Murfin.</p>
+      <p>
+        <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver repo</a>
+        ·
+        <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a>
+        ·
+        <a href="https://magictray.app/drivers.html">Which driver do I need</a>
+        ·
+        <a href="llms.txt">llms.txt</a>
+      </p>
+      <p>Not affiliated with Apple Inc. Apple, Magic Mouse, and Boot Camp are trademarks of Apple Inc.</p>
+    </div>
   </footer>
 </body>
 </html>

@@ -4,260 +4,427 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Magic Mouse 2024 (v3) Windows Driver — Scroll Fix</title>
-  <meta name="description" content="Apple ships no Windows driver for the 2024 Magic Mouse (PID 0323). Two free MIT scroll fixes for Windows 10 and 11: an Apple-driver route with no Test Mode, or a KMDF filter driver.">
-  <link rel="canonical" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/">
+  <meta name="description" content="Apple ships no Windows driver for the 2024 Magic Mouse (PID 0323). One free MIT scroll fix you can install today on Windows 10 and 11: it registers Apple's own signed driver, so no Test Mode. A second, KMDF driver is still unfinished.">
+  <link rel="canonical" href="https://drivers.magictray.app/">
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
-  <link rel="describedby" href="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/llms.txt">
+  <link rel="describedby" href="https://drivers.magictray.app/llms.txt">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Magic Mouse v3 Windows Driver">
   <meta property="og:locale" content="en_US">
   <meta property="og:title" content="Magic Mouse 2024 (v3) Windows driver — scroll fix for PID 0323">
-  <meta property="og:description" content="Apple ships no Windows driver for the 2024 USB-C Magic Mouse. Two free MIT fixes: register Apple's own signed driver with no Test Mode, or install the KMDF filter driver.">
-  <meta property="og:url" content="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/">
-  <meta property="og:image" content="https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/og.png">
+  <meta property="og:description" content="Apple ships no Windows driver for the 2024 USB-C Magic Mouse. One free MIT fix you can install today: register Apple's own signed driver, no Test Mode. The second, KMDF driver is not finished yet.">
+  <meta property="og:url" content="https://drivers.magictray.app/">
+  <meta property="og:image" content="https://drivers.magictray.app/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Magic Mouse 2024 (v3) Windows driver — scroll fix for PID 0323">
+  <meta property="og:image:alt" content="Magic Mouse 2024 (v3) Windows driver &mdash; scroll fix for PID 0323">
   <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="theme-color" content="#0f0f14">
   <link rel="stylesheet" href="site.css">
-  <script type="application/ld+json">{
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "WebSite",
-      "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#website",
-      "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/",
-      "name": "Magic Mouse v3 Windows Driver",
-      "description": "Free MIT Windows driver project that restores two-finger scroll on the Apple Magic Mouse, including the 2024 model (v3), Bluetooth PID 0323.",
-      "publisher": { "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#org" },
-      "inLanguage": "en"
-    },
-    {
-      "@type": "Organization",
-      "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#org",
-      "name": "Revive Business Solutions",
-      "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/",
-      "sameAs": [
-        "https://github.com/LesleyMurfin"
-      ]
-    },
-    {
-      "@type": "SoftwareApplication",
-      "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#software",
-      "name": "Magic Mouse 2024 (v3) Windows Driver",
-      "alternateName": [
-        "Magic Mouse v3 Windows driver",
-        "Magic Mouse 3 Windows 11 driver",
-        "Apple Magic Mouse USB-C Windows driver",
-        "magic-mouse-v3-windows-fix"
-      ],
-      "description": "Windows 10 and Windows 11 driver project for the Apple Magic Mouse that restores two-finger scroll over Bluetooth. The shipped Apple-driver route registers Apple's own unmodified applewirelessmouse.sys as a lower filter for PID 0x030D, 0x0269, 0x0310 and 0x0323 with no Windows Test Mode required. The KMDF route is development work only on this branch and has no installable package.",
-      "disambiguatingDescription": "A Windows device driver project (kernel-mode filter drivers) for Apple's Magic Mouse, including the 2024 USB-C model. It is not a mouse-customisation utility, not a hardware accessory, and not an Apple product.",
-      "applicationCategory": "DriverApplication",
-      "applicationSubCategory": "Device driver",
-      "operatingSystem": "Windows 10, Windows 11",
-      "processorRequirements": "x64",
-      "softwareVersion": [
-        "1.0.0 (shipped Apple-driver route, v1-binary-patch)"
-      ],
-      "license": "https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/LICENSE",
-      "isAccessibleForFree": true,
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD",
-        "availability": "https://schema.org/InStock"
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Person",
+        "@id": "https://magictray.app/#person",
+        "name": "Lesley Murfin",
+        "url": "https://github.com/LesleyMurfin",
+        "sameAs": [
+          "https://github.com/LesleyMurfin"
+        ]
       },
-      "featureList": [
-        "Restores two-finger scroll on the Apple Magic Mouse over Bluetooth, including the 2024 model, PID 0323",
-        "Apple-driver route registers Apple's own unmodified signed driver, so no Windows Test Mode is required and Secure Boot and memory integrity can stay on",
-        "Apple-driver route supports Magic Mouse v1 (0x030D), v2 (0x0269), v2-alt (0x0310) and v3 (0x0323)",
-        "KMDF route is development work only on this branch; no installable package is shipped",
-        "Keeps the HID collection stack healthy so the Magic Tray Windows app can read battery percentage"
-      ],
-      "downloadUrl": "https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix",
-      "installUrl": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html",
-      "codeRepository": "https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix",
-      "author": { "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#org" },
-      "publisher": { "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#org" },
-      "sameAs": [
-        "https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix"
-      ]
-    },
-    {
-      "@type": "WebPage",
-      "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#webpage",
-      "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/",
-      "name": "Magic Mouse 2024 (v3) Windows driver — scroll fix for PID 0323",
-      "description": "Apple ships no Windows driver for the 2024 Magic Mouse (PID 0323). Two free MIT scroll fixes for Windows 10 and 11: an Apple-driver route with no Test Mode, or a KMDF filter driver.",
-      "isPartOf": { "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#website" },
-      "about": { "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#software" },
-      "primaryImageOfPage": {
-        "@type": "ImageObject",
-        "url": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/og.png",
-        "width": 1200,
-        "height": 630
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://magictray.app/#app",
+        "name": "Magic Tray",
+        "alternateName": [
+          "Magic Tray for Windows",
+          "MagicMouseTray",
+          "Magic Mouse v3 Windows driver",
+          "Magic Mouse 3 Windows 11 driver",
+          "Apple Magic Mouse USB-C Windows driver",
+          "magic-mouse-v3-windows-fix"
+        ],
+        "applicationCategory": "UtilitiesApplication",
+        "applicationSubCategory": "Windows system tray utility",
+        "operatingSystem": "Windows 10, Windows 11",
+        "processorRequirements": "x64",
+        "softwareVersion": "1.1.0",
+        "url": "https://magictray.app/",
+        "downloadUrl": "https://github.com/LesleyMurfin/magic-tray/releases/latest",
+        "sameAs": [
+          "https://github.com/LesleyMurfin/magic-tray"
+        ],
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@id": "https://magictray.app/#person"
+        },
+        "publisher": {
+          "@id": "https://magictray.app/#person"
+        },
+        "description": "Free Windows 10 and Windows 11 system tray app. It shows Apple Magic Mouse, Magic Keyboard and Magic Trackpad battery percent next to the clock.",
+        "disambiguatingDescription": "Magic Tray is downloadable Windows software. It is not a physical desk tray, stand, or 3D-printed cradle for Apple keyboards and trackpads.",
+        "featureList": [
+          "Battery percent for Apple Magic Mouse, Magic Keyboard and Magic Trackpad on Windows 10 and Windows 11",
+          "Restores two-finger scroll on the Apple Magic Mouse over Bluetooth, including the 2024 model, PID 0323",
+          "Apple-driver route registers Apple's own unmodified signed driver, so no Windows Test Mode is required and Secure Boot and memory integrity can stay on",
+          "Apple-driver route supports Magic Mouse v1 (0x030D), v2 (0x0269), v2-alt (0x0310) and v3 (0x0323)",
+          "Apple-driver route is the one you can install today; the separate KMDF driver is unfinished, with no compiled driver, signed package or installer"
+        ]
       },
-      "breadcrumb": { "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#breadcrumb" },
-      "datePublished": "2026-05-01",
-      "dateModified": "2026-09-15",
-      "inLanguage": "en"
-    },
-    {
-      "@type": "BreadcrumbList",
-      "@id": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/#breadcrumb",
-      "itemListElement": [
-        {
-          "@type": "ListItem",
-          "position": 1,
-          "name": "Magic Mouse 2024 (v3) Windows driver",
-          "item": "https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/"
+      {
+        "@type": "WebSite",
+        "@id": "https://drivers.magictray.app/#website",
+        "url": "https://drivers.magictray.app/",
+        "name": "Magic Mouse v3 Windows Driver",
+        "description": "Free MIT Windows driver project that restores two-finger scroll on the Apple Magic Mouse, including the 2024 model (v3), Bluetooth PID 0323.",
+        "publisher": {
+          "@id": "https://magictray.app/#person"
+        },
+        "inLanguage": "en",
+        "about": {
+          "@id": "https://magictray.app/#app"
         }
-      ]
-    }
-  ]
-}</script>
+      },
+      {
+        "@type": "WebPage",
+        "@id": "https://drivers.magictray.app/#webpage",
+        "url": "https://drivers.magictray.app/",
+        "name": "Magic Mouse 2024 (v3) Windows Driver — Scroll Fix",
+        "description": "Apple ships no Windows driver for the 2024 Magic Mouse (PID 0323). One free MIT scroll fix you can install today on Windows 10 and 11: it registers Apple's own signed driver, so no Test Mode. A second, KMDF driver is still unfinished.",
+        "isPartOf": {
+          "@id": "https://drivers.magictray.app/#website"
+        },
+        "about": {
+          "@id": "https://magictray.app/#app"
+        },
+        "primaryImageOfPage": {
+          "@type": "ImageObject",
+          "@id": "https://drivers.magictray.app/#primaryimage",
+          "url": "https://drivers.magictray.app/og.png",
+          "width": 1200,
+          "height": 630
+        },
+        "breadcrumb": {
+          "@id": "https://drivers.magictray.app/#breadcrumb"
+        },
+        "datePublished": "2026-05-01",
+        "dateModified": "2026-09-15",
+        "inLanguage": "en",
+        "publisher": {
+          "@id": "https://magictray.app/#person"
+        }
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": "https://drivers.magictray.app/#breadcrumb",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Magic Mouse 2024 (v3) Windows driver",
+            "item": "https://drivers.magictray.app/"
+          }
+        ]
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <header>
-    <p class="kicker">Magic Mouse v3 · PID 0323 · Windows 10/11</p>
-  <nav aria-label="Site">
-    <a href="./" aria-current="page">Windows driver</a>
-    <a href="install.html">Install</a>
-    <a href="scroll-fix.html">Scroll fix</a>
-    <a href="battery.html">Battery %</a>
-    <a href="faq.html">FAQ</a>
-    <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
-    <a href="https://magictray.app/">Magic Tray app</a>
-  </nav>
-    <h1>Magic Mouse 2024 (v3) Windows driver — scroll fix for PID 0323</h1>
-    <p class="lead">Apple ships no Windows driver for the 2024 USB-C Magic Mouse, Bluetooth <strong>PID 0323</strong> &mdash; that ID is absent from the Boot Camp INF. This project is a free, MIT-licensed fix for two-finger scroll on Windows 10 and <strong>Windows 11</strong>. The shipped Apple-driver route registers Apple&rsquo;s own unmodified signed driver, needs no Windows Test Mode, and works on v1, v2, v2-alt and v3. The KMDF route is development documentation only on this branch and has no installable package. The <a href="https://magictray.app/">Magic Tray (Windows app)</a> shows battery percentage in the tray.</p>
-    <p class="cta">
-      <a class="primary" href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Download the driver on GitHub</a>
-      <a class="primary" href="install.html#apple-route">Install the shipped route</a>
-      <a class="ghost" href="https://magictray.app/">Magic Tray (Windows app)</a>
-    </p>
-  </header>
-  <main id="content">
-    <h2 id="at-a-glance">Magic Mouse v3 Windows driver at a glance</h2>
-    <table class="at-a-glance">
-      <caption>Key facts for the Magic Mouse 2024 (v3) Windows driver</caption>
-      <tbody>
-        <tr><th scope="row">Device</th><td>Apple Magic Mouse, third generation — this project calls it Magic Mouse v3</td></tr>
-        <tr><th scope="row">Marketing name</th><td>Magic Mouse (Apple sells it without a version number)</td></tr>
-        <tr><th scope="row">Model year</th><td>2024</td></tr>
-        <tr><th scope="row">Connector</th><td>USB-C</td></tr>
-        <tr><th scope="row">Bluetooth VID / PID</th><td><code>05AC</code> / <code>0x0323</code></td></tr>
-        <tr><th scope="row">OS support</th><td>Windows 10 build 14393 or later, Windows 11 any build, x64</td></tr>
-        <tr><th scope="row">What breaks</th><td>Two-finger scroll dies after a Bluetooth idle disconnect; the cursor keeps working</td></tr>
-        <tr><th scope="row">What this fixes</th><td>Restores and keeps two-finger scroll working — no reinstall, no re-pairing</td></tr>
-        <tr><th scope="row">Two routes</th><td>Apple-driver route (<code>v1-binary-patch/</code>, v1.0.0) is shipped and covers <code>0x030D</code>, <code>0x0269</code>, <code>0x0310</code>, <code>0x0323</code>; KMDF route (<code>v2-kmdf-driver/</code>) is development documentation only. Install the shipped route, not both</td></tr>
-        <tr><th scope="row">License</th><td>MIT</td></tr>
-        <tr><th scope="row">Price</th><td>Free, no subscription <span class="badge">MIT</span></td></tr>
-        <tr><th scope="row">Signing status</th><td>Shipped Apple-driver route uses Apple's own signed binary unmodified, so no Windows Test Mode is required; the KMDF route is development work only and has no package to install</td></tr>
-      </tbody>
-    </table>
-
-    <h2 id="two-routes">What is shipped, and what is still in development?</h2>
-    <p>The Apple-driver route is shipped and installable here. The KMDF route is development work only: this branch contains its README/status material, not an installable package, compiled <code>.sys</code>, or installer. Do not try to install the KMDF route from this branch.</p>
-    <table>
-      <caption>Shipped Apple-driver route and KMDF development status</caption>
-      <thead>
-        <tr><th scope="col"></th><th scope="col">Apple-driver route</th><th scope="col">KMDF route</th></tr>
-      </thead>
-      <tbody>
-        <tr><th scope="row">Folder / version</th><td><code>v1-binary-patch/</code>, v1.0.0</td><td><code>v2-kmdf-driver/</code>, README/status only</td></tr>
-        <tr><th scope="row">Supported PIDs</th><td><code>0x030D</code>, <code>0x0269</code>, <code>0x0310</code>, <code>0x0323</code></td><td>Planned for <code>0x0323</code> only; not shipped</td></tr>
-        <tr><th scope="row">Windows Test Mode</th><td>Not required</td><td>Planned requirement; no package is available to install</td></tr>
-        <tr><th scope="row">Install</th><td>Turn Fast Startup off, then double-click <code>Install.cmd</code></td><td>Not available from this branch</td></tr>
-        <tr><th scope="row">Scroll feel</th><td>Apple's own Mac-style translation; sensitivity fixed</td><td>Planned generated scroll; not available to users from this branch</td></tr>
-        <tr><th scope="row">Battery percentage</th><td>Magic Tray briefly flips Mode A to Mode B and back</td><td>Not applicable until the route ships</td></tr>
-      </tbody>
-    </table>
-    <p>Install and rollback steps for the shipped route: <a href="install.html#apple-route">how to install the Apple-driver route</a>.</p>
-
-    <h2 id="apple-driver">Does Apple make a Windows driver for the 2024 Magic Mouse?</h2>
-    <p>No. Apple's Boot Camp driver package contains no entry for <strong>PID 0323</strong>, so Windows loads only its generic HID mouse stack for the 2024 Magic Mouse. Clicking and cursor movement work out of the box, but nothing from Apple teaches Windows how to keep the touch-surface scroll collection alive.</p>
-    <p>Installing Apple's Boot Camp software does not rescue the older mice either: Apple's installer refuses to run on non-Apple hardware, and even when <code>applewirelessmouse.sys</code> is present on disk, Windows will not attach it to the mouse until something registers the driver as a lower filter on the device. That registration is exactly what this project's Apple-driver installer does — the approach <a href="https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows">sbagirici proved on Magic Mouse v1 and v2</a>.</p>
-
-    <h2 id="why-scroll-stops">Why does Magic Mouse scroll stop working on Windows 11 after a Bluetooth reconnect?</h2>
-    <p>Because Windows collapses the mouse's HID collections. After a Bluetooth idle disconnect, DeviceSetupManager (DSM) runs a property synchronisation pass, and on reconnect the device can come back in a reduced form — this project calls it <strong>Mode A → Mode B</strong>. Mode A exposes the full collection set including the touch-surface report; Mode B exposes only the plain mouse collection. The cursor still moves and clicks still register, so the mouse looks healthy, but two-finger scroll is gone. It does not self-recover: before this driver, the only ways back were a driver reinstall or re-pairing the mouse.</p>
-    <p>Full symptom walkthrough and how to confirm the collapse on your own machine: <a href="scroll-fix.html">Magic Mouse scroll not working on Windows 11 — fix</a>.</p>
-
-    <h2 id="what-it-does">What does the Magic Mouse v3 Windows driver do?</h2>
-    <p>The shipped Apple-driver route is a kernel-mode lower filter on the mouse's Bluetooth HID stack. The KMDF route is development work only on this branch, so it has no installable user path here.</p>
-    <ul class="plain">
-      <li><strong>Apple-driver route</strong> (<code>v1-binary-patch/</code>, v1.0.0, production ready) — ships Apple's own <code>applewirelessmouse.sys</code> completely unmodified and registers it: the binary is copied to <code>System32\drivers</code>, an <code>applewirelessmouse</code> kernel service is created, the driver is added to the device's <code>LowerFilters</code>, and the Bluetooth HID device is restarted. Because the binary is untouched and no catalog is installed, <strong>no Windows Test Mode is required</strong>. Scroll feel is Apple's own Mac-style translation, and sensitivity is fixed. Supports <code>0x030D</code>, <code>0x0269</code>, <code>0x0310</code> and <code>0x0323</code>.</li>
-      <li><strong>KMDF route</strong> (<code>v2-kmdf-driver/</code>) — development documentation only. No compiled <code>.sys</code>, installable package, or installer ships on this branch. Planned scope is PID <code>0x0323</code> with Test Mode, tunable scroll and automatic recovery; these are not current install options.</li>
-    </ul>
-    <p class="note">Install the shipped Apple-driver route. Do not combine it with unreleased KMDF work.</p>
-
-    <h2 id="which-mouse">Which Magic Mouse do I have?</h2>
-    <p>Check the Bluetooth product ID: in Windows, open Device Manager → Human Interface Devices → Apple Magic Mouse → Properties → Details → Hardware Ids, and read the <code>PID_</code> value. The shipped Apple-driver route supports all four mouse PIDs; the unreleased KMDF work is not available from this branch.</p>
-    <table>
-      <thead>
-        <tr><th scope="col">PID</th><th scope="col">Device</th><th scope="col">Where to go</th></tr>
-      </thead>
-      <tbody>
-        <tr><td><code>0x0323</code></td><td>Magic Mouse 2024 (v3), USB-C</td><td>Shipped Apple-driver route — <a href="install.html#apple-route">install</a></td></tr>
-        <tr><td><code>0x0269</code></td><td>Magic Mouse 2 (v2), Lightning</td><td>Shipped Apple-driver route — <a href="install.html#apple-route">Install.cmd</a>, the approach <a href="https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows">sbagirici proved on v1/v2</a></td></tr>
-        <tr><td><code>0x030D</code></td><td>Magic Mouse (v1), AA batteries</td><td>Shipped Apple-driver route — verified on a paired v1 alongside a v3</td></tr>
-        <tr><td><code>0x0310</code></td><td>Magic Mouse 2 (v2-alt) / Apple Wireless Mouse</td><td>Shipped Apple-driver route — supported by the same installer</td></tr>
-      </tbody>
-    </table>
-    <p>If your Hardware Ids show <code>PID_0269</code>, <code>PID_030D</code> or <code>PID_0310</code>, use the shipped Apple-driver route. The unreleased KMDF work is not available from this branch.</p>
-
-    <h2 id="battery">How do I see Magic Mouse battery percentage on Windows?</h2>
-    <p>Use the Magic Tray app — the shipped Apple-driver route does not read battery itself. The 2024 Magic Mouse reports its charge on HID Input report <code>0x90</code>, collection <code>COL02</code>, and Magic Tray reads it in userspace with a brief, temporary Mode A to Mode B flip on the device and then flips it back. The unreleased KMDF route is not available from this branch.</p>
-    <p>Step-by-step, and what is still unknown for v1 and v2: <a href="battery.html">check Magic Mouse battery percentage on Windows 11</a>.</p>
-
-    <h2 id="install">How do I install the Magic Mouse 2024 (v3) Windows driver?</h2>
-    <p>For the shipped <strong>Apple-driver route</strong>, turn Fast Startup off (<code>powercfg /h off</code> from an elevated prompt, then reboot), download the repo and double-click <code>v1-binary-patch/Install.cmd</code>: it asks for Administrator itself, uses the bundled unmodified Apple driver, needs no PowerShell window and no execution-policy change, and a reboot finishes the job. No Test Mode, and Secure Boot and memory integrity can stay on.</p>
-    <p>The <strong>KMDF route is not currently installable</strong>. This branch contains development documentation only; no compiled driver, signed package, or installer is shipped here. Do not follow KMDF installation instructions until a complete package is published.</p>
-    <p>The full sequence for the shipped route, including rollback, is on <a href="install.html#apple-route">how to install the Apple-driver route</a>.</p>
-
-    <h2 id="price">Is this driver free, and how does it compare to Magic Utilities?</h2>
-    <p>It is free and MIT licensed, with no subscription. Magic Utilities is paid software sold on a subscription; this project is not, and nothing here expires or stops scrolling when a licence lapses. It is maintained by Revive Business Solutions / Lesley Murfin and is not affiliated with Apple.</p>
-    <p>Signing is the one thing money buys for the future KMDF route. That route is development work only on this branch; an EV certificate plus Microsoft attestation signing would be needed before a production package could load normally. The Apple-driver route sidesteps the problem because it redistributes Apple's own signed binary without touching a byte of it.</p>
-
-    <h2 id="next">Where to next</h2>
-    <div class="grid grid-3">
-      <div class="card">
-        <h3><a href="install.html#apple-route">Install the shipped Apple-driver route</a></h3>
-        <p>One-click Install.cmd with no Test Mode; KMDF development status is documented separately.</p>
-      </div>
-      <div class="card">
-        <h3><a href="scroll-fix.html">Fix Magic Mouse scroll not working</a></h3>
-        <p>Diagnose the Mode A to Mode B collapse and restore two-finger scroll.</p>
-      </div>
-      <div class="card">
-        <h3><a href="battery.html">Magic Mouse battery percentage on Windows</a></h3>
-        <p>Battery via Magic Tray: a temporary mode flip on the shipped Apple-driver route.</p>
-      </div>
+  <header class="site-header">
+    <div class="bar">
+      <a class="brand" href="https://magictray.app/">Magic Tray <small>Drivers</small></a>
+      <nav aria-label="Site">
+        <a href="./" aria-current="page">Windows driver</a>
+        <a href="install.html">Install</a>
+        <a href="scroll-fix.html">Scroll fix</a>
+        <a href="battery.html">Battery %</a>
+        <a href="faq.html">FAQ</a>
+      </nav>
     </div>
-    <ul class="pick">
-      <li><a href="faq.html">Magic Mouse 2024 Windows driver FAQ<small>Short answers on PID 0323, which route needs Test Mode, v1 and v2 support, Bluetooth reconnects, and what these drivers do not do.</small></a></li>
-    </ul>
+  </header>
 
-    <p class="disambig">Magic Tray is Windows tray software — a system-tray utility that shows Magic Mouse battery percentage — not a wooden or 3D-printed desk tray accessory.</p>
+  <main id="content" tabindex="-1">
+    <div class="wrap">
+      <p class="kicker">Magic Mouse v3 &middot; PID 0323 &middot; Windows 10/11</p>
+      <section class="hero">
+        <div>
+          <h1>Magic Mouse 2024 (v3) Windows driver — scroll fix for PID 0323</h1>
+          <p class="lead">Apple ships no Windows driver for the 2024 USB-C Magic Mouse, Bluetooth <strong>PID 0323</strong>. This free, MIT-licensed driver brings two-finger scroll back on Windows 10 and <strong>Windows 11</strong>. It registers Apple&rsquo;s own signed driver, so no Test Mode, and it covers Magic Mouse v1, v2, v2-alt and v3.</p>
+          <p class="cta">
+            <a class="btn btn-primary" href="install.html#apple-route"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#terminal"/></svg>Install the driver</a>
+            <a class="btn btn-primary" href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#github"/></svg>Source on GitHub</a>
+            <a class="btn btn-ghost" href="https://magictray.app/"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#battery"/></svg>Battery percent</a>
+          </p>
+        </div>
+        <div class="hero-media">
+          <picture>
+            <source srcset="img/magic-mouse-v3-underside-usbc.webp" type="image/webp">
+            <img src="img/magic-mouse-v3-underside-usbc.jpg" width="1144" height="1144" fetchpriority="high" decoding="async" alt="Underside of the 2024 Magic Mouse (v3) showing its USB-C charging port">
+          </picture>
+          <span class="badge badge-accent tag">PID 0323</span>
+        </div>
+      </section>
 
-    <h2 id="research">Research and source documents</h2>
-    <ul class="plain">
-      <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/bug-analysis.md">Bug analysis: DSM and BTHPORT collection collapse</a></li>
-      <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/hid-research.md">HID research: report 0x90 and the Magic Mouse collections</a></li>
-      <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/diagrams/diagram-mode-ab.md">Mode A / Mode B diagram</a></li>
-      <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Magic Mouse v3 Windows driver source on GitHub</a></li>
-    </ul>
+      <section id="at-a-glance">
+        <div class="stat-grid">
+          <div class="stat-card">
+            <svg class="icon" aria-hidden="true"><use href="img/icons.svg#shield-check"/></svg>
+            <div class="value">Free &middot; MIT</div>
+            <div class="label">License</div>
+          </div>
+          <div class="stat-card">
+            <svg class="icon" aria-hidden="true"><use href="img/icons.svg#clock"/></svg>
+            <div class="value">Win 10 14393+ &middot; Win 11</div>
+            <div class="label">OS support, x64</div>
+          </div>
+          <div class="stat-card">
+            <svg class="icon" aria-hidden="true"><use href="img/icons.svg#lock-open"/></svg>
+            <div class="value">No</div>
+            <div class="label">Test Mode needed</div>
+          </div>
+          <div class="stat-card">
+            <svg class="icon" aria-hidden="true"><use href="img/icons.svg#usb"/></svg>
+            <div class="value">0x0323</div>
+            <div class="label">Affected PID (v3)</div>
+          </div>
+        </div>
+        <details class="tech">
+          <summary>Full spec table</summary>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Magic Mouse v3 driver spec table, scrollable">
+          <table class="at-a-glance">
+            <caption>Key facts for the Magic Mouse 2024 (v3) Windows driver</caption>
+            <tbody>
+              <tr><th scope="row">Device</th><td>Apple Magic Mouse, third generation — this project calls it Magic Mouse v3</td></tr>
+              <tr><th scope="row">Marketing name</th><td>Magic Mouse (Apple sells it without a version number)</td></tr>
+              <tr><th scope="row">Model year</th><td>2024</td></tr>
+              <tr><th scope="row">Connector</th><td>USB-C</td></tr>
+              <tr><th scope="row">Bluetooth VID / PID</th><td><code>05AC</code> / <code>0x0323</code></td></tr>
+              <tr><th scope="row">OS support</th><td>Windows 10 build 14393 or later, Windows 11 any build, x64</td></tr>
+              <tr><th scope="row">What breaks</th><td>Two-finger scroll dies after a Bluetooth idle disconnect; the cursor keeps working</td></tr>
+              <tr><th scope="row">What this fixes</th><td>Restores and keeps two-finger scroll working — no reinstall, no re-pairing</td></tr>
+              <tr><th scope="row">Two routes</th><td>The Apple-driver route (<code>v1-binary-patch/</code>, v1.0.0) is the one you install, and it covers <code>0x030D</code>, <code>0x0269</code>, <code>0x0310</code>, <code>0x0323</code>. The separate KMDF driver (<code>v2-kmdf-driver/</code>) is unfinished, so there is nothing to install from it. Never install both</td></tr>
+              <tr><th scope="row">License</th><td>MIT</td></tr>
+              <tr><th scope="row">Price</th><td>Free, no subscription <span class="badge badge-accent">MIT</span></td></tr>
+              <tr><th scope="row">Signing status</th><td>The Apple-driver route uses Apple&rsquo;s own signed binary unmodified, so no Windows Test Mode is required. The KMDF driver is unfinished, so nothing from it is signed or installable yet</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </details>
+      </section>
+
+      <section id="which-mouse">
+        <h2>Which Magic Mouse do I have?</h2>
+        <p>Device Manager &rarr; Human Interface Devices &rarr; Apple Magic Mouse &rarr; Properties &rarr; Details &rarr; Hardware Ids, then read the <code>PID_</code> value. All four are supported.</p>
+        <div class="device-grid">
+          <div class="device-card">
+            <div class="thumb">
+              <picture>
+                <source srcset="img/magic-mouse-v3-underside-usbc.webp" type="image/webp">
+                <img src="img/magic-mouse-v3-underside-usbc.jpg" width="1144" height="1144" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2024 (v3), USB-C port">
+              </picture>
+            </div>
+            <div class="meta">
+              <div class="name">Magic Mouse 2024 (v3)</div>
+              <div class="pid">0x0323</div>
+              <div class="status">USB-C port</div>
+            </div>
+          </div>
+          <div class="device-card">
+            <div class="thumb">
+              <picture>
+                <source srcset="img/magic-mouse-v2-underside-lightning-alt.webp" type="image/webp">
+                <img src="img/magic-mouse-v2-underside-lightning-alt.jpg" width="1600" height="1200" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2), Lightning port">
+              </picture>
+            </div>
+            <div class="meta">
+              <div class="name">Magic Mouse 2 (v2)</div>
+              <div class="pid">0x0269</div>
+              <div class="status">Lightning port</div>
+            </div>
+          </div>
+          <div class="device-card">
+            <div class="thumb">
+              <picture>
+                <source srcset="img/magic-mouse-v2-underside-lightning-alt.webp" type="image/webp">
+                <img src="img/magic-mouse-v2-underside-lightning-alt.jpg" width="1600" height="1200" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2-alt), Lightning port">
+              </picture>
+            </div>
+            <div class="meta">
+              <div class="name">Magic Mouse 2 (v2-alt)</div>
+              <div class="pid">0x0310</div>
+              <div class="status">Apple Wireless Mouse</div>
+            </div>
+          </div>
+          <div class="device-card">
+            <div class="thumb">
+              <picture>
+                <source srcset="img/magic-mouse-v1-underside-aa-door.webp" type="image/webp">
+                <img src="img/magic-mouse-v1-underside-aa-door.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Underside of Magic Mouse (v1), AA battery door">
+              </picture>
+            </div>
+            <div class="meta">
+              <div class="name">Magic Mouse (v1)</div>
+              <div class="pid">0x030D</div>
+              <div class="status">AA batteries</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="install">
+        <h2>Install it in three steps</h2>
+        <ol class="stepper">
+          <li class="step">
+            <span class="num">1</span>
+            <div class="body">
+              <h3>Turn off Fast Startup</h3>
+              <p>From an elevated prompt: <code>powercfg /h off</code>, then reboot.</p>
+            </div>
+          </li>
+          <li class="step">
+            <span class="num">2</span>
+            <div class="body">
+              <h3>Download the project, then run the installer</h3>
+              <p>Download the <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">project repository</a> from GitHub, then double-click <code>v1-binary-patch/Install.cmd</code>. It asks for Administrator itself.</p>
+            </div>
+          </li>
+          <li class="step">
+            <span class="num">3</span>
+            <div class="body">
+              <h3>Reboot</h3>
+              <p>Two-finger scroll comes back.</p>
+            </div>
+          </li>
+        </ol>
+        <div class="callout callout-warning">
+          <svg class="icon" aria-hidden="true"><use href="img/icons.svg#warning-triangle"/></svg>
+          <p>Those steps are the <strong>Apple-driver route</strong>, and it is the only one you can install today. The separate <strong>KMDF driver</strong> for the 2024 mouse is not finished: there is no compiled driver, no signed package and no installer for it yet. If you find KMDF instructions anywhere, do not follow them until a complete package is published here.</p>
+        </div>
+        <p>Full sequence and rollback: <a href="install.html#apple-route">install the Apple-driver route</a>.</p>
+        <details class="tech">
+          <summary>What the installer changes, and what it does not require</summary>
+          <p>The installer copies Apple&rsquo;s unmodified <code>applewirelessmouse.sys</code> to <code>System32\drivers</code>, creates an <code>applewirelessmouse</code> kernel service, adds that driver to the Bluetooth HID device&rsquo;s <code>LowerFilters</code>, then restarts the device so Windows re-enumerates it with the filter attached. It uses the bundled unmodified Apple driver, needs no PowerShell window or execution-policy change, and installs no catalog — so <strong>no Windows Test Mode is required</strong> and Secure Boot and memory integrity can stay on. Scroll feel is Apple&rsquo;s own Mac-style translation, sensitivity fixed.</p>
+          <p>The KMDF driver is a separate design for PID <code>0x0323</code> only, planned with Test Mode, tunable scroll and automatic recovery. It is unfinished: <code>v2-kmdf-driver/</code> holds development notes, and there is no compiled driver, no signed package and no installer. Signing is the one thing money would buy for it: an EV certificate plus Microsoft attestation signing would be needed before a production package could load normally.</p>
+        </details>
+      </section>
+
+      <section id="why-scroll-stops">
+        <h2>Why scroll stops</h2>
+        <p>A Bluetooth idle disconnect makes Windows collapse the mouse&rsquo;s HID collections, and the touch-surface collection <code>COL02</code> disappears. Clicks and cursor movement keep working, so the mouse looks healthy. It does not recover on its own. Symptom walkthrough: <a href="scroll-fix.html">Magic Mouse scroll not working on Windows 11</a>.</p>
+        <details class="tech">
+          <summary>Mode A to Mode B, and why DSM does not self-recover</summary>
+          <figure class="diagram">
+            <svg viewBox="0 0 720 236" role="img" aria-labelledby="modeDiagramTitle modeDiagramDesc">
+              <title id="modeDiagramTitle">Mode A to Mode B HID collection collapse</title>
+              <desc id="modeDiagramDesc">Mode A exposes two HID collections inside one top-level collection: COL01 for mouse clicks and movement, and COL02 for touch-surface scroll and battery. After a Bluetooth idle disconnect and a DSM resync, Mode B keeps only COL01 — COL02 is gone and two-finger scroll stops.</desc>
+              <defs>
+                <marker id="modeArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0 0 10 5 0 10Z" fill="var(--muted)"/>
+                </marker>
+              </defs>
+              <g>
+                <rect x="16" y="18" width="280" height="200" rx="14" fill="none" stroke="var(--ok)" stroke-width="1.6"/>
+                <text x="36" y="48" font-size="16" font-weight="700" fill="var(--ok)">Mode A — working</text>
+                <rect x="36" y="64" width="240" height="132" rx="10" fill="none" stroke="var(--line)" stroke-width="1.2" stroke-dasharray="4 3"/>
+                <text x="48" y="84" font-size="11" fill="var(--muted)" letter-spacing="0.04em">TOP-LEVEL COLLECTION</text>
+                <rect x="52" y="94" width="208" height="36" rx="8" fill="var(--bg-2)" stroke="var(--line)"/>
+                <text x="64" y="117" font-size="13" fill="var(--fg)">COL01 · mouse clicks, move</text>
+                <rect x="52" y="140" width="208" height="36" rx="8" fill="var(--bg-2)" stroke="var(--accent)"/>
+                <text x="64" y="163" font-size="13" fill="var(--fg)">COL02 · scroll + battery</text>
+              </g>
+              <line x1="304" y1="118" x2="404" y2="118" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#modeArrow)"/>
+              <text x="354" y="100" font-size="11" fill="var(--muted)" text-anchor="middle">BT idle disconnect</text>
+              <text x="354" y="140" font-size="11" fill="var(--muted)" text-anchor="middle">DSM resync</text>
+              <g>
+                <rect x="424" y="18" width="280" height="200" rx="14" fill="none" stroke="var(--warning)" stroke-width="1.6"/>
+                <text x="444" y="48" font-size="16" font-weight="700" fill="var(--warning)">Mode B — broken</text>
+                <rect x="444" y="64" width="240" height="132" rx="10" fill="none" stroke="var(--line)" stroke-width="1.2" stroke-dasharray="4 3"/>
+                <text x="456" y="84" font-size="11" fill="var(--muted)" letter-spacing="0.04em">TOP-LEVEL COLLECTION</text>
+                <rect x="460" y="94" width="208" height="36" rx="8" fill="var(--bg-2)" stroke="var(--line)"/>
+                <text x="472" y="117" font-size="13" fill="var(--fg)">COL01 · mouse clicks, move</text>
+                <rect x="460" y="140" width="208" height="36" rx="8" fill="none" stroke="var(--line)" stroke-dasharray="3 3"/>
+                <text x="472" y="163" font-size="12" fill="var(--muted)">COL02 gone — scroll stops</text>
+              </g>
+            </svg>
+            <figcaption>Mode A exposes both HID collections. In Mode B only COL01 survives, so two-finger scroll stops while the cursor still works.</figcaption>
+          </figure>
+          <p>DeviceSetupManager (DSM) runs a property synchronisation pass on reconnect, and the device can come back in this reduced form. Before this driver, the only ways back were a driver reinstall or re-pairing the mouse.</p>
+        </details>
+      </section>
+
+      <section id="battery">
+        <h2>Battery percentage</h2>
+        <p>The driver does not read battery. The <a href="https://magictray.app/">Magic Tray</a> app does, from HID input report <code>0x90</code> on <code>COL02</code>, using a brief temporary Mode A to Mode B flip. Steps, and what is still unknown for v1 and v2: <a href="battery.html">Magic Mouse battery percentage on Windows 11</a>.</p>
+      </section>
+
+      <section id="next">
+        <h2>More</h2>
+        <ul class="pick">
+          <li><a href="faq.html">Driver FAQ</a></li>
+          <li><a href="scroll-fix.html">Fix scroll that stopped working</a></li>
+          <li><a href="https://magictray.app/">Magic Tray, the Windows battery app</a></li>
+        </ul>
+        <details class="tech">
+          <summary>Why Boot Camp does not fix it either</summary>
+          <p>Apple&rsquo;s Boot Camp package has no entry for <strong>PID 0323</strong>, so Windows falls back to its generic HID mouse stack. Boot Camp does not rescue the older mice either: Apple&rsquo;s installer refuses to run on non-Apple hardware, and even when <code>applewirelessmouse.sys</code> is present on disk, Windows will not attach it to the mouse until something registers the driver as a lower filter on the device. That registration is exactly what this project&rsquo;s installer does — the approach <a href="https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows">sbagirici proved on Magic Mouse v1 and v2</a>.</p>
+        </details>
+        <details class="tech">
+          <summary>Research and source documents</summary>
+          <ul class="plain">
+            <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/bug-analysis.md">Bug analysis: DSM and BTHPORT collection collapse</a></li>
+            <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/hid-research.md">HID research: report 0x90 and the Magic Mouse collections</a></li>
+            <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/v1-binary-patch/docs/diagrams/diagram-mode-ab.md">Mode A / Mode B diagram</a></li>
+            <li><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver source on GitHub</a></li>
+          </ul>
+        </details>
+        <p class="disambig">Magic Tray is Windows tray software, not a wooden or 3D-printed desk tray.</p>
+      </section>
+
+    </div>
   </main>
-  <footer>
-    <p><strong>Magic Mouse 2024 (v3) Windows driver</strong> — MIT licensed, free, no subscription.
-      Maintained by Revive Business Solutions / Lesley Murfin.</p>
-    <p><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver repo</a> ·
-      <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a> ·
-      <a href="https://magictray.app/drivers.html">Which driver do I need</a> ·
-      <a href="llms.txt">llms.txt</a></p>
-    <p>Not affiliated with Apple Inc. Apple, Magic Mouse, and Boot Camp are trademarks of Apple Inc.</p>
+
+  <footer class="site-footer">
+    <div class="bar">
+      <nav aria-label="All pages">
+        <p>
+          <a href="./" aria-current="page">Windows driver</a>
+          ·
+          <a href="install.html">Install</a>
+          ·
+          <a href="scroll-fix.html">Scroll fix</a>
+          ·
+          <a href="battery.html">Battery %</a>
+          ·
+          <a href="faq.html">FAQ</a>
+          ·
+          <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
+          ·
+          <a href="https://magictray.app/">Magic Tray app</a>
+        </p>
+      </nav>
+      <p><strong>Magic Mouse 2024 (v3) Windows driver</strong> — MIT licensed, free, no subscription. Maintained by Revive Business Solutions / Lesley Murfin.</p>
+      <p>
+        <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver repo</a>
+        ·
+        <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a>
+        ·
+        <a href="https://magictray.app/drivers.html">Which driver do I need</a>
+        ·
+        <a href="llms.txt">llms.txt</a>
+      </p>
+      <p>Not affiliated with Apple Inc. Apple, Magic Mouse, and Boot Camp are trademarks of Apple Inc.</p>
+    </div>
   </footer>
 </body>
 </html>
