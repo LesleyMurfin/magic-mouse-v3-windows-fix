@@ -104,8 +104,8 @@ function Install-KmdfUniquePackage {
     if ($infText -match '08/30/2026,2\.0\.4\.0' -or $infText -match '08/31/2026,2\.0\.4\.0') {
         throw "INF DriverVer collides with the failed 2.0.4 oem26 / PR #3 identity."
     }
-    if ($infText -notmatch '09/15/2026,2\.0\.4\.3') {
-        throw "INF DriverVer must be 09/15/2026,2.0.4.3 (unique vs oem26)."
+    if ($infText -notmatch '09/17/2026,2\.0\.4\.5') {
+        throw "INF DriverVer must be 09/17/2026,2.0.4.5 (unique vs oem26; newer than the installed 09/16/2026,2.0.4.4)."
     }
     if ($infText -match 'ServiceBinary\s*=\s*%12%\\MagicMouseDriver\.sys') {
         throw "INF ServiceBinary must not be MagicMouseDriver.sys (Apr 30 restore file)."

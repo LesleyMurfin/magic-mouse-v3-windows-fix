@@ -6,7 +6,7 @@
 
 *Dated historical evidence — not current state:* the **2026-09-01** run of package **2.0.4.1** (unsigned `E73EC0A8…`, signed `9901390e…`) produced the same pointer / 2-finger / 1-finger-no-scroll result and is the documented rollback target. Checkpoint: `v2-kmdf-driver/CHECKPOINT-2026-09-01-SCROLL.md`.
 
-Loaded unique dest `MagicMouseDriver-kmdf-204-scroll.sys`, SCM `MagicMouseDriver204Scroll`, oem50. Wheel is emitted only while **two or more** contacts are down (`down >= 2`); one finger (START or DRAG) never emits wheel, at any step magnitude. The detent is the registry tunable `ScrollStep` (`Services\MagicMouseDriver204Scroll\Parameters`, REG_DWORD), default `MM_SCROLL_STEP` **8**; registry values outside `[MM_SCROLL_STEP_MIN=1, MM_SCROLL_STEP_MAX=224]` retain the default `8` — **224 is the runtime clamp ceiling, not the detent**; do not ship ...
+Loaded unique dest `MagicMouseDriver-kmdf-204-scroll.sys`, SCM `MagicMouseDriver204Scroll`, oem50. Wheel is emitted only while **two or more** contacts are down (`down >= 2`); one finger (START or DRAG) never emits wheel, at any step magnitude. With two or more down, **every** contact in `TOUCH_STATE_DRAG` with a valid anchor emits its own notches on its own travel — there is no reference finger (2026-09-16: the single-reference rule went silent whenever the lowest-id contact rested, which killed scroll on hardware). The detent is the registry tunable `ScrollStep` (`Services\MagicMouseDriver204Scroll\Parameters`, REG_DWORD), default `MM_SCROLL_STEP` **16** in source since 2026-09-16 (the signed 2.0.4.3 binary shipped **8**); a registry value below `MM_SCROLL_STEP_MIN=1` falls back to that default and anything above `MM_SCROLL_STEP_MAX=224` clamps to `224` — **224 is the runtime clamp ceiling, not the detent**; do not ship ...
 
 Gestures = Wheel + AC Pan only (not PTP / macOS). PTP needs a later virtual device, not a larger SDP overlay (0x50). v1/v2 = `PidInfo` after dumps; never 0323 overlay on 030D/0269.
 
@@ -114,10 +114,10 @@ Host scroll detent (Linux; `TWO_FINGER` / `down >= 2` is required — one finger
 python3 v2-kmdf-driver/tests/test_scroll_threshold.py
 ```
 
-- 2-slot DRAG `|stepY| >= ScrollStep` → exactly one notch on that frame, emitted only by the reference finger (the second contact just re-anchors, so a two-finger drag is one notch per `step` of travel, not two)
+- 2-slot DRAG → each contact banks `travel / ScrollStep` notches of its own (no reference finger), so a two-finger drag of `N * step` emits `2N` notches; the ~2x per-gesture rate is absorbed by the doubled default detent 16, not by muting a finger
 - compact 8-byte garbage `[6]/[7]` → wheel/hwheel 0
 - 1-finger DRAG → wheel **0** at every magnitude exercised (below the detent, at the detent, and well past it in both directions); `down >= 2` gates the emit path, so one finger never scrolls at any magnitude
-- `ScrollStep` below `MM_SCROLL_STEP_MIN` 1 → falls back to the default **8**; above `MM_SCROLL_STEP_MAX` 224 → **retains the default 8**, not clamped to 224. `step` is a `ULONG`, so a negative `REG_DWORD` arrives as a huge unsigned value and also retains the default 8
+- `ScrollStep` below `MM_SCROLL_STEP_MIN` 1 → falls back to the default **16**; above `MM_SCROLL_STEP_MAX` 224 → **clamps to 224**. `step` is a `ULONG`, so a negative `REG_DWORD` arrives as a huge unsigned value and also clamps to 224
 
 Host tests must fail closed:
 

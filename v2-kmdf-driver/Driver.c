@@ -282,8 +282,22 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
         PIO_STACK_LOCATION sl = IoGetCurrentIrpStackLocation(irp);
         PBRB pBrb = (PBRB)sl->Parameters.Others.Argument1;
 
+        // Learn the HID control channel from BOTH directions of the open.
+        //
+        // BRB_L2CA_OPEN_CHANNEL is the HOST-initiated open (pnputil
+        // /restart-device, boot, re-pair). BRB_L2CA_OPEN_CHANNEL_RESPONSE is
+        // how a DEVICE-initiated reconnect arrives - the Apple mouse dropping
+        // its link on idle and coming back on its own - and it was never
+        // handled, so MtControlHandle stayed NULL for the entire life of that
+        // connection. With it NULL the pass-through at the ACL intercept below
+        // cannot fire, every control-channel read is processed by this filter,
+        // and the GET_REPORT(Input,0x90) response is destroyed: measured on
+        // hardware 2026-09-17, the wire carried A1 90 04 10 (16%) on every
+        // probe while userspace read 90 00 00. Both BRB types share the
+        // _BRB_L2CA_OPEN_CHANNEL layout, so one intercept serves both.
         if (pBrb != NULL &&
-            pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL &&
+            (pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL ||
+             pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL_RESPONSE) &&
             pBrb->BrbHeader.Length >= sizeof(struct _BRB_L2CA_OPEN_CHANNEL) &&
             pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM)
         {
@@ -353,6 +367,7 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
             reqCtx->OrigBuffer = NULL;
             reqCtx->OrigMdl = NULL;
             reqCtx->OrigBufferSize = 0;
+            reqCtx->OrigRemainingBufferSize = 0;
             reqCtx->OrigFlags = 0;
 
             BOOLEAN sdpOk = FALSE;
@@ -367,13 +382,28 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
             ctx->LastInFlags = pBrb->BrbL2caAclTransfer.TransferFlags;
             WdfSpinLockRelease(ctx->Lock);
 
+            // Divert to the scratch buffer only when the caller's buffer is a
+            // whole input report. HidBth reads the HID control channel
+            // header-first - BufferSize 1 for the 0xA1 DATA byte - so a
+            // scratch read of MM_ACL_MAX_PARSE with ACL_SHORT_TRANSFER_OK
+            // consumes the entire GET_REPORT response while only 1 byte can
+            // be copied back to the caller. That is why Input 0x90 on COL02
+            // returned 90 00 00 with STATUS_SUCCESS: the percent arrived off
+            // the air and was discarded here. Interrupt-channel reports are
+            // posted with a 9-byte buffer, so the multitouch read this filter
+            // exists for is still diverted and translated, and
+            // OnAclTransferComplete already refuses to translate below
+            // origCap >= MM_MOUSE_REPORT_LEN - a shorter diversion could only
+            // ever swallow data, never produce a wheel report.
             if (sdpOk &&
-                pBrb->BrbL2caAclTransfer.BufferSize > 0 &&
+                pBrb->BrbL2caAclTransfer.BufferSize >= MM_MOUSE_REPORT_LEN &&
                 pBrb->BrbL2caAclTransfer.BufferSize < MM_ACL_MAX_PARSE)
             {
                 reqCtx->OrigBuffer = pBrb->BrbL2caAclTransfer.Buffer;
                 reqCtx->OrigMdl = pBrb->BrbL2caAclTransfer.BufferMDL;
                 reqCtx->OrigBufferSize = pBrb->BrbL2caAclTransfer.BufferSize;
+                reqCtx->OrigRemainingBufferSize =
+                    pBrb->BrbL2caAclTransfer.RemainingBufferSize;
                 reqCtx->OrigFlags = pBrb->BrbL2caAclTransfer.TransferFlags;
                 reqCtx->UsedScratch = TRUE;
                 pBrb->BrbL2caAclTransfer.Buffer = reqCtx->Scratch;
@@ -391,6 +421,8 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
                     pBrb->BrbL2caAclTransfer.Buffer = reqCtx->OrigBuffer;
                     pBrb->BrbL2caAclTransfer.BufferMDL = reqCtx->OrigMdl;
                     pBrb->BrbL2caAclTransfer.BufferSize = reqCtx->OrigBufferSize;
+                    pBrb->BrbL2caAclTransfer.RemainingBufferSize =
+                        reqCtx->OrigRemainingBufferSize;
                     pBrb->BrbL2caAclTransfer.TransferFlags = reqCtx->OrigFlags;
                     reqCtx->UsedScratch = FALSE;
                 }
@@ -468,6 +500,7 @@ OnAclTransferComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
         pBrb->BrbL2caAclTransfer.BufferMDL = reqCtx->OrigMdl;
         pBrb->BrbL2caAclTransfer.TransferFlags = reqCtx->OrigFlags;
         pBrb->BrbL2caAclTransfer.BufferSize = reqCtx->OrigBufferSize;
+        pBrb->BrbL2caAclTransfer.RemainingBufferSize = reqCtx->OrigRemainingBufferSize;
         reqCtx->UsedScratch = FALSE;
 
         ULONG origCap = reqCtx->OrigBufferSize;
@@ -616,7 +649,8 @@ OnOpenChannelComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
     PBRB pBrb = (reqCtx != NULL) ? (PBRB)reqCtx->Brb : NULL;
 
     if (NT_SUCCESS(status) && ctx != NULL && pBrb != NULL &&
-        pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL &&
+        (pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL ||
+         pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL_RESPONSE) &&
         pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM &&
         pBrb->BrbL2caOpenChannel.ChannelHandle != NULL)
     {
@@ -989,7 +1023,7 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
     ULONG ictlCount, scanHits, patchOk, lastSize, lastStatus;
     ULONG hidReads, rid12, aclN, aclX, lastAclR, lastAclC;
     ULONG mtStatus, mtTries, lastInLen, lastInFl, aclOut, lastOutSz, lastOutFl, lastOutHdr;
-    ULONG scrollStep;
+    ULONG scrollStep, scrollTravel, scrollNotches;
     UCHAR lastBytes[64];
     UCHAR lastAclBytes[16];
 
@@ -1016,6 +1050,8 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
     mtStatus   = ctx->MtEnableStatus;
     mtTries    = ctx->MtEnableTries;
     scrollStep = ctx->ScrollStep;
+    scrollTravel = ctx->ScrollTravelUnits;
+    scrollNotches = ctx->ScrollNotchCount;
     RtlCopyMemory(lastBytes, ctx->LastSdpBytes, 64);
     RtlCopyMemory(lastAclBytes, ctx->LastAclBytes, 16);
     WdfSpinLockRelease(ctx->Lock);
@@ -1053,6 +1089,10 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
                             REG_DWORD, &aclN, sizeof(aclN));
     MmDiagSetValueIfChanged(key, L"AclTranslateCount",
                             REG_DWORD, &aclX, sizeof(aclX));
+    MmDiagSetValueIfChanged(key, L"ScrollTravelUnits",
+                            REG_DWORD, &scrollTravel, sizeof(scrollTravel));
+    MmDiagSetValueIfChanged(key, L"ScrollNotchCount",
+                            REG_DWORD, &scrollNotches, sizeof(scrollNotches));
     MmDiagSetValueIfChanged(key, L"LastAclReceived",
                             REG_DWORD, &lastAclR, sizeof(lastAclR));
     MmDiagSetValueIfChanged(key, L"LastAclCapacity",

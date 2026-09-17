@@ -6,8 +6,15 @@ AccumulateSurfaceScroll + TranslateMouse2ToHid, ported from the shipped C:
 
   * Wheel / AC Pan only while two or more contacts are down (down >= 2).
     One finger (START or DRAG) never emits, at any step magnitude.
-  * Exactly one reference finger — the lowest active DRAG slot with a valid
-    anchor — emits notches. Other contacts only re-anchor.
+  * Every contact in DRAG with a valid anchor emits its own notches: a
+    contact emits when its own travel crosses the detent, and only then
+    advances its own anchor. There is no reference finger, so a resting or
+    slow contact cannot mute a moving one.
+  * ctx.ScrollTravelUnits / ctx.ScrollNotchCount are the Diag counter pair:
+    on every threshold crossing travel takes the |step| consumed and notches
+    takes the single +1/-1 emitted, on either axis. Travel climbing while
+    notches stay flat is the reference-finger bug; flat travel means no one
+    is scrolling; a pinch shows notches climbing with net wheel 0.
   * While down < 2 an active DRAG anchor is refreshed to the current x/y, so
     one-finger travel never accumulates into a notch when a second finger
     lands: both contacts start the step calculation from current positions.
@@ -130,13 +137,20 @@ def make_mt(touches: list[bytes]) -> bytearray:
 
 
 class Ctx:
-    """DEVICE_CONTEXT touch state. ScrollStep is the registry tunable."""
+    """DEVICE_CONTEXT touch state. ScrollStep is the registry tunable.
+
+    ScrollTravelUnits / ScrollNotchCount are the Diag counter pair the driver
+    publishes: touch units consumed at threshold crossings, and every +1/-1
+    notch emitted on either axis. Both are wrapping ULONGs in the C.
+    """
 
     def __init__(self, scroll_step: int = MM_SCROLL_STEP) -> None:
         self.TouchAnchorX = [0] * MM_TOUCH_SLOTS
         self.TouchAnchorY = [0] * MM_TOUCH_SLOTS
         self.TouchAnchorValid = [False] * MM_TOUCH_SLOTS
         self.ScrollStep = scroll_step
+        self.ScrollTravelUnits = 0
+        self.ScrollNotchCount = 0
 
 
 def effective_step(ctx: Ctx) -> int:
@@ -157,7 +171,7 @@ def effective_step(ctx: Ctx) -> int:
 
 
 def accumulate_surface_scroll(inp: bytes, ctx: Ctx) -> tuple[int, int]:
-    """Port of AccumulateSurfaceScroll: TWO_FINGER, one reference finger."""
+    """Port of AccumulateSurfaceScroll: TWO_FINGER, per-contact detent."""
     out_wheel = 0
     out_hwheel = 0
     if len(inp) < MM2_HEADER_LEN:
@@ -176,21 +190,6 @@ def accumulate_surface_scroll(inp: bytes, ctx: Ctx) -> tuple[int, int]:
             down += 1
 
     step = effective_step(ctx)
-
-    # Reference = lowest active DRAG slot with a valid anchor. Only that
-    # finger emits, so a two-finger drag is one notch per `step` of travel.
-    ref_id = MM_TOUCH_SLOTS
-    for i in range(n_touches):
-        off = MM2_HEADER_LEN + i * MM2_TOUCH_BYTES
-        if off + MM2_TOUCH_BYTES > len(inp):
-            break
-        t = inp[off : off + MM2_TOUCH_BYTES]
-        tid = ((t[6] << 2) | (t[5] >> 6)) & 0xF
-        if tid >= MM_TOUCH_SLOTS:
-            continue
-        if (t[7] & TOUCH_STATE_MASK) == TOUCH_STATE_DRAG:
-            if ctx.TouchAnchorValid[tid] and tid < ref_id:
-                ref_id = tid
 
     for i in range(n_touches):
         off = MM2_HEADER_LEN + i * MM2_TOUCH_BYTES
@@ -223,13 +222,18 @@ def accumulate_surface_scroll(inp: bytes, ctx: Ctx) -> tuple[int, int]:
 
         step_y = ctx.TouchAnchorY[tid] - y
         step_x = ctx.TouchAnchorX[tid] - x
+        # Per-contact detent: emit on this contact's own travel, then move
+        # only this contact's anchor. No reference finger. The Diag counter
+        # pair advances on the same crossings (wrapping ULONG adds).
         if step_y >= step or step_y <= -step:
-            if tid == ref_id:
-                out_wheel += 1 if step_y > 0 else -1
+            out_wheel += 1 if step_y > 0 else -1
+            ctx.ScrollTravelUnits = (ctx.ScrollTravelUnits + abs(step_y)) & 0xFFFFFFFF
+            ctx.ScrollNotchCount = (ctx.ScrollNotchCount + 1) & 0xFFFFFFFF
             ctx.TouchAnchorY[tid] = y
         if step_x >= step or step_x <= -step:
-            if tid == ref_id:
-                out_hwheel += -1 if step_x > 0 else 1
+            out_hwheel += -1 if step_x > 0 else 1
+            ctx.ScrollTravelUnits = (ctx.ScrollTravelUnits + abs(step_x)) & 0xFFFFFFFF
+            ctx.ScrollNotchCount = (ctx.ScrollNotchCount + 1) & 0xFFFFFFFF
             ctx.TouchAnchorX[tid] = x
     return out_wheel, out_hwheel
 

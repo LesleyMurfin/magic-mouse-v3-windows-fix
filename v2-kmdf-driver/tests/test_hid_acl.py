@@ -311,11 +311,13 @@ def test_wheel_notch_across_reports(run: _Run) -> None:
     """WHEEL_NOTCH_ACROSS_REPORTS: a notch needs the anchor of a prior report.
 
     One DEVICE_CONTEXT, two 14+16 reports through the ACL path: the first
-    lands two contacts (anchors only), the second drags both by the detent so
-    the reference finger emits one notch into byte 7. The same second report
-    replayed against a device that never saw the first must emit nothing —
-    which is why a per-report context makes any Wheel assertion unfalsifiable.
+    lands two contacts (anchors only), the second drags both by one detent, so
+    each dragging contact emits its own notch into byte 7. The same second
+    report replayed against a device that never saw the first must emit
+    nothing — which is why a per-report context makes any Wheel assertion
+    unfalsifiable.
     """
+    contacts = 2
     ctx = Ctx()
     land = make_mt(
         [
@@ -350,7 +352,8 @@ def test_wheel_notch_across_reports(run: _Run) -> None:
         and rw_drag
         and n_drag == MM_MOUSE_REPORT_LEN
         and notch[0] == MM_REPORT_ID_MOUSE
-        and notch[7] == 1  # Wheel: one notch per detent of travel
+        # Wheel: one notch per contact that crossed the detent.
+        and notch[7] == contacts
         and notch[6] == 0  # AC Pan: no horizontal travel
         and cold[7] == 0  # no persisted anchor → no notch
         and cold[6] == 0
@@ -468,6 +471,135 @@ def test_c_source_acl_contract(run: _Run) -> None:
     )
 
 
+def test_c_source_control_channel_learned_both_ways(run: _Run) -> None:
+    """Fail-closed vs Driver.c: the control channel must be learned from
+    device-initiated reconnects, not only host-initiated opens.
+
+    The diversion gate alone does not keep the battery readable. The only path
+    that makes this filter transparent to the control channel is the
+    pass-through taken when an inbound ACL transfer's ChannelHandle equals
+    ctx->MtControlHandle. That handle was learned solely from
+    BRB_L2CA_OPEN_CHANNEL - the HOST-initiated open - while an Apple mouse
+    coming back from an idle drop reconnects on its own and arrives as
+    BRB_L2CA_OPEN_CHANNEL_RESPONSE. With that case unhandled the handle stays
+    NULL for the life of the connection, every control-channel read is
+    processed by the filter, and GET_REPORT(Input, 0x90) is destroyed.
+
+    Measured on hardware 2026-09-17 with the gate fix already installed and
+    2.0.4.4 confirmed live: the wire carried A1 90 04 10 (0x10 = 16%) on every
+    one of 112 captured frames while userspace read 90 00 00. Deleting either
+    BRB type from the request intercept or from OnOpenChannelComplete must
+    turn this red.
+    """
+    if not DRV_C.is_file():
+        run.check("C_SOURCE_CONTROL_CHANNEL_LEARNED_BOTH_WAYS", False, f"missing {DRV_C}")
+        return
+
+    drv = DRV_C.read_text(encoding="utf-8")
+
+    # Both BRB types must appear, and RESPONSE must be paired with the control
+    # PSM rather than mentioned only in a comment.
+    n_open = len(re.findall(r"BrbHeader\.Type\s*==\s*BRB_L2CA_OPEN_CHANNEL(?![_A-Z])", drv))
+    n_resp = len(re.findall(r"BrbHeader\.Type\s*==\s*BRB_L2CA_OPEN_CHANNEL_RESPONSE", drv))
+    # Two sites must handle both: the request intercept and the completion.
+    both_sites = n_open >= 2 and n_resp >= 2
+    psm_guarded = (
+        re.search(
+            r"BRB_L2CA_OPEN_CHANNEL_RESPONSE[\s\S]{0,200}?"
+            r"BrbL2caOpenChannel\.Psm\s*==\s*MM_HID_CONTROL_PSM",
+            drv,
+        )
+        is not None
+    )
+    # The pass-through that the learned handle enables must still exist.
+    passthrough = (
+        re.search(
+            r"ChannelHandle\s*==\s*ctlHandle[\s\S]{0,200}?ForwardPassthrough",
+            drv,
+        )
+        is not None
+    )
+    ok = both_sites and psm_guarded and passthrough
+    run.check(
+        "C_SOURCE_CONTROL_CHANNEL_LEARNED_BOTH_WAYS",
+        ok,
+        f"OPEN_CHANNEL sites={n_open} OPEN_CHANNEL_RESPONSE sites={n_resp} "
+        f"(both>=2: {both_sites}); RESPONSE guarded by control PSM={psm_guarded}; "
+        f"ctlHandle passthrough present={passthrough}",
+    )
+
+
+def test_c_source_control_channel_gate(run: _Run) -> None:
+    """Fail-closed vs Driver.c: the IN scratch diversion must not eat short reads.
+
+    HidBth reads the HID control channel header-first (BufferSize 1 for the
+    0xA1 DATA byte). A `BufferSize > 0` diversion gate hands that 1-byte read
+    a MM_ACL_MAX_PARSE scratch with ACL_SHORT_TRANSFER_OK, swallows the whole
+    GET_REPORT(Input, 0x90) response and copies back min(received, origCap) = 1
+    byte, so COL02 battery returns 90 00 00 / STATUS_SUCCESS. Reintroducing
+    that gate, dropping the MM_MOUSE_REPORT_LEN floor, deleting the
+    MM_ACL_MAX_PARSE upper bound or the sdpOk conjunct, or lowering the
+    OnAclTransferComplete origCap floor must turn this red.
+    """
+    if not DRV_C.is_file():
+        run.check("C_SOURCE_CONTROL_CHANNEL_GATE", False, f"missing {DRV_C}")
+        return
+
+    drv = DRV_C.read_text(encoding="utf-8")
+
+    # Diversion floor: a whole report, never a header-first 1-byte read.
+    has_floor = (
+        re.search(
+            r"BrbL2caAclTransfer\.BufferSize\s*>=\s*MM_MOUSE_REPORT_LEN",
+            drv,
+        )
+        is not None
+    )
+    # No `BufferSize > 0` gate anywhere; `>= 0` / `> 1` / `> 0x10` must not hit.
+    has_gt_zero = (
+        re.search(
+            r"BrbL2caAclTransfer\.BufferSize\s*>(?!=)\s*0(?![\dxX])",
+            drv,
+        )
+        is not None
+    )
+    # Upper bound kept: the gate cannot be "fixed" by deleting it outright.
+    has_upper = (
+        re.search(
+            r"BrbL2caAclTransfer\.BufferSize\s*<(?!=)\s*MM_ACL_MAX_PARSE",
+            drv,
+        )
+        is not None
+    )
+    has_sdp_conjunct = (
+        re.search(
+            r"sdpOk\s*&&[\s\S]{0,200}?"
+            r"BrbL2caAclTransfer\.BufferSize\s*>=\s*MM_MOUSE_REPORT_LEN",
+            drv,
+        )
+        is not None
+    )
+    # OnAclTransferComplete still refuses to translate below a whole report.
+    has_orig_cap = (
+        re.search(r"origCap\s*>=\s*MM_MOUSE_REPORT_LEN", drv) is not None
+    )
+
+    ok = (
+        has_floor
+        and not has_gt_zero
+        and has_upper
+        and has_sdp_conjunct
+        and has_orig_cap
+    )
+    run.check(
+        "C_SOURCE_CONTROL_CHANNEL_GATE",
+        ok,
+        f"BufferSize>=MM_MOUSE_REPORT_LEN={has_floor} BufferSize>0={has_gt_zero}; "
+        f"BufferSize<MM_ACL_MAX_PARSE={has_upper} sdpOk&&gate={has_sdp_conjunct}; "
+        f"origCap>=MM_MOUSE_REPORT_LEN={has_orig_cap}",
+    )
+
+
 def main() -> int:
     run = _Run()
     test_battery_passthrough(run)
@@ -478,6 +610,8 @@ def main() -> int:
     test_no_feature_47(run)
     test_unique_scm(run)
     test_c_source_acl_contract(run)
+    test_c_source_control_channel_gate(run)
+    test_c_source_control_channel_learned_both_ways(run)
     return 1 if run.failed else 0
 
 

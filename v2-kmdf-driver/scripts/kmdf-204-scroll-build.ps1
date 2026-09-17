@@ -11,8 +11,8 @@
 # guard blocks rebuilding the SAME version without blocking the next one.
 [CmdletBinding()]
 param(
-    [string]$Version        = '2.0.4.3',
-    [string]$DriverVerDate  = '09/15/2026'
+    [string]$Version        = '2.0.4.5',
+    [string]$DriverVerDate  = '09/17/2026'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -102,8 +102,10 @@ try {
         Fail 3 'Driver.c contains the parked kernel HID SetFeature path - see STATUS.md 2026-09-08 incident'
     }
 
-    # The scroll detent must stay tunable and single-reference-finger. Both are
-    # behavioral, so they are checked against stripped code.
+    # The scroll detent must stay a registry tunable. Do NOT re-add a single
+    # reference finger: it went silent whenever the lowest-id contact rested
+    # and killed scroll on hardware (STATUS.md, 2026-09-16). The check runs
+    # against stripped code because it is behavioral.
     if ($drvCode -notmatch 'ScrollStep') { Fail 3 'Driver.c missing ScrollStep registry tunable' }
     $proj = Join-Path $Work 'MagicMouseDriver.vcxproj'
     if (-not (Test-Path -LiteralPath $proj)) { Fail 2 "vcxproj missing immediately before msbuild $Work" }

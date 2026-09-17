@@ -8,7 +8,7 @@ set -euo pipefail
 # always builds scripts/kmdf-204-scroll-build.ps1's own -Version default. This
 # constant must be updated in lockstep with that default; it only selects the
 # work dir C:\mm-dev-queue\kmdf-204-bld-<version without dots> we read back.
-MM_VERSION='2.0.4.3'
+MM_VERSION='2.0.4.5'
 MM_VERTAG="${MM_VERSION//./}"
 QUEUE_DIR="${MM_QUEUE_DIR:-/mnt/c/mm-dev-queue}"
 

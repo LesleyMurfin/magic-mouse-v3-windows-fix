@@ -34,7 +34,7 @@
 
 // FileVersion / package label. INF dest is unique so Apr 30 MagicMouseDriver.sys
 // (oem16 / AD5D244B) is not replaced or hardlinked.
-#define MM_FILE_VERSION_STR     "2.0.4.3"
+#define MM_FILE_VERSION_STR     "2.0.4.5"
 #define MM_ARTIFACT_SYS_PATTERN "MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys"
 #define MM_INF_SYS_NAME         "MagicMouseDriver-kmdf-204-scroll.sys"
 
@@ -111,6 +111,19 @@ typedef struct _DEVICE_CONTEXT
     // restart, not a driver reinstall.
     ULONG   ScrollStep;
 
+    // Scroll diagnosis pair, published to Diag alongside Rid12Count.
+    // Counters alone cannot tell a hand resting motionless on the surface -
+    // which emits TOUCH_STATE_DRAG at ~65 reports/s and legitimately yields
+    // zero wheel - from a finger actually sliding, because nothing here
+    // records travel. ScrollTravelUnits accumulates the touch units consumed
+    // at each detent crossing in AccumulateSurfaceScroll; ScrollNotchCount
+    // counts every +1/-1 the engine emits on either axis. Travel climbing
+    // while notches stay 0 is an emission bug; notches climbing while
+    // Raw Input sees no wheel is loss downstream of this filter; travel flat
+    // means the user is not scrolling. Both wrap; deltas are what matter.
+    ULONG   ScrollTravelUnits;
+    ULONG   ScrollNotchCount;
+
     WDFTIMER    DiagTimer;
     WDFWORKITEM DiagWorkItem;
 } DEVICE_CONTEXT, *PDEVICE_CONTEXT;
@@ -123,6 +136,12 @@ typedef struct _MM_REQUEST_CONTEXT
     PVOID OrigBuffer;
     PMDL  OrigMdl;
     ULONG OrigBufferSize;
+    // BufferSize and RemainingBufferSize are two halves of one capacity
+    // (OnAclTransferComplete computes capacity = BufferSize +
+    // RemainingBufferSize). Diverting to the scratch buffer overwrites both,
+    // so both must be saved and restored or the profile driver sees a
+    // capacity that never belonged to its buffer.
+    ULONG OrigRemainingBufferSize;
     ULONG OrigFlags;
     BOOLEAN UsedScratch;
     UCHAR Scratch[MM_ACL_MAX_PARSE];
