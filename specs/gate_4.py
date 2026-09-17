@@ -294,7 +294,7 @@ def check_scroll_threshold() -> None:
     else:
         fail_(
             "GestureEngine.c missing SCROLL_STEP_8 and/or TWO_FINGER "
-            "(1-finger must not emit; detent 8)"
+            "(1-finger must not emit; detent = MM_SCROLL_STEP in GestureEngine.h)"
         )
 
 def main() -> int:
