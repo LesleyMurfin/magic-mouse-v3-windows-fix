@@ -1,6 +1,6 @@
 # MagicMouseDriver (KMDF) — PID 0x0323 only
 
-**Unique 2.0.4.4 scroll package** (`DriverVer 09/16/2026,2.0.4.4`) — **source only, not yet built or signed.** It carries two fixes over 2.0.4.3: the COL02 Input `0x90` battery read is no longer swallowed by the ACL scratch diversion, and every dragging contact emits wheel notches again (default detent `ScrollStep` 8 -> **16**). **2026-09-15 hardware (the signed 2.0.4.3 build):** pointer + **2-finger** surface scroll + battery `0x90`. 1-finger glass does not scroll. Detent is the registry tunable `ScrollStep`. Earlier dated evidence for the 2.0.4.1 build is in `CHECKPOINT-2026-09-01-SCROLL.md`.
+**Unique 2.0.4.5 scroll package** (`DriverVer 09/17/2026,2.0.4.5`) — **source only, not yet built or signed.** 2.0.4.5 adds one fix over 2.0.4.4: the HID control channel is learned from device-initiated reconnects (`BRB_L2CA_OPEN_CHANNEL_RESPONSE`) as well as host-initiated opens, which keeps the battery percent readable after an idle disconnect. 2.0.4.4 had carried two fixes over 2.0.4.3: the COL02 Input `0x90` battery read is no longer swallowed by the ACL scratch diversion, and every dragging contact emits wheel notches again (default detent `ScrollStep` 8 -> **16**). **2026-09-15 hardware (the signed 2.0.4.3 build):** pointer + **2-finger** surface scroll + battery `0x90`. 1-finger glass does not scroll. Detent is the registry tunable `ScrollStep`. Earlier dated evidence for the 2.0.4.1 build is in `CHECKPOINT-2026-09-01-SCROLL.md`.
 
 **Other PCs ($0):** `Setup-Community.cmd` (testsigning, Secure Boot off). **How to help test:** `COMMUNITY-TESTING.md`. Status / leftovers: `STATUS.md`. Ship plan: `SHIPPING.md`. Developer path: thumb `16940C0F` + `Install-KMDF.cmd`.
 
@@ -17,27 +17,27 @@ was a hardlink. Restore needed Safe Mode takeown. This package uses a **new INF 
 
 | Filename | FileVersion | Role |
 |----------|-------------|------|
-| **`MagicMouseDriver.sys`** | not 2.0.4.4 | **Apr 30 live / restore name only.** SHA `AD5D244B…`. Do not ship a second copy. |
-| **`MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys`** | not 2.0.4.4 | Package label for that pointer-only binary. |
+| **`MagicMouseDriver.sys`** | not 2.0.4.5 | **Apr 30 live / restore name only.** SHA `AD5D244B…`. Do not ship a second copy. |
+| **`MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys`** | not 2.0.4.5 | Package label for that pointer-only binary. |
 | **`MagicMouseDriver-kmdf-may20-pointerdead-559B136A.sys`** | 2.0.2.0 | Pointer-dead. Refuse. |
-| **`MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys`** | **2.0.4.4** | **Canonical scroll artifact** after freeze-hash. |
-| **`MagicMouseDriver-kmdf-204-scroll.sys`** | **2.0.4.4** | INF dest / ServiceBinary (same bytes as the sha8 file). |
+| **`MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys`** | **2.0.4.5** | **Canonical scroll artifact** after freeze-hash. |
+| **`MagicMouseDriver-kmdf-204-scroll.sys`** | **2.0.4.5** | INF dest / ServiceBinary (same bytes as the sha8 file). |
 | **`applewirelessmouse-patched-pathA-SHIPBLOCKER.sys`** | PATH-A v1 | **SHIPBLOCKER.** Never this product. |
 
 Do not install PATH-A. Do not install May 20. Do not install SHA `845435CE…`. No dual-filter.
 
-## Release identity — 2.0.4.4 (source), 2.0.4.3 (last signed)
+## Release identity — 2.0.4.5 (source), 2.0.4.3 (last signed)
 
-| Field | 2.0.4.4 — this tree | 2.0.4.3 — last built/signed/installed |
+| Field | 2.0.4.5 — this tree | 2.0.4.3 — last built/signed/installed |
 |-------|---------------------|---------------------------------------|
-| DriverVer | `09/16/2026,2.0.4.4` | `09/15/2026,2.0.4.3` |
+| DriverVer | `09/17/2026,2.0.4.5` | `09/15/2026,2.0.4.3` |
 | Unsigned freeze SHA256 | not built yet | `25A3287AE7FBF62873354B71F32B16F7DC47CEA65C165C760A9AFBC28C74F6B2` (26112 bytes) |
 | Signed `.sys` SHA256 | not signed yet | `0CC4458B2D70C58BDFB89AD3C4D5BCDB594D6EE34DEFD0E6C831E56FE22540ED` |
 | Cert thumb | `16940C0F` (private key on the PC, never in git) | `16940C0F` |
 | Diag | default `ScrollStep=16` | measured `ScrollStep=8` |
 
 The 2.0.4.3 hashes above are the only ones that describe a real build of this package so far;
-2.0.4.4 gets its own freeze hash when a Windows host compiles it. `AD5D244B…` is the Apr 30
+2.0.4.5 gets its own freeze hash when a Windows host compiles it. `AD5D244B…` is the Apr 30
 restore baseline and `845435CE…` is the refused 2.0.4.0 package.
 
 ## Install (signed pnputil only)

@@ -471,6 +471,64 @@ def test_c_source_acl_contract(run: _Run) -> None:
     )
 
 
+def test_c_source_control_channel_learned_both_ways(run: _Run) -> None:
+    """Fail-closed vs Driver.c: the control channel must be learned from
+    device-initiated reconnects, not only host-initiated opens.
+
+    The diversion gate alone does not keep the battery readable. The only path
+    that makes this filter transparent to the control channel is the
+    pass-through taken when an inbound ACL transfer's ChannelHandle equals
+    ctx->MtControlHandle. That handle was learned solely from
+    BRB_L2CA_OPEN_CHANNEL - the HOST-initiated open - while an Apple mouse
+    coming back from an idle drop reconnects on its own and arrives as
+    BRB_L2CA_OPEN_CHANNEL_RESPONSE. With that case unhandled the handle stays
+    NULL for the life of the connection, every control-channel read is
+    processed by the filter, and GET_REPORT(Input, 0x90) is destroyed.
+
+    Measured on hardware 2026-09-17 with the gate fix already installed and
+    2.0.4.4 confirmed live: the wire carried A1 90 04 10 (0x10 = 16%) on every
+    one of 112 captured frames while userspace read 90 00 00. Deleting either
+    BRB type from the request intercept or from OnOpenChannelComplete must
+    turn this red.
+    """
+    if not DRV_C.is_file():
+        run.check("C_SOURCE_CONTROL_CHANNEL_LEARNED_BOTH_WAYS", False, f"missing {DRV_C}")
+        return
+
+    drv = DRV_C.read_text(encoding="utf-8")
+
+    # Both BRB types must appear, and RESPONSE must be paired with the control
+    # PSM rather than mentioned only in a comment.
+    n_open = len(re.findall(r"BrbHeader\.Type\s*==\s*BRB_L2CA_OPEN_CHANNEL(?![_A-Z])", drv))
+    n_resp = len(re.findall(r"BrbHeader\.Type\s*==\s*BRB_L2CA_OPEN_CHANNEL_RESPONSE", drv))
+    # Two sites must handle both: the request intercept and the completion.
+    both_sites = n_open >= 2 and n_resp >= 2
+    psm_guarded = (
+        re.search(
+            r"BRB_L2CA_OPEN_CHANNEL_RESPONSE[\s\S]{0,200}?"
+            r"BrbL2caOpenChannel\.Psm\s*==\s*MM_HID_CONTROL_PSM",
+            drv,
+        )
+        is not None
+    )
+    # The pass-through that the learned handle enables must still exist.
+    passthrough = (
+        re.search(
+            r"ChannelHandle\s*==\s*ctlHandle[\s\S]{0,200}?ForwardPassthrough",
+            drv,
+        )
+        is not None
+    )
+    ok = both_sites and psm_guarded and passthrough
+    run.check(
+        "C_SOURCE_CONTROL_CHANNEL_LEARNED_BOTH_WAYS",
+        ok,
+        f"OPEN_CHANNEL sites={n_open} OPEN_CHANNEL_RESPONSE sites={n_resp} "
+        f"(both>=2: {both_sites}); RESPONSE guarded by control PSM={psm_guarded}; "
+        f"ctlHandle passthrough present={passthrough}",
+    )
+
+
 def test_c_source_control_channel_gate(run: _Run) -> None:
     """Fail-closed vs Driver.c: the IN scratch diversion must not eat short reads.
 
@@ -553,6 +611,7 @@ def main() -> int:
     test_unique_scm(run)
     test_c_source_acl_contract(run)
     test_c_source_control_channel_gate(run)
+    test_c_source_control_channel_learned_both_ways(run)
     return 1 if run.failed else 0
 
 

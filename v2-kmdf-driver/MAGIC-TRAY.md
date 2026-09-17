@@ -24,4 +24,4 @@
 - Ship a second live-named `MagicMouseDriver.sys`.
 - Treat this PR as merge-ready before hardware proves pointer **and** scroll.
 
-Tray SELECT for 0323 should pull **`MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys`** (FileVersion 2.0.4.4; INF dest `MagicMouseDriver-kmdf-204-scroll.sys`). Leave **`MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys`** as the pointer-only baseline (live name `MagicMouseDriver.sys`). Refuse **`MagicMouseDriver-kmdf-may20-pointerdead-559B136A.sys`**. PATH-A stays in `v1-binary-patch/`.
+Tray SELECT for 0323 should pull **`MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys`** (FileVersion 2.0.4.5; INF dest `MagicMouseDriver-kmdf-204-scroll.sys`). Leave **`MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys`** as the pointer-only baseline (live name `MagicMouseDriver.sys`). Refuse **`MagicMouseDriver-kmdf-may20-pointerdead-559B136A.sys`**. PATH-A stays in `v1-binary-patch/`.

@@ -282,8 +282,22 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
         PIO_STACK_LOCATION sl = IoGetCurrentIrpStackLocation(irp);
         PBRB pBrb = (PBRB)sl->Parameters.Others.Argument1;
 
+        // Learn the HID control channel from BOTH directions of the open.
+        //
+        // BRB_L2CA_OPEN_CHANNEL is the HOST-initiated open (pnputil
+        // /restart-device, boot, re-pair). BRB_L2CA_OPEN_CHANNEL_RESPONSE is
+        // how a DEVICE-initiated reconnect arrives - the Apple mouse dropping
+        // its link on idle and coming back on its own - and it was never
+        // handled, so MtControlHandle stayed NULL for the entire life of that
+        // connection. With it NULL the pass-through at the ACL intercept below
+        // cannot fire, every control-channel read is processed by this filter,
+        // and the GET_REPORT(Input,0x90) response is destroyed: measured on
+        // hardware 2026-09-17, the wire carried A1 90 04 10 (16%) on every
+        // probe while userspace read 90 00 00. Both BRB types share the
+        // _BRB_L2CA_OPEN_CHANNEL layout, so one intercept serves both.
         if (pBrb != NULL &&
-            pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL &&
+            (pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL ||
+             pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL_RESPONSE) &&
             pBrb->BrbHeader.Length >= sizeof(struct _BRB_L2CA_OPEN_CHANNEL) &&
             pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM)
         {
@@ -635,7 +649,8 @@ OnOpenChannelComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
     PBRB pBrb = (reqCtx != NULL) ? (PBRB)reqCtx->Brb : NULL;
 
     if (NT_SUCCESS(status) && ctx != NULL && pBrb != NULL &&
-        pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL &&
+        (pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL ||
+         pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL_RESPONSE) &&
         pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM &&
         pBrb->BrbL2caOpenChannel.ChannelHandle != NULL)
     {
