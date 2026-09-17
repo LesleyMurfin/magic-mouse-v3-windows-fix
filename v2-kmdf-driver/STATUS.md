@@ -1,4 +1,4 @@
-# Status — unique 2.0.4.3 KMDF (PID 0323)
+# Status — unique 2.0.4.4 KMDF (PID 0323)
 
 Branch `ai/kmdf-204-unique-pkg-7748` (PR #4, **open**). This PC is the only lab. Community how-to-test: `COMMUNITY-TESTING.md`. Ship mechanics: `SHIPPING.md`.
 
@@ -16,7 +16,7 @@ Branch `ai/kmdf-204-unique-pkg-7748` (PR #4, **open**). This PC is the only lab.
 | Overlay | 135-byte memcpy; prefix `09 02 06 35 8D 35 8B 08 22 25 87` |
 | ACL | HidBth IN cap 9; scratch to see 23–31 byte `A1 12`; write 8-byte `0x12` back |
 | Bind | oem50, SCM `MagicMouseDriver204Scroll`, dest `MagicMouseDriver-kmdf-204-scroll.sys` |
-| Loaded SHA | signed `0CC4458B2D70C58BDFB89AD3C4D5BCDB594D6EE34DEFD0E6C831E56FE22540ED` 2.0.4.3 / unsigned freeze `25A3287AE7FBF62873354B71F32B16F7DC47CEA65C165C760A9AFBC28C74F6B2` / thumb **16940C0F** |
+| Loaded SHA | **2.0.4.3** (2.0.4.4 is source-only, unbuilt): signed `0CC4458B2D70C58BDFB89AD3C4D5BCDB594D6EE34DEFD0E6C831E56FE22540ED` / unsigned freeze `25A3287AE7FBF62873354B71F32B16F7DC47CEA65C165C760A9AFBC28C74F6B2` / thumb **16940C0F** |
 | Previous good | signed `9901390E…` 2.0.4.1 — rollback stage `C:\mm-dev-queue\kmdf-204-sign\` |
 | oem16 | `AD5D244B` **not** overwritten |
 | After bind | `HidD_SetFeature(F1)` → HidBth 4-byte `0x53` |

@@ -1,12 +1,12 @@
-# Shipping — unique 2.0.4.3 (PID 0323)
+# Shipping — unique 2.0.4.4 (PID 0323)
 
 This PC is the only lab. Do not lose the restore package.
 
-## What is proven (2026-09-16, current package)
+## What is proven (2026-09-16, last signed package 2.0.4.3)
 
 | | |
 |--|--|
-| Version | **2.0.4.3** — `DriverVer 09/15/2026,2.0.4.3` |
+| Version | source **2.0.4.4** — `DriverVer 09/16/2026,2.0.4.4`, **not yet built or signed** (adds the COL02 `0x90` battery fix and per-contact scroll notches); last built/signed/installed **2.0.4.3** — `DriverVer 09/15/2026,2.0.4.3` |
 | Product on **this** PC | Pointer, battery `0x90`, **2-finger** Wheel/AC Pan, 1-finger glass does not scroll |
 | Loaded | dest `MagicMouseDriver-kmdf-204-scroll.sys` signed SHA256 `0CC4458B2D70C58BDFB89AD3C4D5BCDB594D6EE34DEFD0E6C831E56FE22540ED`, cert **16940C0F** |
 | Unsigned freeze | `25A3287AE7FBF62873354B71F32B16F7DC47CEA65C165C760A9AFBC28C74F6B2` (26112 bytes) |
@@ -35,7 +35,8 @@ C:\mm-dev-queue\kmdf-204-sign\
 
 Reload: `kmdf-204-pnputil-once.ps1` (unique INF only, then F1). Its `-Stage` defaults to that
 2.0.4.1 folder, so a bare run **is** the rollback; pass `-Stage C:\mm-dev-queue\kmdf-204-sign-2043`
-to reload the current 2.0.4.3 package. Do not `Copy-Item` onto System32. Do not delete oem16.
+to reload the 2.0.4.3 package (the last one that exists as a binary; 2.0.4.4 has no stage folder
+until it is built). Do not `Copy-Item` onto System32. Do not delete oem16.
 
 This PC: testsigning **Yes**, Secure Boot **off**, Memory integrity **off**. `16940C0F` HasPrivateKey=True.
 

@@ -1,6 +1,6 @@
-# Community testing — Magic Mouse v3 (PID 0323) KMDF 2.0.4.3
+# Community testing — Magic Mouse v3 (PID 0323) KMDF 2.0.4.4
 
-Help wanted. This is a **test-signed kernel filter**, not WHQL. It will **not** load on a stock PC with Secure Boot on. The package under test is **2.0.4.3** (`DriverVer 09/15/2026,2.0.4.3`); anything older is not the build being tested.
+Help wanted. This is a **test-signed kernel filter**, not WHQL. It will **not** load on a stock PC with Secure Boot on. The package under test is **2.0.4.4** (`DriverVer 09/16/2026,2.0.4.4`); anything older is not the build being tested.
 
 ## What should work today
 

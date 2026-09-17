@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 //
-// FileVersion 2.0.4.4 - control-channel 1-byte IN reads are no longer diverted into the ACL scratch (COL02 Input 0x90 battery fix), plus RemainingBufferSize restore.
+// FileVersion 2.0.4.4 - two fixes: (1) battery - control-channel 1-byte IN reads are no longer diverted into the ACL scratch, so the COL02 Input 0x90 GET_REPORT response survives (plus RemainingBufferSize restore); (2) scroll - every dragging contact emits its own wheel notches again (the single-reference-finger rule went silent whenever the lowest-id contact rested), with the default detent MM_SCROLL_STEP raised 8 -> 16 to keep sensitivity.
 // FileVersion 2.0.4.3 - single-reference-finger scroll detent + registry-tunable ScrollStep; kernel HID SetFeature-via-sibling-PDO path removed (broke pointer+scroll live as 2.0.4.2).
 // Canonical artifact: MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys
 // INF dest / ServiceBinary: MagicMouseDriver-kmdf-204-scroll.sys
