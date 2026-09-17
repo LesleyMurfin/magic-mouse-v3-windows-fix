@@ -79,36 +79,23 @@ AccumulateSurfaceScroll(
     if (step < MM_SCROLL_STEP_MIN) { step = MM_SCROLL_STEP; }
     if (step > MM_SCROLL_STEP_MAX) { step = MM_SCROLL_STEP_MAX; }
 
-    // Emit notches from ONE reference finger, not from every touch point.
+    // Every contact in DRAG with a valid anchor emits its own notches.
     //
-    // 2026-09-15: user reported scroll "too sensitive" all week. The loop
-    // below used to emit for each finger independently, so a normal
-    // two-finger drag produced ~2 notches per `step` of travel - the detent
-    // was effectively half its configured value, and a three-finger rest
-    // made it worse. `down < 2` only gates entry; it never stopped the
-    // double count. One finger drives the wheel; the others only keep their
-    // anchors current so handing over on lift-off is seamless.
+    // 2026-09-16: 2.0.4.3 tried to halve sensitivity by nominating ONE
+    // reference finger (lowest DRAG slot with a valid anchor) and letting the
+    // others only re-anchor. That killed scroll outright on live hardware:
+    // whenever the lowest-id contact is resting or moving slower than the
+    // detent, the reference emits nothing while the finger that is actually
+    // moving has its travel discarded by the re-anchor. Measured on the 01:44
+    // build: RID 0x12 +694 reports over 15 active seconds produced 0 Wheel
+    // and 0 AC Pan. Per-finger emission produced 24 Wheel events (22 notches)
+    // over 84 active seconds on the same glass.
     //
-    // Reference = lowest active slot id in DRAG with a valid anchor. Ids are
-    // hardware-stable for the life of a contact, so this stays on the same
-    // physical finger for the whole gesture.
-    ULONG refId = MM_TOUCH_SLOTS;
-
-    for (ULONG i = 0; i < nTouches; i++)
-    {
-        ULONG off = MM2_HEADER_LEN + i * MM2_TOUCH_BYTES;
-        if (off + MM2_TOUCH_BYTES > inLen) { break; }
-
-        PUCHAR t = in + off;
-        ULONG id = ((ULONG)t[6] << 2 | ((ULONG)t[5] >> 6)) & 0xFu;
-        if (id >= MM_TOUCH_SLOTS) { continue; }
-
-        UCHAR st = (UCHAR)(t[7] & TOUCH_STATE_MASK);
-        if (st == TOUCH_STATE_DRAG && ctx->TouchAnchorValid[id] && id < refId)
-        {
-            refId = id;
-        }
-    }
+    // The ~2x sensitivity the reference rule was introduced to fix is handled
+    // by doubling the default detent instead (MM_SCROLL_STEP 8 -> 16 in
+    // GestureEngine.h), which is the registry tunable users can already move.
+    // Measured rejects: a largest-delta reference and a per-report notch cap
+    // both produce 15 notches on a skewed-speed drag where detent 16 gives 7.
 
     for (ULONG i = 0; i < nTouches; i++)
     {
@@ -144,8 +131,9 @@ AccumulateSurfaceScroll(
             continue;
         }
 
-        // TWO_FINGER + SCROLL_STEP_8 baseline (detent = registry ScrollStep,
-        // default MM_SCROLL_STEP 8): one finger (START or DRAG) never emits
+        // TWO_FINGER + SCROLL_STEP_8 baseline, the 2026-09-01 proven-working
+        // configuration (detent = registry ScrollStep, default
+        // MM_SCROLL_STEP, now 16): one finger (START or DRAG) never emits
         // Wheel. Refresh the anchor so one-finger travel is discarded instead
         // of accumulating into a spurious notch when a second finger lands and
         // the two-finger step calculation begins.
@@ -159,18 +147,34 @@ AccumulateSurfaceScroll(
         INT stepY = (INT)ctx->TouchAnchorY[id] - y;
         INT stepX = (INT)ctx->TouchAnchorX[id] - x;
 
-        // Non-reference fingers: re-anchor on the same threshold the
-        // reference uses, so whichever finger takes over next starts from a
-        // fresh anchor instead of a stale one that would dump a burst of
-        // notches at hand-over.
+        // Per-contact detent: each finger has its own anchor, emits when its
+        // own travel crosses `step`, and only then advances its own anchor.
+        // No cross-finger state, so a resting or slow contact can never mute
+        // a moving one and hand-over on lift-off stays seamless.
+        //
+        // ScrollTravelUnits / ScrollNotchCount are the Diag counter pair
+        // (published by Driver.c). The Diag block carries counters only - no
+        // coordinates, no travel accumulator - so without these a hand resting
+        // motionless on the glass (TOUCH_STATE_DRAG at ~65 reports/s and
+        // legitimately zero wheel) is indistinguishable from a finger actually
+        // sliding. Travel climbing while notches stay 0 is precisely the
+        // reference-finger bug; notches climbing while raw input shows no wheel
+        // is loss downstream of this filter; flat travel means the user is not
+        // scrolling at all. Travel counts the touch units consumed at a
+        // threshold crossing, notches counts every +1/-1 emitted on either
+        // axis. Wrapping ULONG adds under the lock this function already holds.
         if (stepY >= (INT)step || stepY <= -(INT)step)
         {
-            if (id == refId) { *outWheel += (stepY > 0) ? 1 : -1; }
+            *outWheel += (stepY > 0) ? 1 : -1;
+            ctx->ScrollTravelUnits += (ULONG)(stepY < 0 ? -stepY : stepY);
+            ctx->ScrollNotchCount++;
             ctx->TouchAnchorY[id] = (INT16)y;
         }
         if (stepX >= (INT)step || stepX <= -(INT)step)
         {
-            if (id == refId) { *outHWheel += (stepX > 0) ? -1 : 1; }
+            *outHWheel += (stepX > 0) ? -1 : 1;
+            ctx->ScrollTravelUnits += (ULONG)(stepX < 0 ? -stepX : stepX);
+            ctx->ScrollNotchCount++;
             ctx->TouchAnchorX[id] = (INT16)x;
         }
     }

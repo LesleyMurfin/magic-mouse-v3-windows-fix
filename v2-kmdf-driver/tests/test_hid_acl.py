@@ -311,11 +311,13 @@ def test_wheel_notch_across_reports(run: _Run) -> None:
     """WHEEL_NOTCH_ACROSS_REPORTS: a notch needs the anchor of a prior report.
 
     One DEVICE_CONTEXT, two 14+16 reports through the ACL path: the first
-    lands two contacts (anchors only), the second drags both by the detent so
-    the reference finger emits one notch into byte 7. The same second report
-    replayed against a device that never saw the first must emit nothing —
-    which is why a per-report context makes any Wheel assertion unfalsifiable.
+    lands two contacts (anchors only), the second drags both by one detent, so
+    each dragging contact emits its own notch into byte 7. The same second
+    report replayed against a device that never saw the first must emit
+    nothing — which is why a per-report context makes any Wheel assertion
+    unfalsifiable.
     """
+    contacts = 2
     ctx = Ctx()
     land = make_mt(
         [
@@ -350,7 +352,8 @@ def test_wheel_notch_across_reports(run: _Run) -> None:
         and rw_drag
         and n_drag == MM_MOUSE_REPORT_LEN
         and notch[0] == MM_REPORT_ID_MOUSE
-        and notch[7] == 1  # Wheel: one notch per detent of travel
+        # Wheel: one notch per contact that crossed the detent.
+        and notch[7] == contacts
         and notch[6] == 0  # AC Pan: no horizontal travel
         and cold[7] == 0  # no persisted anchor → no notch
         and cold[6] == 0

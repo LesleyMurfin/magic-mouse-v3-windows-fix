@@ -33,13 +33,21 @@
 
 // Default surface drag distance (touch units) per Wheel detent.
 // Hardware 2026-09-01: 224 (Linux default) produced zero wheel on live 0323.
-// 8 is the proven-working floor from the TWO_FINGER + SCROLL_STEP_8 baseline.
+// 8 is the proven-working per-finger floor from the TWO_FINGER +
+// SCROLL_STEP_8 baseline.
+//
+// 2026-09-16: doubled 8 -> 16. Every dragging contact emits its own notches
+// again (AccumulateSurfaceScroll), so a two-finger drag banks two notches per
+// `step` of travel; 16 restores the per-gesture feel of 8 without the
+// single-reference-finger rule, which went silent - and killed scroll on
+// hardware - whenever the lowest-id contact rested or moved slower than the
+// detent. Inside [MM_SCROLL_STEP_MIN, MM_SCROLL_STEP_MAX] below.
 //
 // This is only the DEFAULT. The live value is ctx->ScrollStep, read from
 // Services\MagicMouseDriver204Scroll\Parameters!ScrollStep so sensitivity can
 // be tuned with a device restart instead of a rebuild+sign+reinstall of the
 // .sys. Higher value = coarser detent = less sensitive.
-#define MM_SCROLL_STEP 8
+#define MM_SCROLL_STEP 16
 
 // Clamp bounds for the tunable. MIN 1 keeps the value physically meaningful
 // (0 would emit a notch on every report); MAX 224 is the Linux default, i.e.

@@ -54,22 +54,22 @@ If 1-finger still scrolls, or 2-finger never scrolls, we need a Diag dump (below
 ### Scroll too sensitive or too sluggish?
 
 It is tunable — no rebuild, no reinstall. `ScrollStep` is how far (in touch units) you must drag
-per scroll notch, so **higher = less sensitive**. Default 8, valid `1`–`224`. Out of range is
-**not accepted**: values below `1` or above `224` leave the driver at the default `8`.
-`ScrollStep` is a `REG_DWORD` read as an unsigned 32-bit value, so a "negative" number arrives
-as a huge positive value and also loads the default.
+per scroll notch, so **higher = less sensitive**. Default **16**, valid `1`–`224`. Out-of-range
+values are corrected, not honoured: below `1` you get the default `16`, and anything above `224`
+is clamped to `224`. `ScrollStep` is a `REG_DWORD` read as an unsigned 32-bit value, so a
+"negative" number arrives as a huge positive one and also clamps to `224`.
 
 ```powershell
 # admin PowerShell, from the package directory
-scripts\mm-scroll-tune.ps1 -ScrollStep 16
+scripts\mm-scroll-tune.ps1 -ScrollStep 24
 ```
 
 It writes the value, restarts the 0323 device, re-sends F1, then prints what the driver actually
 loaded (`driver_ScrollStep`) so you can tell a real change from a silent no-op. Reference points on
-the original hardware: `8` is the proven default, and `224` (the Linux `hid-magicmouse` default)
-produced **zero** wheel — so treat the high end with suspicion and move in small steps. That fits
-the range check above: asking for anything over `224` leaves you at the default `8`, not on the
-detent that scrolled nothing here. A typo like `500` therefore loads the default.
+the original hardware: `8` was the proven per-finger detent, and `16` is the default now that
+**every** finger of a two-finger drag emits its own notches; `224` (the Linux `hid-magicmouse`
+default) produced **zero** wheel — so treat the high end with suspicion and move in small steps.
+A typo like `500` does not fail, it clamps to the `224` that scrolled nothing here.
 
 ## What to send if it fails
 

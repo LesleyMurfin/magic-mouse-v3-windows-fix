@@ -6,20 +6,23 @@ Linux mouse detent vs GestureEngine.c.
 Host model of AccumulateSurfaceScroll + TranslateMouse2ToHid lives in
 hostmodel.py and is shared with test_two_finger_scroll.py; the detent comes
 from #define MM_SCROLL_STEP in GestureEngine.h, never from a literal here.
-Token SCROLL_STEP_8 must sit next to the detent in GestureEngine.c.
-MM_SCROLL_STEP is 8 (live 0323).
+Token SCROLL_STEP_8 must sit next to the detent in GestureEngine.c: it names
+the 2026-09-01 proven-working baseline, whose 8 units is the PER-FINGER
+floor. MM_SCROLL_STEP is 16, twice that floor, because every dragging
+contact emits its own notches.
 
 The detent is the tunable ScrollStep (REG_DWORD under
-Services\\MagicMouseDriver204Scroll\\Parameters), default MM_SCROLL_STEP 8,
+Services\\MagicMouseDriver204Scroll\\Parameters), default MM_SCROLL_STEP,
 clamped to [MM_SCROLL_STEP_MIN 1, MM_SCROLL_STEP_MAX 224]. 224 is the clamp
 ceiling — the Linux default at which this hardware produced zero wheel — and
 is never the detent. The clamp is unsigned (ULONG): too low becomes the
-default 8, too high — including a negative REG_DWORD — becomes 224.
+default, too high — including a negative REG_DWORD — becomes 224.
 
-1-finger START/DRAG must not emit wheel at any |step|, including 8 and 20.
-down < 2 keeps the whole emit path gated: the contact's anchor is refreshed
-to the current position and nothing is banked. Wheel/AC Pan need two or more
-contacts down, and one reference finger emits for the whole gesture.
+1-finger START/DRAG must not emit wheel at any |step|: below the detent, at
+it, and well past it in both directions. down < 2 keeps the whole emit path
+gated: the contact's anchor is refreshed to the current position and nothing
+is banked. Wheel/AC Pan need two or more contacts down, and then every
+dragging contact emits on its own travel.
 Compact 8-byte 0x12 must not copy native in[6]/in[7].
 A report that fails the TranslateMouse2ToHid front gate is dropped whole:
 outLen 0, no output bytes, no anchor mutation.
@@ -156,19 +159,30 @@ def test_c_source(run: _Run) -> None:
         else "compact 8-byte path assigns in[6]/in[7] into wheel/hwheel (must leave 0)",
     )
     if not GESTURE_H.is_file():
-        run.check("MM_SCROLL_STEP_8", False, f"missing {GESTURE_H}")
+        run.check("MM_SCROLL_STEP_DEFAULT", False, f"missing {GESTURE_H}")
         return
     hdr = GESTURE_H.read_text(encoding="utf-8")
+    define = re.search(r"#define\s+MM_SCROLL_STEP\s+(\d+)\b", hdr)
+    # No reference finger: every dragging contact emits, so a two-finger
+    # drag banks two notches per detent of travel. The shipped default is
+    # therefore twice the 8-unit per-finger floor proven on live 0323.
+    per_finger_floor = 8
     has_step = (
-        re.search(r"#define\s+MM_SCROLL_STEP\s+8\b", hdr) is not None
-        and MM_SCROLL_STEP == 8
+        define is not None
+        and int(define.group(1)) == MM_SCROLL_STEP
+        and MM_SCROLL_STEP == 2 * per_finger_floor
     )
     run.check(
-        "MM_SCROLL_STEP_8",
+        "MM_SCROLL_STEP_DEFAULT",
         has_step,
-        "GestureEngine.h MM_SCROLL_STEP 8 (live 0323 detent; host model reads it)"
+        f"GestureEngine.h MM_SCROLL_STEP {MM_SCROLL_STEP} = 2 x the "
+        f"{per_finger_floor}-unit per-finger floor (host model reads the header)"
         if has_step
-        else "GestureEngine.h missing #define MM_SCROLL_STEP 8",
+        else (
+            "GestureEngine.h MM_SCROLL_STEP "
+            f"{define.group(1) if define else 'absent'}; want "
+            f"{2 * per_finger_floor} (2 x the {per_finger_floor}-unit per-finger floor)"
+        ),
     )
 
 def test_scroll_step_clamp(run: _Run) -> None:
@@ -220,30 +234,68 @@ def test_one_slot_drag_thresholds(run: _Run) -> None:
         )
 
 
-def two_slot_drag(step_y: int) -> tuple[Mouse2Result, int]:
+def two_slot_drag_travel(distance: int, increment: int = 1) -> tuple[int, int, int]:
+    """Drag two pre-anchored contacts `distance` units in y, `increment`/report.
+
+    Both slots are DRAG for the whole gesture, so down is 2 on every report
+    and travel is the only variable. Returns (summed wheel, summed AC Pan,
+    report count); report count -1 marks a rejected report.
+    """
     ctx = Ctx()
-    ctx.TouchAnchorValid[0] = True
-    ctx.TouchAnchorValid[1] = True
-    ctx.TouchAnchorX[0] = 0
-    ctx.TouchAnchorY[0] = 0
-    ctx.TouchAnchorX[1] = 10
-    ctx.TouchAnchorY[1] = 0
-    drag0 = pack_touch(0, -step_y, 0, TOUCH_STATE_DRAG)
-    drag1 = pack_touch(10, -step_y, 1, TOUCH_STATE_DRAG)
-    inp = make_mt([drag0, drag1])
-    return translate_mouse2_to_hid(inp, ctx), len(inp)
+    for tid, x in ((0, 0), (1, 10)):
+        ctx.TouchAnchorValid[tid] = True
+        ctx.TouchAnchorX[tid] = x
+        ctx.TouchAnchorY[tid] = 0
+    wheel = 0
+    hwheel = 0
+    reports = 0
+    y = 0
+    while y < distance:
+        y = min(y + increment, distance)
+        inp = make_mt(
+            [
+                pack_touch(0, -y, 0, TOUCH_STATE_DRAG),
+                pack_touch(10, -y, 1, TOUCH_STATE_DRAG),
+            ]
+        )
+        if len(inp) != MM2_HEADER_LEN + 2 * MM2_TOUCH_BYTES:
+            return 0, 0, -1
+        res = translate_mouse2_to_hid(inp, ctx)
+        if not res.ok or res.out_len != MM_MOUSE_REPORT_LEN:
+            return 0, 0, -1
+        wheel += i8(res.payload[7])
+        hwheel += i8(res.payload[6])
+        reports += 1
+    return wheel, hwheel, reports
 
 
-def test_two_finger_emits(run: _Run) -> None:
-    res, n = two_slot_drag(MM_SCROLL_STEP)
-    wheel = i8(res.payload[7])
-    ok = res.ok and n == MM2_HEADER_LEN + 2 * MM2_TOUCH_BYTES and wheel == 1
+def test_two_finger_travel_notches(run: _Run) -> None:
+    """Two-finger drag banks travel / detent notches per dragging contact.
+
+    This is the contract a user feels: notches per unit of travel, stated as
+    the detent relationship instead of a constant. Each contact carries its
+    own anchor and its own detent, so a drag of `distance` yields
+    distance // MM_SCROLL_STEP notches from each of the two contacts.
+    Driving one unit per report also proves the detent accumulates across
+    reports rather than needing a single oversized step.
+    """
+    contacts = 2
+    notches_per_contact = 5
+    distance = MM_SCROLL_STEP * notches_per_contact
+    wheel, hwheel, reports = two_slot_drag_travel(distance)
+    want = contacts * (distance // MM_SCROLL_STEP)
+    ok = reports == distance and wheel == want and hwheel == 0
     run.check(
-        "TWO_FINGER_STEP_NONZERO",
+        "TWO_FINGER_TRAVEL_NOTCHES",
         ok,
-        "14+16 two-slot DRAG emits exactly one notch per step (one reference finger)"
+        f"2-finger drag of {distance} units over {reports} reports → wheel "
+        f"{wheel} = {contacts} contacts x {distance}/{MM_SCROLL_STEP} detent, AC Pan 0"
         if ok
-        else f"2-finger step={MM_SCROLL_STEP} wheel={wheel} (want 1) len={n}",
+        else (
+            f"2-finger drag of {distance} units gave wheel={wheel} "
+            f"hwheel={hwheel} over {reports} reports (want wheel {want} = "
+            f"{contacts} x {distance}//{MM_SCROLL_STEP}, AC Pan 0)"
+        ),
     )
 
 
@@ -314,7 +366,7 @@ def main() -> int:
     test_c_source(run)
     test_scroll_step_clamp(run)
     test_one_slot_drag_thresholds(run)
-    test_two_finger_emits(run)
+    test_two_finger_travel_notches(run)
     test_compact_garbage_no_wheel(run)
     test_front_gate_rejects(run)
     return 1 if run.failed else 0

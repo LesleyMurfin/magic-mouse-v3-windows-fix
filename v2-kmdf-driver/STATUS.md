@@ -10,7 +10,7 @@ Branch `ai/kmdf-204-unique-pkg-7748` (PR #4, **open**). This PC is the only lab.
 | Battery | COL02 `HidD_GetInputReport(0x90)` |
 | Surface scroll | **2-finger** → HID Wheel + AC Pan |
 | 1-finger on glass | Does **not** scroll (`TWO_FINGER` / `down < 2`) |
-| Detent | One **reference finger** (lowest DRAG slot) emits; `ScrollStep` tunable, default **8**, clamp `[1,224]` (224 produced zero wheel) |
+| Detent | **Every** dragging contact emits its own notches; `ScrollStep` tunable, default **16** (source, unbuilt), clamp `[1,224]` (224 produced zero wheel) |
 | Sensitivity tuning | `Parameters!ScrollStep` + device restart via `scripts/mm-scroll-tune.ps1` — no rebuild/re-sign/reinstall |
 | Reconnect + boot | `MmAutoF1Watcher` arrival events **and** startup reconcile |
 | Overlay | 135-byte memcpy; prefix `09 02 06 35 8D 35 8B 08 22 25 87` |
@@ -220,12 +220,13 @@ via `$script:MmF1Ok`, not a return value — the log lines share the function's 
 normal two-finger drag emitted **two** notches per `MM_SCROLL_STEP` of travel: the detent was
 effectively 4, not 8. `down < 2` gates entry only; it never stopped the double count.
 
-2.0.4.3: one **reference finger** (lowest active DRAG slot, ids are stable for a contact's life)
-drives the wheel. Other contacts still re-anchor on the same threshold, so whichever finger takes
-over at lift-off starts fresh instead of dumping a burst of notches from a stale anchor.
+2.0.4.3 answered it with one **reference finger** (lowest active DRAG slot, ids are stable for a
+contact's life) driving the wheel while the other contacts only re-anchored. **That answer was
+wrong and is reverted — see the 2026-09-16 entry below.**
 
 `ScrollStep` is now read from `Services\MagicMouseDriver204Scroll\Parameters` (REG_DWORD, clamp
-`[1,224]`, default 8) and echoed into `Diag!ScrollStep`, so **sensitivity is tunable without a
+`[1,224]`, default `MM_SCROLL_STEP` — 8 in the 2.0.4.3 build, **16** in source since 2026-09-16)
+and echoed into `Diag!ScrollStep`, so **sensitivity is tunable without a
 rebuild**: `scripts/mm-scroll-tune.ps1 -ScrollStep N` writes the value, restarts the device,
 re-runs F1, and fails loudly if the driver still reports the old number. Out-of-range values fall
 back to the proven default rather than being honoured.
@@ -234,6 +235,36 @@ Installed live 2026-09-16: signed `0CC4458B…`, `dest_version=2.0.4.3`, oem16 s
 four PnP nodes `CM_PROB_NONE`, `LastAclReceived=23`, `LastAclCapacity=9`,
 `SdpPatchSuccess=1`, `Diag!ScrollStep=8`. The rebuilt package passed the hardware smoke path;
 no new visual user confirmation was recorded in this pass.
+
+### Scroll died on the reference finger — reverted 2026-09-16
+
+The 2.0.4.3 reference-finger rule (above) emitted only from the lowest DRAG slot with a valid
+anchor. Every other contact still re-anchored, so its travel was **discarded**. Whenever the
+lowest-id contact was resting or moving slower than the detent, the finger that was actually
+sliding emitted nothing: scroll was dead, not merely coarse.
+
+Measured on hardware, on the shipped binary: `Rid12Count` **+694 over 15 active seconds → 0
+wheel, 0 hwheel** (an earlier +64 over 5 s also gave 0). The restored per-finger logic (17:45
+`08E91E37` binary) gave `Rid12Count` **+5714 over 84 active seconds → 24 wheel events** (sum
++2640, 22 notches) and 8 hwheel (sum -720).
+
+Fix in source: `AccumulateSurfaceScroll` has no reference finger at all — every contact in
+`TOUCH_STATE_DRAG` with a valid anchor emits on its own travel and advances only its own anchor.
+The ~2x sensitivity the reference rule was aimed at is handled by doubling the default detent
+instead, `MM_SCROLL_STEP` 8 → **16** in `GestureEngine.h` (still the registry tunable). Measured
+rejects: a largest-delta reference and a per-report notch cap both produce **15** notches on a
+skewed-speed drag where detent 16 produces **7**.
+
+New Diag counter pair accumulated in `AccumulateSurfaceScroll`: `ScrollTravelUnits` (touch units
+consumed at threshold crossings) and `ScrollNotchCount` (every ±1 emitted on either axis). Diag
+publishes counters only — no coordinates — so without them a hand resting motionless on the glass
+(DRAG at ~65 reports/s, legitimately zero wheel) is indistinguishable from a finger sliding.
+Travel climbing while notches stay 0 is the reference-finger bug; notches climbing while raw
+input shows no wheel is loss downstream of the filter; flat travel means nobody is scrolling.
+
+Source only: this host has no WDK/MSVC, so nothing here has been compiled, signed or installed.
+Host gates: `test_two_finger_scroll.py` adds `STATIONARY_LOW_ID_STILL_SCROLLS` and
+`PINCH_EMITS_NOTHING`, both red against `c3aff5d` (0 wheel and +7 wheel respectively).
 
 ### The 2.0.4.2 kernel F1 path is gone, not parked
 
@@ -267,9 +298,11 @@ Windows/macOS **gestures** (no PTP). v1 `0x030D` / v2 `0x0269`. PATH-A (`0xD1`).
    3/3 overnight 09-08) and boot (startup reconcile, proven live 09-15). The in-kernel version is
    **deleted**, and the build refuses to compile it back in. `MagicMouseTray/DeviceEnable.cs`
    calling F1 directly is optional belt-and-suspenders, not required.
-5. **Scroll sensitivity — SOLVED, and tunable.** Fixed the per-touch-point double count in 2.0.4.3;
-   `ScrollStep` (default 8) is live-tunable via `scripts/mm-scroll-tune.ps1`, no reinstall. If the
-   user ever wants it coarser/finer, that is a one-command change, not a build.
+5. **Scroll sensitivity — handled by the detent, not by a reference finger.** The 2.0.4.3
+   reference finger killed scroll and is reverted (2026-09-16); the double count is answered by
+   the doubled default detent `MM_SCROLL_STEP` **16**. `ScrollStep` stays live-tunable via
+   `scripts/mm-scroll-tune.ps1`, no reinstall, so coarser/finer is a one-command change, not a
+   build. Source only — not yet compiled or installed.
 6. Virtual PTP (gestures) — new spec, not this overlay.
 7. EV + Partner Center if Secure Boot “just works” is the goal.
 8. Keep PR #4 draft until swap-test. Do not merge PR #3.

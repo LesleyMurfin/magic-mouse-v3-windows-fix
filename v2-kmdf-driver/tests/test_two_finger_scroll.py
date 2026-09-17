@@ -9,9 +9,11 @@ is #define MM_SCROLL_STEP from GestureEngine.h, not a literal here.
 
 1-finger START/DRAG must not emit Wheel/AC Pan, and while down < 2 the active
 DRAG anchor is refreshed to the current position, so one-finger travel is
-discarded instead of banked into a notch when a second finger lands. Token
-TWO_FINGER must sit next to down < 2 in GestureEngine.c. Compact 8-byte 0x12
-must not copy native in[6]/in[7]. No WDK. No .sys load.
+discarded instead of banked into a notch when a second finger lands. With two
+or more down, every dragging contact emits on its own travel: a resting or
+slow contact cannot mute a moving one, and opposed travel (a pinch) cancels.
+Token TWO_FINGER must sit next to down < 2 in GestureEngine.c. Compact 8-byte
+0x12 must not copy native in[6]/in[7]. No WDK. No .sys load.
 """
 from __future__ import annotations
 
@@ -233,6 +235,121 @@ def test_two_finger_start_drag_may_wheel(run: _Run) -> None:
     )
 
 
+def test_stationary_low_id_still_scrolls(run: _Run) -> None:
+    """A resting low-id contact must not mute the finger that is moving.
+
+    Both slots are DRAG with valid anchors: slot 0 does not move at all and
+    slot 1 travels well past the detent. The 2.0.4.3 reference-finger rule
+    nominated the lowest DRAG slot, so this frame emitted nothing — the live
+    scroll regression, measured as 0 wheel over 694 reports on hardware.
+    The Diag counter pair must move with the emission: travel records the
+    units consumed and notches the emitted detent.
+    """
+    travel = 60
+    ctx = Ctx()
+    for tid, x in ((0, 0), (1, 40)):
+        ctx.TouchAnchorValid[tid] = True
+        ctx.TouchAnchorX[tid] = x
+        ctx.TouchAnchorY[tid] = 0
+    inp = make_mt(
+        [
+            pack_touch(0, 0, 0, TOUCH_STATE_DRAG),
+            pack_touch(40, -travel, 1, TOUCH_STATE_DRAG),
+        ]
+    )
+    res = translate_mouse2_to_hid(inp, ctx)
+    wheel = i8(res.payload[7])
+    hwheel = i8(res.payload[6])
+    ok = (
+        res.ok
+        and wheel != 0
+        and ctx.ScrollTravelUnits != 0
+        and ctx.ScrollNotchCount != 0
+    )
+    run.check(
+        "STATIONARY_LOW_ID_STILL_SCROLLS",
+        ok,
+        f"slot 0 stationary, slot 1 moved {travel} (detent {MM_SCROLL_STEP}) "
+        f"→ wheel {wheel} non-zero, Diag travel {ctx.ScrollTravelUnits} "
+        f"notches {ctx.ScrollNotchCount}"
+        if ok
+        else (
+            f"slot 0 stationary muted slot 1's {travel} units: wheel={wheel} "
+            f"hwheel={hwheel} travel={ctx.ScrollTravelUnits} "
+            f"notches={ctx.ScrollNotchCount} (detent {MM_SCROLL_STEP}; every "
+            "DRAG contact must emit)"
+        ),
+    )
+
+
+def test_pinch_emits_nothing(run: _Run) -> None:
+    """Opposed two-finger travel is a pinch, not a scroll: net Wheel 0.
+
+    Both contacts travel the same distance in opposite y directions, one unit
+    per report. Each emits on its own travel, so the two notch streams have
+    opposite sign and cancel: every crossing report emits exactly 2 notches
+    (one per finger) while net Wheel stays 0. That is the whole point of the
+    Diag counter pair — the notch counter still climbs, so a pinch is
+    distinguishable from a hand resting motionless on the glass. The
+    reference-finger rule published only the lowest slot's stream and turned
+    this pinch into a full 7-notch scroll.
+    """
+    detents = 7
+    distance = MM_SCROLL_STEP * detents
+    ctx = Ctx()
+    for tid, x in ((0, 0), (1, 40)):
+        ctx.TouchAnchorValid[tid] = True
+        ctx.TouchAnchorX[tid] = x
+        ctx.TouchAnchorY[tid] = 0
+    wheel = 0
+    hwheel = 0
+    crossings = 0
+    per_crossing_ok = True
+    rejected = False
+    for moved in range(1, distance + 1):
+        before = ctx.ScrollNotchCount
+        inp = make_mt(
+            [
+                pack_touch(0, -moved, 0, TOUCH_STATE_DRAG),
+                pack_touch(40, moved, 1, TOUCH_STATE_DRAG),
+            ]
+        )
+        res = translate_mouse2_to_hid(inp, ctx)
+        if not res.ok:
+            rejected = True
+            break
+        wheel += i8(res.payload[7])
+        hwheel += i8(res.payload[6])
+        emitted = ctx.ScrollNotchCount - before
+        if emitted:
+            crossings += 1
+            # Both fingers cross on the same report, in opposite directions.
+            per_crossing_ok = per_crossing_ok and emitted == 2
+    ok = (
+        not rejected
+        and wheel == 0
+        and hwheel == 0
+        and crossings == detents
+        and per_crossing_ok
+        and ctx.ScrollNotchCount == 2 * detents
+        and ctx.ScrollTravelUnits == 2 * distance
+    )
+    run.check(
+        "PINCH_EMITS_NOTHING",
+        ok,
+        f"opposed {distance}-unit travel → net wheel 0, AC Pan 0, but Diag "
+        f"notches {ctx.ScrollNotchCount} (2 per crossing x {crossings}) and "
+        f"travel {ctx.ScrollTravelUnits}"
+        if ok
+        else (
+            f"pinch of {distance} units each way: wheel={wheel} "
+            f"hwheel={hwheel} crossings={crossings} (want {detents}, 2 notches "
+            f"each) notches={ctx.ScrollNotchCount} "
+            f"travel={ctx.ScrollTravelUnits} rejected={rejected}"
+        ),
+    )
+
+
 def test_compact_garbage_no_wheel(run: _Run) -> None:
     """Compact 8-byte 0x12 with garbage at [6]/[7] → wheel/hwheel 0."""
     inp = bytearray(MM2_COMPACT_LEN)
@@ -258,6 +375,8 @@ def main() -> int:
     test_one_finger_drag_no_wheel(run)
     test_one_finger_travel_not_banked(run)
     test_two_finger_start_drag_may_wheel(run)
+    test_stationary_low_id_still_scrolls(run)
+    test_pinch_emits_nothing(run)
     test_compact_garbage_no_wheel(run)
     return 1 if run.failed else 0
 
