@@ -10,7 +10,7 @@ This PC is the only lab. Do not lose the restore package.
 | Product on **this** PC | Pointer, battery `0x90`, **2-finger** Wheel/AC Pan, 1-finger glass does not scroll |
 | Loaded | dest `MagicMouseDriver-kmdf-204-scroll.sys` signed SHA256 `0CC4458B2D70C58BDFB89AD3C4D5BCDB594D6EE34DEFD0E6C831E56FE22540ED`, cert **16940C0F** |
 | Unsigned freeze | `25A3287AE7FBF62873354B71F32B16F7DC47CEA65C165C760A9AFBC28C74F6B2` (26112 bytes) |
-| Detent | registry `ScrollStep` (default 8, accepted range `[1,224]`; out-of-range values retain default 8); `Diag!ScrollStep=8` |
+| Detent | registry `ScrollStep`; default `MM_SCROLL_STEP` **16** in source since 2026-09-16 (the signed 2.0.4.3 binary shipped 8 and its install measured `Diag!ScrollStep=8`); accepted range `[1,224]` — below `1` falls back to the default, above `224` clamps to `224` |
 | oem16 | `AD5D244B` — never delete |
 | Gestures | **Not** in this package (mouse+wheel, not PTP) |
 
