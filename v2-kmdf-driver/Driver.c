@@ -1008,7 +1008,7 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
     ULONG ictlCount, scanHits, patchOk, lastSize, lastStatus;
     ULONG hidReads, rid12, aclN, aclX, lastAclR, lastAclC;
     ULONG mtStatus, mtTries, lastInLen, lastInFl, aclOut, lastOutSz, lastOutFl, lastOutHdr;
-    ULONG scrollStep;
+    ULONG scrollStep, scrollTravel, scrollNotches;
     UCHAR lastBytes[64];
     UCHAR lastAclBytes[16];
 
@@ -1035,6 +1035,8 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
     mtStatus   = ctx->MtEnableStatus;
     mtTries    = ctx->MtEnableTries;
     scrollStep = ctx->ScrollStep;
+    scrollTravel = ctx->ScrollTravelUnits;
+    scrollNotches = ctx->ScrollNotchCount;
     RtlCopyMemory(lastBytes, ctx->LastSdpBytes, 64);
     RtlCopyMemory(lastAclBytes, ctx->LastAclBytes, 16);
     WdfSpinLockRelease(ctx->Lock);
@@ -1072,6 +1074,10 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
                             REG_DWORD, &aclN, sizeof(aclN));
     MmDiagSetValueIfChanged(key, L"AclTranslateCount",
                             REG_DWORD, &aclX, sizeof(aclX));
+    MmDiagSetValueIfChanged(key, L"ScrollTravelUnits",
+                            REG_DWORD, &scrollTravel, sizeof(scrollTravel));
+    MmDiagSetValueIfChanged(key, L"ScrollNotchCount",
+                            REG_DWORD, &scrollNotches, sizeof(scrollNotches));
     MmDiagSetValueIfChanged(key, L"LastAclReceived",
                             REG_DWORD, &lastAclR, sizeof(lastAclR));
     MmDiagSetValueIfChanged(key, L"LastAclCapacity",

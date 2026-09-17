@@ -111,6 +111,19 @@ typedef struct _DEVICE_CONTEXT
     // restart, not a driver reinstall.
     ULONG   ScrollStep;
 
+    // Scroll diagnosis pair, published to Diag alongside Rid12Count.
+    // Counters alone cannot tell a hand resting motionless on the surface -
+    // which emits TOUCH_STATE_DRAG at ~65 reports/s and legitimately yields
+    // zero wheel - from a finger actually sliding, because nothing here
+    // records travel. ScrollTravelUnits accumulates the touch units consumed
+    // at each detent crossing in AccumulateSurfaceScroll; ScrollNotchCount
+    // counts every +1/-1 the engine emits on either axis. Travel climbing
+    // while notches stay 0 is an emission bug; notches climbing while
+    // Raw Input sees no wheel is loss downstream of this filter; travel flat
+    // means the user is not scrolling. Both wrap; deltas are what matter.
+    ULONG   ScrollTravelUnits;
+    ULONG   ScrollNotchCount;
+
     WDFTIMER    DiagTimer;
     WDFWORKITEM DiagWorkItem;
 } DEVICE_CONTEXT, *PDEVICE_CONTEXT;
