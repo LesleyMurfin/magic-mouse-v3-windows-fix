@@ -295,11 +295,24 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
         // hardware 2026-09-17, the wire carried A1 90 04 10 (16%) on every
         // probe while userspace read 90 00 00. Both BRB types share the
         // _BRB_L2CA_OPEN_CHANNEL layout, so one intercept serves both.
+        BOOLEAN isControlOpen = FALSE;
         if (pBrb != NULL &&
-            (pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL ||
-             pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL_RESPONSE) &&
-            pBrb->BrbHeader.Length >= sizeof(struct _BRB_L2CA_OPEN_CHANNEL) &&
-            pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM)
+            pBrb->BrbHeader.Length >= sizeof(struct _BRB_L2CA_OPEN_CHANNEL))
+        {
+            if (pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL &&
+                pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM)
+            {
+                isControlOpen = TRUE;
+            }
+            else if (pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL_RESPONSE &&
+                     pBrb->BrbL2caOpenChannel.Response == 0 &&
+                     (pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM || ctx->MtControlHandle == NULL))
+            {
+                isControlOpen = TRUE;
+            }
+        }
+
+        if (isControlOpen)
         {
             PMM_REQUEST_CONTEXT reqCtx = GetRequestContext(Request);
             reqCtx->Brb = pBrb;
@@ -395,8 +408,15 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
             // OnAclTransferComplete already refuses to translate below
             // origCap >= MM_MOUSE_REPORT_LEN - a shorter diversion could only
             // ever swallow data, never produce a wheel report.
+            ULONG inCap = pBrb->BrbL2caAclTransfer.BufferSize;
+            if (pBrb->BrbL2caAclTransfer.BufferMDL != NULL)
+            {
+                inCap = MmGetMdlByteCount(pBrb->BrbL2caAclTransfer.BufferMDL);
+            }
+
             if (sdpOk &&
                 pBrb->BrbL2caAclTransfer.BufferSize >= MM_MOUSE_REPORT_LEN &&
+                inCap >= MM_MOUSE_REPORT_LEN &&
                 pBrb->BrbL2caAclTransfer.BufferSize < MM_ACL_MAX_PARSE)
             {
                 reqCtx->OrigBuffer = pBrb->BrbL2caAclTransfer.Buffer;
@@ -648,11 +668,25 @@ OnOpenChannelComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
     PMM_REQUEST_CONTEXT reqCtx = GetRequestContext(Request);
     PBRB pBrb = (reqCtx != NULL) ? (PBRB)reqCtx->Brb : NULL;
 
+    BOOLEAN isControlOpen = FALSE;
     if (NT_SUCCESS(status) && ctx != NULL && pBrb != NULL &&
-        (pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL ||
-         pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL_RESPONSE) &&
-        pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM &&
+        pBrb->BrbHeader.Length >= sizeof(struct _BRB_L2CA_OPEN_CHANNEL) &&
         pBrb->BrbL2caOpenChannel.ChannelHandle != NULL)
+    {
+        if (pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL &&
+            pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM)
+        {
+            isControlOpen = TRUE;
+        }
+        else if (pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL_RESPONSE &&
+                 pBrb->BrbL2caOpenChannel.Response == 0 &&
+                 (pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM || ctx->MtControlHandle == NULL))
+        {
+            isControlOpen = TRUE;
+        }
+    }
+
+    if (isControlOpen)
     {
         WdfSpinLockAcquire(ctx->Lock);
         ctx->MtControlHandle = pBrb->BrbL2caOpenChannel.ChannelHandle;

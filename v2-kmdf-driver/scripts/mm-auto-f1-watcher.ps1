@@ -176,11 +176,33 @@ if (Test-MmCol01Present) {
     Write-MmWatcherLog 'startup reconcile: COL01 not present, waiting for arrival event'
 }
 
+
+$lastRid = 0
+$diagKey = 'HKLM:\SYSTEM\CurrentControlSet\Services\MagicMouseDriver204Scroll\Diag'
+$heartbeatCounter = 0
+
 while ($true) {
-    $ev = Wait-Event -Timeout 300
+    $ev = Wait-Event -Timeout 5
     if ($ev) {
         Remove-Event -EventIdentifier $ev.EventIdentifier -ErrorAction SilentlyContinue
-    } else {
+    }
+
+    $heartbeatCounter++
+    if ($heartbeatCounter -ge 60) {
+        $heartbeatCounter = 0
         Write-MmWatcherLog 'heartbeat alive'
     }
+
+    try {
+        $diag = Get-ItemProperty $diagKey -ErrorAction SilentlyContinue
+        if ($diag -and $diag.LastAclReceived -eq 9 -and $diag.Rid12Count -gt $lastRid) {
+            if ($lastRid -gt 0) {
+                Write-MmWatcherLog ('mouse in compact 9-byte mode (Rid12=' + $diag.Rid12Count + ') - auto-recovering multitouch')
+                Invoke-MmF1 -Reason 'compact mode detected on active mouse' -UpdateDebounce
+            }
+            $lastRid = $diag.Rid12Count
+        } elseif ($diag) {
+            $lastRid = $diag.Rid12Count
+        }
+    } catch {}
 }

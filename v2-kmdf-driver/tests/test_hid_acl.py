@@ -583,6 +583,11 @@ def test_c_source_control_channel_gate(run: _Run) -> None:
     has_orig_cap = (
         re.search(r"origCap\s*>=\s*MM_MOUSE_REPORT_LEN", drv) is not None
     )
+    # Inbound MDL capacity floor: caller buffer must hold a whole report, even if
+    # BufferSize is set larger.
+    has_mdl_cap = (
+        re.search(r"inCap\s*>=\s*MM_MOUSE_REPORT_LEN", drv) is not None
+    )
 
     ok = (
         has_floor
@@ -590,6 +595,7 @@ def test_c_source_control_channel_gate(run: _Run) -> None:
         and has_upper
         and has_sdp_conjunct
         and has_orig_cap
+        and has_mdl_cap
     )
     run.check(
         "C_SOURCE_CONTROL_CHANNEL_GATE",

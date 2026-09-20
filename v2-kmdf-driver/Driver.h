@@ -34,7 +34,7 @@
 
 // FileVersion / package label. INF dest is unique so Apr 30 MagicMouseDriver.sys
 // (oem16 / AD5D244B) is not replaced or hardlinked.
-#define MM_FILE_VERSION_STR     "2.0.4.5"
+#define MM_FILE_VERSION_STR     "2.0.4.6"
 #define MM_ARTIFACT_SYS_PATTERN "MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys"
 #define MM_INF_SYS_NAME         "MagicMouseDriver-kmdf-204-scroll.sys"
 

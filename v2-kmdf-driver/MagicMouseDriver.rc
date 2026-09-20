@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 //
+// FileVersion 2.0.4.6 - battery: prevent ACL scratch diversion on short reads (inCap < MM_MOUSE_REPORT_LEN) and learn control channel on device-initiated reconnect (BRB_L2CA_OPEN_CHANNEL_RESPONSE); COL02 0x90 battery stays readable.
 // FileVersion 2.0.4.5 - battery after reconnect: the HID control channel handle is now learned from BRB_L2CA_OPEN_CHANNEL_RESPONSE (device-initiated reconnects) as well as BRB_L2CA_OPEN_CHANNEL (host-initiated opens), so MtControlHandle is no longer NULL after an idle disconnect and the COL02 Input 0x90 battery percent stays readable.
 // FileVersion 2.0.4.4 - two fixes: (1) battery - control-channel 1-byte IN reads are no longer diverted into the ACL scratch, so the COL02 Input 0x90 GET_REPORT response survives (plus RemainingBufferSize restore); (2) scroll - every dragging contact emits its own wheel notches again (the single-reference-finger rule went silent whenever the lowest-id contact rested), with the default detent MM_SCROLL_STEP raised 8 -> 16 to keep sensitivity.
 // FileVersion 2.0.4.3 - single-reference-finger scroll detent + registry-tunable ScrollStep; kernel HID SetFeature-via-sibling-PDO path removed (broke pointer+scroll live as 2.0.4.2).
@@ -16,8 +17,8 @@
 #include <windows.h>
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION    2,0,4,5
- PRODUCTVERSION 2,0,4,5
+ FILEVERSION    2,0,4,6
+ PRODUCTVERSION 2,0,4,6
  FILEFLAGSMASK  0x3fL
 #ifdef _DEBUG
  FILEFLAGS      0x1L
@@ -33,13 +34,13 @@ BEGIN
         BLOCK "040904B0"
         BEGIN
             VALUE "CompanyName",      "Magic Mouse Driver KMDF 204 scroll"
-            VALUE "FileDescription",  "KMDF 2.0.4.5 scroll (PID 0323). Dest MagicMouseDriver-kmdf-204-scroll.sys."
-            VALUE "FileVersion",      "2.0.4.5"
+            VALUE "FileDescription",  "KMDF 2.0.4.6 scroll (PID 0323). Dest MagicMouseDriver-kmdf-204-scroll.sys."
+            VALUE "FileVersion",      "2.0.4.6"
             VALUE "InternalName",     "MagicMouseDriver-kmdf-204-scroll"
             VALUE "LegalCopyright",   "MIT"
             VALUE "OriginalFilename", "MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys"
             VALUE "ProductName",      "MagicMouseDriver KMDF 2.0.4 scroll"
-            VALUE "ProductVersion",   "2.0.4.5"
+            VALUE "ProductVersion",   "2.0.4.6"
         END
     END
     BLOCK "VarFileInfo"
