@@ -1,18 +1,21 @@
-/* Magic Tray drivers hub. Same design system as magictray.app: the font files,
-   the token block and the shared chrome below are the apex site's, so the two
-   hosts render as one project rather than two. Apex is the source of truth --
-   anything here that apex also has is apex's version verbatim; the rest is the
+/* Magic Tray drivers hub. Same design system as magictray.app: the font block,
+   the token block and the shared chrome below are the apex site's verbatim, so
+   the two hosts render as one project rather than two. Apex is the source of
+   truth; where a shared component is adapted to this site's layout or
+   deliberately diverges from apex, the rule itself says so. The rest is the
    handful of components only the drivers pages need, built on apex's tokens. */
 
-/* Fonts are self-hosted from docs/fonts/ so a page load makes no third-party
-   request and first paint waits on nothing but this stylesheet. The files are
-   the exact woff2 subsets Google serves (Source Sans 3 v19, Source Code Pro
-   v31); each one is a variable font, so every weight below shares a single
-   file and a single download. The weights are declared discretely, as the old
-   @import asked for them, which keeps font-weight: 650 snapping to 700 the way
-   it always has. unicode-range values are copied verbatim from Google's CSS:
-   they are what lets the browser skip the latin-ext file on a page that has no
-   latin-ext glyph. Only latin and latin-ext ship; the site is lang="en". */
+/* Fonts are self-hosted from docs/fonts/. The files are the exact woff2
+   subsets Google serves (Source Sans 3 v19, Source Code Pro v31); each one is
+   a variable font, so every weight below shares a single file and a single
+   download. Both families are (c) Adobe under the SIL Open Font License 1.1,
+   whose clause 2 requires the notice to travel with the binaries: it ships
+   beside them in docs/fonts/OFL.txt. The weights are declared discretely, as
+   the old @import asked for them, which keeps font-weight: 650 snapping to 700
+   the way it always has. unicode-range values are copied verbatim from
+   Google's CSS: they are what lets the browser skip the latin-ext file on a
+   page that has no latin-ext glyph. Only latin and latin-ext ship; the site is
+   lang="en". */
 
 /* latin-ext */
 @font-face {
@@ -483,6 +486,16 @@ ul.plain li { margin: 0.35rem 0; }
 /* A fixed ratio so the photo reserves its space before it loads and the hero
    text does not jump. */
 .hero-media img { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; }
+/* A screenshot is not a product photo. It has a fixed pixel grid and its own
+   1.75:1 ratio, so the 4/3 crop above would cut 24% of its height away and
+   width: 100% would upscale it 1.56x with no 2x source to fall back on. Own
+   ratio, centred, never wider than intrinsic. */
+.hero-media.shot img {
+  aspect-ratio: auto;
+  object-fit: contain;
+  max-width: 330px;
+  margin-inline: auto;
+}
 /* Opaque, not the badge's translucent wash: this pill sits on a photograph,
    and every product shot on the site is a white mouse on white. */
 .hero-media .tag {
@@ -515,26 +528,34 @@ ul.plain li { margin: 0.35rem 0; }
   border: 1px solid transparent;
   transition: background 0.15s var(--ease), border-color 0.15s var(--ease), color 0.15s var(--ease);
 }
-.btn-primary {
+/* `.btn primary` / `.btn ghost`, not `.btn-primary` / `.btn-ghost`: apex names
+   them this way, and markup has to survive being moved between the two hosts. */
+.btn.primary {
   background: var(--btn);
   border-color: var(--btn);
   color: var(--btn-fg);
 }
-.btn-primary:hover {
-  background: #8b5cf6;
-  border-color: #8b5cf6;
+.btn.primary:hover {
+  /* Deliberate deviation from apex, which hovers to #8b5cf6. Button text is
+     0.95rem at weight 650 on an 18px root -- 17.1px, under both large-text
+     thresholds -- so WCAG 2.2 AA wants 4.5:1. #7c3aed resting measures 5.70:1
+     against white and #8b5cf6 measures 4.23:1, so lightening the fill drops
+     hover below the floor in the one state the pointer is on it. #6d28d9
+     darkens instead and measures 7.10:1. Apex needs the same change. */
+  background: #6d28d9;
+  border-color: #6d28d9;
   color: #fff;
 }
 /* Not --line-strong: at #3f3f4d this edge measures under 2:1 on the page, so
    the only outline distinguishing the second button from loose text is
    invisible. WCAG 1.4.11 wants 3:1 for a control's boundary; #66667d measures
    3.43:1. */
-.btn-ghost {
+.btn.ghost {
   border-color: #66667d;
   color: var(--fg);
   background: transparent;
 }
-.btn-ghost:hover { border-color: var(--accent); color: var(--accent-2); }
+.btn.ghost:hover { border-color: var(--accent); color: var(--accent-2); }
 
 /* ---------- Badges ---------- */
 
@@ -820,20 +841,14 @@ summary:not(:has(.chev))::after {
 }
 details[open] > summary:not(:has(.chev))::after { transform: rotate(-135deg); }
 details[open] summary .chev { transform: rotate(180deg); }
-/* A link to a #fragment that names a <details> lands on a closed disclosure,
-   so the visitor arrives at a summary whose answer is hidden. A hashchange
-   listener is the usual fix and is not available: the site runs under
-   `script-src 'none'`. ::details-content is the disclosure's own slot, and
-   revealing it needs no `open` attribute and no script. Unsupported browsers
-   drop the rule and keep today's behaviour, which is one click from the
-   answer, so no fallback is needed. Both properties are required: the closed
-   state sets `block-size: 0` as well as hiding the content. */
-details:target::details-content {
-  content-visibility: visible;
-  block-size: auto;
-}
-details:target > summary:not(:has(.chev))::after { transform: rotate(-135deg); }
-details:target summary .chev { transform: rotate(180deg); }
+/* No `details:target` reveal. Revealing a targeted disclosure with
+   ::details-content cannot be undone in CSS: the reader clicks the summary,
+   `open` flips true then false, and at false the element is still :target, so
+   the author declaration re-reveals it and the disclosure can never be closed.
+   Measured in Chromium 149 -- two clicks, content visible after both. Guarding
+   with :not([open]) does not help; that is exactly the state that re-fires.
+   The honest behaviour is the browser's: land on the summary and open it with
+   one click. Nothing on this site links to a <details> fragment in any case. */
 details > *:not(summary) {
   margin: 0 1.05rem 0.95rem;
   color: var(--muted);

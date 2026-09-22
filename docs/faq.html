@@ -92,7 +92,7 @@
           "@id": "https://drivers.magictray.app/faq.html#breadcrumb"
         },
         "datePublished": "2026-05-01",
-        "dateModified": "2026-09-15",
+        "dateModified": "2026-09-22",
         "inLanguage": "en",
         "publisher": {
           "@id": "https://magictray.app/#person"
@@ -197,7 +197,7 @@
             "name": "Does the driver fix the battery percentage on Windows?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "The Apple-driver route does not read battery itself; the free Magic Tray Windows app does, using a brief temporary Mode A to Mode B flip. The unfinished KMDF driver does not read it either. Battery on Magic Mouse v1 0x030D, v2 0x0269 and v2-alt 0x0310 is not yet characterised."
+              "text": "The Apple-driver route does not read battery itself; the free Magic Tray Windows app does. It briefly removes applewirelessmouse from the mouse's LowerFilters to expose the COL02 collection, reads HID input report 0x90 there, then restores the filter, so two-finger scroll is unavailable for a few seconds. The unfinished KMDF driver does not read it either. Battery on Magic Mouse v1 0x030D, v2 0x0269 and v2-alt 0x0310 is not yet characterised."
             }
           },
           {
@@ -250,8 +250,8 @@
       <h1>Magic Mouse v3 Windows driver FAQ</h1>
       <p class="lead">Short answers about the <strong>Magic Mouse 2024 (v3) Windows driver</strong>. You install the <strong>Apple-driver route</strong>; the separate <strong>KMDF driver</strong> is not finished yet.</p>
       <p class="cta">
-        <a class="btn btn-primary" href="install.html#choose"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#download"/></svg> Install guide</a>
-        <a class="btn btn-ghost" href="scroll-fix.html"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#scroll"/></svg> Fix dead scroll</a>
+        <a class="btn primary" href="install.html#choose"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#download"/></svg> Install guide</a>
+        <a class="btn ghost" href="scroll-fix.html"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#scroll"/></svg> Fix dead scroll</a>
       </p>
 
       <section>
@@ -314,7 +314,7 @@
           <details>
             <summary>Does the driver fix the battery percentage on Windows? <svg class="icon chev" aria-hidden="true"><use href="img/icons.svg#chevron-down"/></svg></summary>
             <div class="a-body">
-              <p>The Apple-driver route does not read battery itself &mdash; the free <a href="https://magictray.app/">Magic Tray (Windows app)</a> does, using a brief temporary Mode A to Mode B flip. The unfinished KMDF driver does not read it either. Battery on Magic Mouse v1 <code>0x030D</code>, v2 <code>0x0269</code> and v2-alt <code>0x0310</code> is <strong>not yet characterised</strong>.</p>
+              <p>The Apple-driver route does not read battery itself &mdash; the free <a href="https://magictray.app/">Magic Tray (Windows app)</a> does. It briefly removes <code>applewirelessmouse</code> from the mouse&rsquo;s <code>LowerFilters</code> to expose the <code>COL02</code> collection, reads HID input report <code>0x90</code> there, then restores the filter, so two-finger scroll is unavailable for a few seconds. The unfinished KMDF driver does not read it either. Battery on Magic Mouse v1 <code>0x030D</code>, v2 <code>0x0269</code> and v2-alt <code>0x0310</code> is <strong>not yet characterised</strong>.</p>
             </div>
           </details>
         </div>

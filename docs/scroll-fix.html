@@ -92,7 +92,7 @@
           "@id": "https://drivers.magictray.app/scroll-fix.html#breadcrumb"
         },
         "datePublished": "2026-05-01",
-        "dateModified": "2026-09-15",
+        "dateModified": "2026-09-22",
         "inLanguage": "en",
         "publisher": {
           "@id": "https://magictray.app/#person"
@@ -140,8 +140,8 @@
       <h1>Magic Mouse 2024 (v3) scroll not working on Windows 11</h1>
       <p class="lead">Cursor still moves, two-finger scroll is dead: a Bluetooth idle disconnect made Windows collapse the mouse&rsquo;s HID collections. The shipped Apple-driver route puts scroll back, no Test Mode.</p>
       <p class="cta">
-        <a class="btn btn-primary" href="install.html#apple-route"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#download"/></svg> Install the fix</a>
-        <a class="btn btn-ghost" href="#which-mouse"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#mouse"/></svg> Which mouse do I have?</a>
+        <a class="btn primary" href="install.html#apple-route"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#download"/></svg> Install the fix</a>
+        <a class="btn ghost" href="#which-mouse"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#mouse"/></svg> Which mouse do I have?</a>
       </p>
 
       <section>
@@ -171,7 +171,7 @@
 
       <section>
         <h2 id="why-scroll-stops">Why does Magic Mouse scroll stop working on Windows 11?</h2>
-        <p>After a Bluetooth idle disconnect, DeviceSetupManager (DSM) runs a property sync against cached device state and the mouse&rsquo;s HID collections collapse &mdash; <strong>Mode A &rarr; Mode B</strong>. Mode A keeps the touch surface on its own collection; Mode B merges everything into one plain-mouse collection: cursor, buttons, no scroll surface.</p>
+        <p>After a Bluetooth idle disconnect, DeviceSetupManager (DSM) runs a property sync against cached device state and the mouse&rsquo;s HID collections collapse &mdash; <strong>Mode A &rarr; Mode B</strong>. Mode A enumerates COL01 and COL02 as independent collections; Mode B merges them into one plain-mouse collection, and the scroll consumer can no longer bind to it: cursor, buttons, no scroll.</p>
 
         <figure class="diagram">
           <svg viewBox="0 0 920 220" role="img" aria-labelledby="mode-ab-title mode-ab-desc">
@@ -272,8 +272,8 @@
           <div class="device-card">
             <div class="thumb">
               <picture>
-                <source srcset="img/magic-mouse-v3-underside-usbc.webp" type="image/webp">
-                <img src="img/magic-mouse-v3-underside-usbc.jpg" width="1144" height="1144" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2024 (v3), USB-C port">
+                <source srcset="img/magic-mouse-v3-underside-usbc-192.webp" type="image/webp">
+                <img src="img/magic-mouse-v3-underside-usbc-192.jpg" width="192" height="192" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2024 (v3), USB-C port">
               </picture>
             </div>
             <div class="meta">
@@ -285,8 +285,8 @@
           <div class="device-card">
             <div class="thumb">
               <picture>
-                <source srcset="img/magic-mouse-v2-underside-lightning-alt.webp" type="image/webp">
-                <img src="img/magic-mouse-v2-underside-lightning-alt.jpg" width="1600" height="1200" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2), Lightning port">
+                <source srcset="img/magic-mouse-v2-underside-lightning-alt-192.webp" type="image/webp">
+                <img src="img/magic-mouse-v2-underside-lightning-alt-192.jpg" width="192" height="192" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2), Lightning port">
               </picture>
             </div>
             <div class="meta">
@@ -298,8 +298,8 @@
           <div class="device-card">
             <div class="thumb">
               <picture>
-                <source srcset="img/magic-mouse-v2-underside-lightning-alt.webp" type="image/webp">
-                <img src="img/magic-mouse-v2-underside-lightning-alt.jpg" width="1600" height="1200" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2-alt), Lightning port">
+                <source srcset="img/magic-mouse-v2-underside-lightning-alt-192.webp" type="image/webp">
+                <img src="img/magic-mouse-v2-underside-lightning-alt-192.jpg" width="192" height="192" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2-alt), Lightning port">
               </picture>
             </div>
             <div class="meta">
@@ -311,8 +311,8 @@
           <div class="device-card">
             <div class="thumb">
               <picture>
-                <source srcset="img/magic-mouse-v1-underside-aa-door.webp" type="image/webp">
-                <img src="img/magic-mouse-v1-underside-aa-door.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Underside of Magic Mouse (v1), AA battery door">
+                <source srcset="img/magic-mouse-v1-underside-aa-door-192.webp" type="image/webp">
+                <img src="img/magic-mouse-v1-underside-aa-door-192.jpg" width="192" height="192" loading="lazy" decoding="async" alt="Underside of Magic Mouse (v1), AA battery door">
               </picture>
             </div>
             <div class="meta">

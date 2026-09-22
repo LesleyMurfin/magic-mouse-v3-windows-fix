@@ -117,7 +117,7 @@
           "@id": "https://drivers.magictray.app/#breadcrumb"
         },
         "datePublished": "2026-05-01",
-        "dateModified": "2026-09-15",
+        "dateModified": "2026-09-22",
         "inLanguage": "en",
         "publisher": {
           "@id": "https://magictray.app/#person"
@@ -162,9 +162,9 @@
           <h1>Magic Mouse 2024 (v3) Windows driver — scroll fix for PID 0323</h1>
           <p class="lead">Apple ships no Windows driver for the 2024 USB-C Magic Mouse, Bluetooth <strong>PID 0323</strong>. This free, MIT-licensed driver brings two-finger scroll back on Windows 10 and <strong>Windows 11</strong>. It registers Apple&rsquo;s own signed driver, so no Test Mode, and it covers Magic Mouse v1, v2, v2-alt and v3.</p>
           <p class="cta">
-            <a class="btn btn-primary" href="install.html#apple-route"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#terminal"/></svg>Install the driver</a>
-            <a class="btn btn-primary" href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#github"/></svg>Source on GitHub</a>
-            <a class="btn btn-ghost" href="https://magictray.app/"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#battery"/></svg>Battery percent</a>
+            <a class="btn primary" href="install.html#apple-route"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#terminal"/></svg>Install the driver</a>
+            <a class="btn primary" href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#github"/></svg>Source on GitHub</a>
+            <a class="btn ghost" href="https://magictray.app/"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#battery"/></svg>Battery percent</a>
           </p>
         </div>
         <div class="hero-media">
@@ -230,8 +230,8 @@
           <div class="device-card">
             <div class="thumb">
               <picture>
-                <source srcset="img/magic-mouse-v3-underside-usbc.webp" type="image/webp">
-                <img src="img/magic-mouse-v3-underside-usbc.jpg" width="1144" height="1144" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2024 (v3), USB-C port">
+                <source srcset="img/magic-mouse-v3-underside-usbc-192.webp" type="image/webp">
+                <img src="img/magic-mouse-v3-underside-usbc-192.jpg" width="192" height="192" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2024 (v3), USB-C port">
               </picture>
             </div>
             <div class="meta">
@@ -243,8 +243,8 @@
           <div class="device-card">
             <div class="thumb">
               <picture>
-                <source srcset="img/magic-mouse-v2-underside-lightning-alt.webp" type="image/webp">
-                <img src="img/magic-mouse-v2-underside-lightning-alt.jpg" width="1600" height="1200" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2), Lightning port">
+                <source srcset="img/magic-mouse-v2-underside-lightning-alt-192.webp" type="image/webp">
+                <img src="img/magic-mouse-v2-underside-lightning-alt-192.jpg" width="192" height="192" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2), Lightning port">
               </picture>
             </div>
             <div class="meta">
@@ -256,8 +256,8 @@
           <div class="device-card">
             <div class="thumb">
               <picture>
-                <source srcset="img/magic-mouse-v2-underside-lightning-alt.webp" type="image/webp">
-                <img src="img/magic-mouse-v2-underside-lightning-alt.jpg" width="1600" height="1200" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2-alt), Lightning port">
+                <source srcset="img/magic-mouse-v2-underside-lightning-alt-192.webp" type="image/webp">
+                <img src="img/magic-mouse-v2-underside-lightning-alt-192.jpg" width="192" height="192" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2-alt), Lightning port">
               </picture>
             </div>
             <div class="meta">
@@ -269,8 +269,8 @@
           <div class="device-card">
             <div class="thumb">
               <picture>
-                <source srcset="img/magic-mouse-v1-underside-aa-door.webp" type="image/webp">
-                <img src="img/magic-mouse-v1-underside-aa-door.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Underside of Magic Mouse (v1), AA battery door">
+                <source srcset="img/magic-mouse-v1-underside-aa-door-192.webp" type="image/webp">
+                <img src="img/magic-mouse-v1-underside-aa-door-192.jpg" width="192" height="192" loading="lazy" decoding="async" alt="Underside of Magic Mouse (v1), AA battery door">
               </picture>
             </div>
             <div class="meta">
@@ -327,7 +327,7 @@
           <figure class="diagram">
             <svg viewBox="0 0 720 236" role="img" aria-labelledby="modeDiagramTitle modeDiagramDesc">
               <title id="modeDiagramTitle">Mode A to Mode B HID collection collapse</title>
-              <desc id="modeDiagramDesc">Mode A exposes two HID collections inside one top-level collection: COL01 for mouse clicks and movement, and COL02 for touch-surface scroll and battery. After a Bluetooth idle disconnect and a DSM resync, Mode B keeps only COL01 — COL02 is gone and two-finger scroll stops.</desc>
+              <desc id="modeDiagramDesc">Mode A enumerates two independent HID collections: COL01 carries the cursor, the buttons and the scroll wheel, and COL02 carries battery and diagnostic data. After a Bluetooth idle disconnect and a DSM property write, Mode B collapses both into one unified top-level collection: COL02 is gone, the scroll consumer can no longer bind, and two-finger scroll stops while the cursor keeps working.</desc>
               <defs>
                 <marker id="modeArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                   <path d="M0 0 10 5 0 10Z" fill="var(--muted)"/>
@@ -339,9 +339,9 @@
                 <rect x="36" y="64" width="240" height="132" rx="10" fill="none" stroke="var(--line)" stroke-width="1.2" stroke-dasharray="4 3"/>
                 <text x="48" y="84" font-size="11" fill="var(--muted)" letter-spacing="0.04em">TOP-LEVEL COLLECTION</text>
                 <rect x="52" y="94" width="208" height="36" rx="8" fill="var(--bg-2)" stroke="var(--line)"/>
-                <text x="64" y="117" font-size="13" fill="var(--fg)">COL01 · mouse clicks, move</text>
+                <text x="64" y="117" font-size="13" fill="var(--fg)">COL01 · cursor + buttons + scroll</text>
                 <rect x="52" y="140" width="208" height="36" rx="8" fill="var(--bg-2)" stroke="var(--accent)"/>
-                <text x="64" y="163" font-size="13" fill="var(--fg)">COL02 · scroll + battery</text>
+                <text x="64" y="163" font-size="13" fill="var(--fg)">COL02 · battery + diagnostics</text>
               </g>
               <line x1="304" y1="118" x2="404" y2="118" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#modeArrow)"/>
               <text x="354" y="100" font-size="11" fill="var(--muted)" text-anchor="middle">BT idle disconnect</text>
@@ -352,12 +352,12 @@
                 <rect x="444" y="64" width="240" height="132" rx="10" fill="none" stroke="var(--line)" stroke-width="1.2" stroke-dasharray="4 3"/>
                 <text x="456" y="84" font-size="11" fill="var(--muted)" letter-spacing="0.04em">TOP-LEVEL COLLECTION</text>
                 <rect x="460" y="94" width="208" height="36" rx="8" fill="var(--bg-2)" stroke="var(--line)"/>
-                <text x="472" y="117" font-size="13" fill="var(--fg)">COL01 · mouse clicks, move</text>
+                <text x="472" y="117" font-size="13" fill="var(--fg)">Unified TLC · cursor + buttons</text>
                 <rect x="460" y="140" width="208" height="36" rx="8" fill="none" stroke="var(--line)" stroke-dasharray="3 3"/>
-                <text x="472" y="163" font-size="12" fill="var(--muted)">COL02 gone — scroll stops</text>
+                <text x="472" y="163" font-size="12" fill="var(--muted)">COL02 gone — scroll dropped</text>
               </g>
             </svg>
-            <figcaption>Mode A exposes both HID collections. In Mode B only COL01 survives, so two-finger scroll stops while the cursor still works.</figcaption>
+            <figcaption>Mode A enumerates both HID collections. In Mode B they collapse into one unified collection, so two-finger scroll stops while the cursor still works.</figcaption>
           </figure>
           <p>DeviceSetupManager (DSM) runs a property synchronisation pass on reconnect, and the device can come back in this reduced form. Before this driver, the only ways back were a driver reinstall or re-pairing the mouse.</p>
         </details>
@@ -365,7 +365,7 @@
 
       <section id="battery">
         <h2>Battery percentage</h2>
-        <p>The driver does not read battery. The <a href="https://magictray.app/">Magic Tray</a> app does, from HID input report <code>0x90</code> on <code>COL02</code>, using a brief temporary Mode A to Mode B flip. Steps, and what is still unknown for v1 and v2: <a href="battery.html">Magic Mouse battery percentage on Windows 11</a>.</p>
+        <p>The driver does not read battery. The <a href="https://magictray.app/">Magic Tray</a> app does, from HID input report <code>0x90</code> on <code>COL02</code>. It briefly removes <code>applewirelessmouse</code> from the mouse&rsquo;s <code>LowerFilters</code> to expose that collection, reads the percentage, then restores the filter &mdash; two-finger scroll is unavailable for the few seconds that takes. Steps, and what is still unknown for v1 and v2: <a href="battery.html">Magic Mouse battery percentage on Windows 11</a>.</p>
       </section>
 
       <section id="next">

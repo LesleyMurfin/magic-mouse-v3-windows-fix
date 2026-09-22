@@ -18,7 +18,7 @@
 | Windows Test Mode | Not required; Secure Boot and memory integrity can stay on | Planned requirement; no package is available to install |
 | Install | Turn Fast Startup off (`powercfg /h off`, reboot), then double-click `v1-binary-patch/Install.cmd`; it self-elevates, no PowerShell window, no execution-policy change, reboot to finish | Nothing to install; the driver does not exist yet |
 | Scroll | Apple's own Mac-style translation; sensitivity fixed | Planned generated scroll; not available yet |
-| Battery (via Magic Tray) | Brief temporary Mode A <-> Mode B flip, then flips back | Not applicable until the route ships |
+| Battery (via Magic Tray) | Briefly removes `applewirelessmouse` from `LowerFilters` to expose `COL02`, reads HID input report `0x90` there, then restores the filter; two-finger scroll is unavailable for those few seconds | Not applicable until the route ships |
 
 ## Quick answers
 
@@ -28,7 +28,7 @@
 - Q: Does it recover by itself? A: No; previously only a driver reinstall or re-pair restored scroll.
 - Q: Do I need Windows Test Mode? A: Not for the shipped Apple-driver route. Test Mode is planned for the unfinished KMDF route, but no KMDF package exists yet.
 - Q: Does it support Magic Mouse v1 or v2? A: Yes, via the shipped Apple-driver route (`0x030D`, `0x0269`, `0x0310`, `0x0323`), verified on a real paired v1 alongside a v3 on the same PC. The unreleased KMDF work is planned for `0x0323` only.
-- Q: Does either driver show battery percentage? A: No. Battery is read in userspace by the Magic Tray app via the shipped Apple-driver route's temporary mode flip. The unfinished KMDF route is not available yet.
+- Q: Does either driver show battery percentage? A: No. Battery is read in userspace by the Magic Tray app via the shipped Apple-driver route's temporary `LowerFilters` change that exposes `COL02`. The unfinished KMDF route is not available yet.
 - Q: What about battery on v1/v2? A: Not yet characterised on v1 `0x030D`, v2 `0x0269` and v2-alt `0x0310`. Those models use different HID descriptor structures from the 2024 mouse, so the collection that carries report `0x90` on `0x0323` has not been mapped on them; no claim either way.
 - Q: Can I install both? A: No. Install the shipped Apple-driver route only; the KMDF route is unfinished development work and has no installable package.
 - Q: Cost? A: Free, MIT licensed, no subscription.
@@ -86,5 +86,5 @@ It detects which driver state a machine reports, but the KMDF package does not e
 - KMDF route: development documentation only in `v2-kmdf-driver/`; no compiled `.sys`, installable package, or installer exists yet. Its planned `0x0323` scope and Test Mode requirement must not be presented as a current install option.
 - Signing: only a future KMDF package would need Test Mode. Removing that requirement needs an EV code-signing certificate plus Microsoft Partner Center attestation signing, renewed annually - a funding problem, not a code problem: https://magictray.app/funding.html
 - OS support for the shipped Apple-driver route: Windows 10 build 14393 or later, Windows 11 any build, x64.
-- Battery percentage is not read by the Apple driver; Magic Tray reads it in userspace via a brief temporary mode flip. Battery on v1 `0x030D`, v2 `0x0269` and v2-alt `0x0310` is not yet characterised.
+- Battery percentage is not read by the Apple driver; Magic Tray reads it in userspace via a brief temporary `LowerFilters` change that exposes `COL02`. Battery on v1 `0x030D`, v2 `0x0269` and v2-alt `0x0310` is not yet characterised.
 - License: MIT, Copyright 2026 Revive Business Solutions. Free. Not affiliated with Apple.
