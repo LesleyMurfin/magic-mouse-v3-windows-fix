@@ -9,17 +9,22 @@
 # mismatch, so a stale sync can never be signed under a new version number.
 # Each version builds in its own Work dir, so the FROZEN-UNSIGNED one-shot
 # guard blocks rebuilding the SAME version without blocking the next one.
+#
+# -QueueRoot is the scratch root that holds the synced source, the per-version
+# build dirs and the build log. Set the MM_QUEUE_ROOT environment variable, or
+# pass -QueueRoot, to move it off the default below.
 [CmdletBinding()]
 param(
     [string]$Version        = '2.0.4.6',
-    [string]$DriverVerDate  = '09/20/2026'
+    [string]$DriverVerDate  = '09/20/2026',
+    [string]$QueueRoot      = $(if ($env:MM_QUEUE_ROOT) { $env:MM_QUEUE_ROOT } else { 'C:\mm-dev-queue' })
 )
 
 $ErrorActionPreference = 'Stop'
-$Work = 'C:\mm-dev-queue\kmdf-204-bld-' + ($Version -replace '\.', '')
-$Src  = 'C:\mm-dev-queue\kmdf-204-src'
+$Work = $QueueRoot + '\kmdf-204-bld-' + ($Version -replace '\.', '')
+$Src  = $QueueRoot + '\kmdf-204-src'
 $Iso  = 'D:\Users\Lesley\Downloads\EWDK_ge_release_svc_prod1_26100_250904-1728.iso'
-$Log  = 'C:\mm-dev-queue\kmdf-204-scroll-build.log'
+$Log  = $QueueRoot + '\kmdf-204-scroll-build.log'
 $Forbid = @(
     '845435CE','13BF983A','D3876B0A','A1289489','AD5D244B','559B136A',
     '370A5555','6DF8575B','9EF6C117','D22EB163','F02ECCED','B4582C50',
@@ -181,7 +186,7 @@ $frozenLines = @(
     ('artifact={0}' -f $parkName),
     ('DriverVer={0},{1}' -f $DriverVerDate, $Version),
     'AddService=MagicMouseDriver204Scroll',
-    ('source=single-reference-finger-scroll-tunable-scrollstep-{0}' -f $Version)
+    ('source=per-contact-scroll-tunable-scrollstep-{0}' -f $Version)
 )
 Set-Content -LiteralPath $frozen -Encoding ASCII -Value $frozenLines
 Log ('FROZEN ' + $frozen)

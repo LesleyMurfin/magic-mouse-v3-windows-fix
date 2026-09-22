@@ -2,15 +2,21 @@
 # Sign the unique KMDF sys+cat with thumb 16940C0F. No MagicMouseDriver.sys.
 # No PATH-A.
 #
-# -Version selects the build dir and its own sign stage, so signing 2.0.4.3
-# cannot touch 2.0.4.2's artifacts. The expected pre-sign hash is read from
+# -Version selects the build dir and its own sign stage, so signing one
+# version cannot touch another version's artifacts. The expected pre-sign hash is read from
 # that build's FROZEN-UNSIGNED.txt instead of being pasted in here: the
 # freeze record written by kmdf-204-scroll-build.ps1 is the only thing that
 # knows what was actually built, and a hardcoded hash silently rots into
 # "REFUSE hash not frozen" on every new build.
+#
+# -QueueRoot is the scratch root that holds the per-version build dirs, the
+# sign stages and the NuGet-installed WDK/SDK tool packages. Set the
+# MM_QUEUE_ROOT environment variable, or pass -QueueRoot, to move it off the
+# default below.
 [CmdletBinding()]
 param(
-    [string]$Version = '2.0.4.6'
+    [string]$Version = '2.0.4.6',
+    [string]$QueueRoot = $(if ($env:MM_QUEUE_ROOT) { $env:MM_QUEUE_ROOT } else { 'C:\mm-dev-queue' })
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,13 +24,13 @@ $Thumb = '16940C0F937D569363560D5FEC5CD8FA6D6D9BCE'
 $ForbidB902 = 'B902C2864315E2DE359450024768CE7D01715C38'
 $WdkTest = '609447610A54605BE39AB32CFADB661023FD3ED0'
 $VerTag  = ($Version -replace '\.', '')
-$Work    = 'C:\mm-dev-queue\kmdf-204-bld-' + $VerTag
+$Work    = $QueueRoot + '\kmdf-204-bld-' + $VerTag
 $SrcSys = Join-Path $Work 'x64\Release\MagicMouseDriver-kmdf-204-scroll.sys'
 $SrcInf = Join-Path $Work 'x64\Release\MagicMouseDriver-kmdf-204-scroll.inf'
-# Separate stage from C:\mm-dev-queue\kmdf-204-sign\ - that path is the
+# Separate stage from the QueueRoot kmdf-204-sign\ folder - that path is the
 # known-good 2.0.4.1 restore copy (kmdf-204-pnputil-once.ps1 restore
 # source). Never overwrite it with an unverified build.
-$Stage = 'C:\mm-dev-queue\kmdf-204-sign-' + $VerTag
+$Stage = $QueueRoot + '\kmdf-204-sign-' + $VerTag
 $Sys = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.sys'
 $Inf = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.inf'
 $Cat = Join-Path $Stage 'MagicMouseDriver-kmdf-204-scroll.cat'
@@ -53,8 +59,8 @@ $Forbid = @(
     '370A5555','6DF8575B','9EF6C117','D22EB163','F02ECCED','B4582C50',
     'EA1F80B4','30F91397','614DFA90','E0BC5661','1405473F','A9450168'
 )
-$SignTool = 'C:\mm-dev-queue\wdk-packages\Microsoft.Windows.SDK.CPP.10.0.26100.6584\c\bin\10.0.26100.0\x64\signtool.exe'
-$Inf2Cat = 'C:\mm-dev-queue\wdk-packages\Microsoft.Windows.WDK.x64.10.0.26100.6584\c\bin\10.0.26100.0\x86\Inf2Cat.exe'
+$SignTool = $QueueRoot + '\wdk-packages\Microsoft.Windows.SDK.CPP.10.0.26100.6584\c\bin\10.0.26100.0\x64\signtool.exe'
+$Inf2Cat = $QueueRoot + '\wdk-packages\Microsoft.Windows.WDK.x64.10.0.26100.6584\c\bin\10.0.26100.0\x86\Inf2Cat.exe'
 
 function Fail([int]$c, [string]$m) { Write-Output $m; exit $c }
 
@@ -63,8 +69,8 @@ Write-Output ('frozen_expects=' + $Want)
 Write-Output ('frozen_inf_expects=' + $WantInf)
 if (-not (Test-Path -LiteralPath $SrcSys)) { Fail 2 ('missing sys ' + $SrcSys) }
 if (-not (Test-Path -LiteralPath $SrcInf)) { Fail 2 ('missing inf ' + $SrcInf) }
-if (-not (Test-Path -LiteralPath $SignTool)) { Fail 2 ('missing signtool ' + $SignTool) }
-if (-not (Test-Path -LiteralPath $Inf2Cat)) { Fail 2 ('missing Inf2Cat ' + $Inf2Cat) }
+if (-not (Test-Path -LiteralPath $SignTool)) { Fail 2 ('missing signtool ' + $SignTool + ' - set MM_QUEUE_ROOT or pass -QueueRoot to point at the WDK/SDK packages') }
+if (-not (Test-Path -LiteralPath $Inf2Cat)) { Fail 2 ('missing Inf2Cat ' + $Inf2Cat + ' - set MM_QUEUE_ROOT or pass -QueueRoot to point at the WDK/SDK packages') }
 if ($SrcSys -match 'applewirelessmouse|MagicMouseDriver\.sys$') { Fail 3 'REFUSE live or PATH-A sys name' }
 
 $hash = (Get-FileHash -LiteralPath $SrcSys -Algorithm SHA256).Hash.ToUpperInvariant()

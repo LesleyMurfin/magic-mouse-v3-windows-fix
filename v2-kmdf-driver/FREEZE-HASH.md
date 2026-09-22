@@ -8,7 +8,7 @@ MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys
 
 `<sha8>` is the first eight hex characters of SHA256 (uppercase). Example after a real build: `MagicMouseDriver-kmdf-2.0.4-scroll-A1B2C3D4.sys`.
 
-Linux cannot produce the `.sys`. There is no frozen hash in this PR until a human builds on Windows.
+Linux cannot produce the `.sys`. There is no frozen hash in this repository until a human builds on Windows.
 
 ## Gate
 
@@ -31,4 +31,4 @@ Linux cannot produce the `.sys`. There is no frozen hash in this PR until a huma
 
 ## Why the name includes sha8
 
-The unlabeled `MagicMouseDriver-kmdf-2.0.4-scroll.sys` from PR #3 collided with “the 2.0.4 file” in conversation while System32 still used the live name. Hash-in-the-filename stops a second live-named copy from being treated as restore.
+An earlier iteration of this package emitted an unlabeled `MagicMouseDriver-kmdf-2.0.4-scroll.sys`, which collided with “the 2.0.4 file” in conversation while System32 still used the live name. Hash-in-the-filename stops a second live-named copy from being treated as restore.

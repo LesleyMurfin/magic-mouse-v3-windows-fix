@@ -1,8 +1,8 @@
 # MagicMouseDriver (KMDF) — PID 0x0323 only
 
-**Unique 2.0.4.6 scroll package** (`DriverVer 09/20/2026,2.0.4.6`) — **source only, not yet built or signed.** 2.0.4.6 adds one fix over 2.0.4.4: the HID control channel is learned from device-initiated reconnects (`BRB_L2CA_OPEN_CHANNEL_RESPONSE`) as well as host-initiated opens, which keeps the battery percent readable after an idle disconnect. 2.0.4.4 had carried two fixes over 2.0.4.3: the COL02 Input `0x90` battery read is no longer swallowed by the ACL scratch diversion, and every dragging contact emits wheel notches again (default detent `ScrollStep` 8 -> **16**). **2026-09-15 hardware (the signed 2.0.4.3 build):** pointer + **2-finger** surface scroll + battery `0x90`. 1-finger glass does not scroll. Detent is the registry tunable `ScrollStep`. Earlier dated evidence for the 2.0.4.1 build is in `CHECKPOINT-2026-09-01-SCROLL.md`.
+**Unique 2.0.4.6 scroll package** (`DriverVer 09/20/2026,2.0.4.6`) — **source only, not yet built or signed.** Over 2.0.4.4, the HID control channel is now learned from device-initiated reconnects (`BRB_L2CA_OPEN_CHANNEL_RESPONSE`) as well as host-initiated opens (2.0.4.5), a control read shorter than a mouse report is no longer diverted into the ACL scratch, and the watcher re-arms multitouch by itself after sleep/wake (2.0.4.6) — together keeping the battery percent readable and scroll alive across an idle disconnect and a resume. 2.0.4.4 had carried two fixes over 2.0.4.3: the COL02 Input `0x90` battery read is no longer swallowed by the ACL scratch diversion, and every dragging contact emits wheel notches again (default detent `ScrollStep` 8 -> **16**). **2026-09-15 hardware (the signed 2.0.4.3 build):** pointer + **2-finger** surface scroll + battery `0x90`. 1-finger glass does not scroll. Detent is the registry tunable `ScrollStep`.
 
-**Other PCs ($0):** `Setup-Community.cmd` (testsigning, Secure Boot off). **How to help test:** `COMMUNITY-TESTING.md`. Status / leftovers: `STATUS.md`. Ship plan: `SHIPPING.md`. Developer path: thumb `16940C0F` + `Install-KMDF.cmd`.
+**Other PCs ($0):** `Setup-Community.cmd` (testsigning, Secure Boot off). **How to help test:** `COMMUNITY-TESTING.md`. Current state: `STATUS.md`. Ship plan: `SHIPPING.md`. Developer path: thumb `16940C0F` + `Install-KMDF.cmd`.
 
 
 
@@ -44,7 +44,7 @@ restore baseline and `845435CE…` is the refused 2.0.4.0 package.
 
 See `SIGN-AND-INSTALL.md` and `FREEZE-HASH.md`.
 
-**Where is the compiler?** `TOOLCHAIN.md` — the measured build-toolchain inventory (EWDK / WDK, `signtool`, `Inf2Cat`, signing cert). Do not re-discover it.
+**Where is the compiler?** `BUILDING.md` — Visual Studio + WDK, or a mounted Enterprise WDK, plus `signtool` and `Inf2Cat` from the same kit.
 
 1. Windows WDK build → `Freeze-KmdfArtifact.ps1` → `SHA256SUMS.txt`.
 2. Human signs `.sys` + `.cat` with cert thumb **16940C0F** (private key on the PC, not in git).

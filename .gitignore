@@ -60,5 +60,6 @@ env/
 *.swo
 *~
 
-# Local research — private, never pushed
+# Local research and agent working notes — private, never pushed
 docs/research/
+.ai/

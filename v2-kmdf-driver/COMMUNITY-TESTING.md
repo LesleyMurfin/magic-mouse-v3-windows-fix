@@ -112,4 +112,4 @@ Delete the published `oemNN.inf` whose Original Name is `MagicMouseDriver-kmdf-2
 
 ## Maintainers
 
-Internal leftover list: `STATUS.md`. Swap-test / attestation: `SHIPPING.md`.
+Current state and remaining work: `STATUS.md`. Swap-test / attestation: `SHIPPING.md`.

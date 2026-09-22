@@ -1,6 +1,6 @@
 # magic-tray: install this KMDF for 0323
 
-`LesleyMurfin/magic-tray` PR #74 should treat **this repo / `v2-kmdf-driver/`** as the 0323 driver.
+`LesleyMurfin/magic-tray` should treat **this repo / `v2-kmdf-driver/`** as the 0323 driver.
 
 ## Do
 
@@ -22,6 +22,6 @@
 - Run unsigned activate (`pr3-activate-204`).
 - `pnputil /delete-driver` Apr 30 oem16 / `MagicMouseDriver.inf`.
 - Ship a second live-named `MagicMouseDriver.sys`.
-- Treat this PR as merge-ready before hardware proves pointer **and** scroll.
+- Present the KMDF route as hardware-proven at 2.0.4.6. That version is source only — not yet built, signed or run on hardware.
 
 Tray SELECT for 0323 should pull **`MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys`** (FileVersion 2.0.4.6; INF dest `MagicMouseDriver-kmdf-204-scroll.sys`). Leave **`MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys`** as the pointer-only baseline (live name `MagicMouseDriver.sys`). Refuse **`MagicMouseDriver-kmdf-may20-pointerdead-559B136A.sys`**. PATH-A stays in `v1-binary-patch/`.

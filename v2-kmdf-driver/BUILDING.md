@@ -1,16 +1,7 @@
 # Building MagicMouseDriver-kmdf-2.0.4-scroll-\<sha8\>.sys
 
-Linux cannot produce a `.sys`. This WSL is a factory-server mirror; Windows work is IaC through `MM-Dev-Cycle`, not `/tmp` copies of `powershell.exe`.
-
-From this WSL (after `WSL-FACTORY-MIRROR`):
-
-```bash
-bash v2-kmdf-driver/scripts/kmdf-204-from-wsl.sh
-```
-
-That syncs sources to `C:\mm-dev-queue\kmdf-204-src` and runs named phases `KMDF-204-SYNC` / `KMDF-204-BUILD` (unsigned unique `2.0.4.6` only). It does **not** `pnputil` or `INSTALL-DRIVER`.
-
-Build on Windows 10/11 x64 with Visual Studio + WDK, or a mounted Enterprise WDK.
+Linux cannot produce a `.sys`. Build on Windows 10/11 x64 with Visual Studio + WDK, or a mounted
+Enterprise WDK.
 
 `msbuild` emits **`MagicMouseDriver-kmdf-204-scroll.sys`** (unique INF dest / ServiceBinary). Then freeze it as **`MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys`**. FileVersion / DriverVer is **2.0.4.6** (`DriverVer 09/20/2026,2.0.4.6`). 2.0.4.3 is frozen: it was already built and hashed, so the build script's `FROZEN-UNSIGNED` one-shot guard refuses to rebuild that version and every change must land under a new version number.
 
@@ -35,6 +26,11 @@ powershell -NoProfile -File scripts\Freeze-KmdfArtifact.ps1 -SysPath x64\Release
 1. Mount the EWDK ISO.
 2. Run `LaunchBuildEnv.cmd` (or `BuildEnv\SetupBuildEnv.cmd`).
 3. `msbuild` the vcxproj as above, then freeze.
+
+`scripts\kmdf-204-scroll-build.ps1` and `scripts\kmdf-204-scroll-sign.ps1` automate those steps.
+Both work out of a scratch queue root — synced source, per-version build dirs, sign stages, the
+NuGet-installed WDK/SDK tool packages — whose default is the one baked into those scripts; set the
+`MM_QUEUE_ROOT` environment variable (or pass `-QueueRoot`) to point them at your own layout.
 
 ## After the `.sys` exists
 

@@ -2,13 +2,18 @@
 # pnputil /add-driver a signed unique package. Never oem16, never
 # MagicMouseDriver.sys, never PATH-A.
 #
-# -Stage DEFAULTS to the known-good 2.0.4.1 restore copy, so running this
-# with no arguments is always the rollback. Installing anything newer is an
-# explicit act: pass the version's own sign stage, e.g.
-#   -Stage C:\mm-dev-queue\kmdf-204-sign-2043
+# -Stage DEFAULTS to the known-good 2.0.4.1 restore copy under -QueueRoot, so
+# running this with no arguments is always the rollback. Installing anything
+# newer is an explicit act: pass the version's own sign stage, e.g.
+#   -Stage (Join-Path $env:MM_QUEUE_ROOT 'kmdf-204-sign-2043')
+#
+# -QueueRoot is the scratch root those sign stages live under. Set the
+# MM_QUEUE_ROOT environment variable, or pass -QueueRoot, to move it off the
+# default below.
 [CmdletBinding()]
 param(
-    [string]$Stage = 'C:\mm-dev-queue\kmdf-204-sign'
+    [string]$QueueRoot = $(if ($env:MM_QUEUE_ROOT) { $env:MM_QUEUE_ROOT } else { 'C:\mm-dev-queue' }),
+    [string]$Stage = ($QueueRoot + '\kmdf-204-sign')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -80,7 +85,9 @@ Write-Output ('restart_exit=' + $LASTEXITCODE)
 Start-Sleep -Seconds 3
 
 Write-Output '=== F1 SetFeature (restore MT 14+8N) ==='
-$f1 = 'C:\mm-dev-queue\mm-f1-once.ps1'
+# Prefer the copy shipped next to this script; fall back to the queue root.
+$f1 = Join-Path $Here 'mm-f1-once.ps1'
+if (-not (Test-Path -LiteralPath $f1)) { $f1 = $QueueRoot + '\mm-f1-once.ps1' }
 if (Test-Path -LiteralPath $f1) {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $f1
     Write-Output ('f1_exit=' + $LASTEXITCODE)
