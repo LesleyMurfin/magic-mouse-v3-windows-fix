@@ -81,15 +81,16 @@ jobs:
             'Install-MagicMousePatch.ps1 enforces these and refuses to run otherwise:'
             ''
             '- Windows 10 build 14393 (1607) or later, x64, elevated PowerShell 5.0+.'
-            '- Test Signing ON. The driver is self-signed:'
-            '  `bcdedit /set testsigning on`, then reboot.'
             '- Fast Startup OFF (`HiberbootEnabled` must be 0):'
             '  `powercfg /h off`, then reboot. With Fast Startup on the install'
             '  silently fails.'
-            '- HVCI / Memory Integrity is a warning, not a block. Windows 11 22H2+'
-            '  refuses to load self-signed kernel drivers while it is enabled:'
-            '  Windows Security -> Device Security -> Core isolation ->'
-            '  Memory Integrity: OFF, then reboot.'
+            ''
+            'Test Signing and HVCI are NOT prerequisites for the route this kit'
+            'installs. Apple ships applewirelessmouse.sys with a Microsoft'
+            'countersignature, so it loads under Secure Boot and Memory Integrity'
+            'unchanged. The installer applies the test-signing and HVCI checks only'
+            'to the legacy byte-patched variant, whose re-signing invalidates that'
+            'countersignature.'
             ''
             '## Install'
             ''
@@ -106,10 +107,11 @@ jobs:
 
           if ($env:BINARY_INCLUDED -eq 'true') {
             $notes += @(
-              'This asset includes the signed `applewirelessmouse.sys` and'
-              '`MagicMouseFix.cer`. Packaging verified the driver SHA256 and byte'
-              'length against the constants in `Install-MagicMousePatch.ps1`; the'
-              'release fails rather than publish a binary that disagrees with them.'
+              "This asset includes Apple's `applewirelessmouse.sys`, unmodified, with"
+              'its Apple/Microsoft signature intact. No certificate is shipped and none'
+              'is imported: nothing here is self-signed. Packaging verified the'
+              'SHA256 and byte length against the constants the provenance gate pins,'
+              'and the release fails rather than publish a binary that disagrees.'
             )
           } else {
             $notes += @(

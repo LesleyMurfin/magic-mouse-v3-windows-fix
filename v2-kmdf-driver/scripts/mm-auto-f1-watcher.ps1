@@ -180,6 +180,10 @@ if (Test-MmCol01Present) {
 $lastRid = 0
 $diagKey = 'HKLM:\SYSTEM\CurrentControlSet\Services\MagicMouseDriver204Scroll\Diag'
 $heartbeatCounter = 0
+# Last logged diag-poll failure. The poll runs every 5s, so a persistent
+# failure (service uninstalled, key ACL'd away) would otherwise write ~17k
+# identical lines a day; only a change in the message is worth a line.
+$lastDiagError = ''
 
 while ($true) {
     $ev = Wait-Event -Timeout 5
@@ -204,5 +208,12 @@ while ($true) {
         } elseif ($diag) {
             $lastRid = $diag.Rid12Count
         }
-    } catch {}
+        $lastDiagError = ''
+    } catch {
+        $diagError = $_.Exception.Message
+        if ($diagError -ne $lastDiagError) {
+            Write-MmWatcherLog ('diag poll failed: ' + $diagError)
+            $lastDiagError = $diagError
+        }
+    }
 }
