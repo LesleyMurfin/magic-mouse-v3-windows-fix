@@ -65,7 +65,17 @@ jobs:
           ZIP_NAME: ${{ steps.package.outputs.zip_name }}
           ZIP_SHA256: ${{ steps.package.outputs.zip_sha256 }}
           BINARY_INCLUDED: ${{ steps.package.outputs.binary_included }}
+          CERT_INCLUDED: ${{ steps.package.outputs.cert_included }}
+          DRIVER_SHA256: ${{ steps.package.outputs.driver_sha256 }}
         run: |
+          # binary_included can no longer be false: the driver is tracked in git
+          # and packaging fails without it. Kept as a tripwire so a kit that
+          # somehow ships without the driver never reaches users.
+          if ($env:BINARY_INCLUDED -ne 'true') {
+            Write-Host "::error::Packaging reported binary_included=$env:BINARY_INCLUDED. The kit must ship apple-driver\applewirelessmouse.sys."
+            exit 1
+          }
+
           $notes = @(
             "Magic Mouse v3 Windows scroll fix $env:RELEASE_TAG"
             ''
@@ -80,45 +90,58 @@ jobs:
             ''
             'Install-MagicMousePatch.ps1 enforces these and refuses to run otherwise:'
             ''
-            '- Windows 10 build 14393 (1607) or later, x64, elevated PowerShell 5.0+.'
-            '- Test Signing ON. The driver is self-signed:'
-            '  `bcdedit /set testsigning on`, then reboot.'
+            '- Windows 10 build 14393 (1607) or later, x64, elevated.'
             '- Fast Startup OFF (`HiberbootEnabled` must be 0):'
             '  `powercfg /h off`, then reboot. With Fast Startup on the install'
             '  silently fails.'
-            '- HVCI / Memory Integrity is a warning, not a block. Windows 11 22H2+'
-            '  refuses to load self-signed kernel drivers while it is enabled:'
-            '  Windows Security -> Device Security -> Core isolation ->'
-            '  Memory Integrity: OFF, then reboot.'
+            ''
+            'Test Signing and HVCI / Memory Integrity are NOT prerequisites of this'
+            'download. They applied to the legacy patched-and-re-signed driver, which'
+            'is no longer shipped. The driver in this asset is Apple''s own, unmodified'
+            'and Microsoft-countersigned, so Test Mode is EXPECTED not to be required'
+            'and Secure Boot / Memory Integrity should be able to stay ON. That is NOT'
+            'yet verified on a machine with test signing off - this project''s'
+            'development PC runs with testsigning on. After the reboot, confirm the'
+            'driver really loaded:'
+            ''
+            '    sc query applewirelessmouse'
             ''
             '## Install'
             ''
-            '1. Extract the ZIP.'
+            '1. Extract the whole ZIP, keeping its folders. Install.cmd finds the'
+            '   installer and the driver relative to itself.'
             '2. Verify `SHA256SUMS` against the extracted files.'
-            '3. Run `Install-MagicMousePatch.ps1` from an elevated prompt.'
+            '3. Double-click `Install.cmd`. It requests Administrator itself, so there'
+            '   is nothing to type and no execution policy to change.'
             '4. Reboot.'
             ''
-            'Rollback: `Uninstall-MagicMousePatch.ps1`, elevated, then reboot.'
+            'Advanced: from an elevated prompt, run'
+            '`installer\Install-MagicMousePatch.ps1 -DriverPath <applewirelessmouse.sys>`'
+            'instead - for example to install a copy from your own Boot Camp files.'
+            ''
+            'Rollback: `installer\Uninstall-MagicMousePatch.ps1`, elevated, then reboot.'
             ''
             '## Driver binary'
             ''
+            'This asset ships Apple''s unmodified `applewirelessmouse.sys` as'
+            '`apple-driver\applewirelessmouse.sys`:'
+            ''
+            "    SHA256: $env:DRIVER_SHA256"
+            ''
+            'Packaging hashed that file and refused to publish unless it matched the'
+            'checksum published for it in `installer\SHA256SUMS.txt`. The installer'
+            'accepts a driver on its Authenticode status, signer subject and PE'
+            'OriginalFilename rather than on a pinned hash, because Apple has shipped'
+            'more than one Boot Camp build; a modified or unsigned binary is rejected.'
+            'Apple retains copyright in the file - see the bundled `DMCA-NOTICE.md`.'
           )
 
-          if ($env:BINARY_INCLUDED -eq 'true') {
+          if ($env:CERT_INCLUDED -eq 'true') {
             $notes += @(
-              'This asset includes the signed `applewirelessmouse.sys` and'
-              '`MagicMouseFix.cer`. Packaging verified the driver SHA256 and byte'
-              'length against the constants in `Install-MagicMousePatch.ps1`; the'
-              'release fails rather than publish a binary that disagrees with them.'
-            )
-          } else {
-            $notes += @(
-              'This asset is the scripts-only kit. The signed `applewirelessmouse.sys`'
-              'and `MagicMouseFix.cer` are NOT redistributed in it (see'
-              '`DMCA-NOTICE.md`). Obtain the binary as described in the bundled'
-              '`README.txt` (`v1-binary-patch/README.md`). The installer verifies'
-              'SHA256, byte length, Authenticode signature and signer thumbprint'
-              'before it touches the system, so a substituted binary is rejected.'
+              ''
+              'This asset also carries `installer\MagicMouseFix.cer`, which belongs to'
+              'the legacy patched variant only. The Apple driver route neither imports'
+              'nor needs it.'
             )
           }
 

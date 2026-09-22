@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Apple-driver install route. `v1-binary-patch/apple-driver/applewirelessmouse.sys` is Apple's
+  own driver redistributed **unmodified** (SHA256
+  `08F33D7E3ECE2C73950A9706F1C4C9057894EAEAF1C4FB355F261F3C2333378F`, 78,424 bytes, version
+  6.1.7700.0), still carrying its Apple signature and Microsoft WHQL countersignature
+  (`CN=Microsoft Windows Hardware Compatibility Publisher`). The fix is the *registration* —
+  creating the kernel service and binding the driver as a lower filter — which Windows does not
+  do on a non-Mac PC. That logic is this project's own work.
+- `v1-binary-patch/Install.cmd`: one-click, self-elevating installer. No PowerShell window and
+  no execution-policy change.
+- Support for every Magic Mouse model the filter serves, not just v3: `0x030D` (v1), `0x0269`
+  and `0x0310` (v2), `0x0323` (v3). New `-TargetPid` switch selects a single model.
+- Installer switches `-DriverPath`, `-FromDriverStore` and `-DryRun`.
+
+### Changed
+
+- **The shipped route no longer requires Windows Test Mode or a certificate.** Apple's binary is
+  countersigned by Microsoft, so Secure Boot and memory integrity should be able to stay on.
+  Note this is not yet verified on a machine with test signing off — the development PC runs
+  with it on. Confirm with `sc query applewirelessmouse` after rebooting.
+- The installer now identifies which binary it was handed rather than pinning one hash:
+  `AppleSigned` (Authenticode Valid + Apple/Microsoft signer + Apple's PE `OriginalFilename`)
+  or `PatchedResigned` (the legacy thumbprint). Apple's driver is deliberately **not**
+  hash-pinned at runtime, because Apple has shipped more than one Boot Camp build and a pin
+  would reject a legitimately signed newer copy. Test-signing and certificate-import steps are
+  gated to `PatchedResigned` only.
+- Release provenance moved to model v2: the shipped driver is verified by hashing the tracked
+  bytes rather than scraping a constant out of the installer, which is what the old
+  `$ExpectedSha256` / `$ExpectedSize` pair did. The legacy triple is still verified where it is
+  documented.
+- `DMCA-NOTICE.md` rewritten: the repository now redistributes Apple's driver verbatim rather
+  than a patched derivative, which is a materially different posture and is stated as such.
+- `README.md` and `SECURITY.md` corrected. `README.md` had claimed the installer imports a
+  certificate into `LocalMachine\TrustedPublisher` **and the Root store**; the installer imports
+  to `TrustedPublisher` only, and its own comment calls a Root import a security hole.
+
+### Deprecated
+
+- The byte-patched, re-signed driver variant (SHA256 `370A5555…`, 66,288 bytes, signed
+  `CN=MagicMouseFix`) is no longer shipped. Patching breaks Apple's countersignature, which is
+  why it needed Test Mode. Its constants are retained so an existing installation can be
+  identified and cleanly uninstalled.
+
 ## [1.0.0] - 2026-05-18
 
 ### Added

@@ -50,34 +50,45 @@ This security policy covers only this driver patch repository and its distribute
 
 ### When Installing This Patch
 
-1. **Verify binary integrity:** Always run the SHA256 hash check before installation
+1. **Verify binary integrity:** always run the SHA256 check before installation
    ```powershell
-   (Get-FileHash "applewirelessmouse.sys" -Algorithm SHA256).Hash
-   # Expected: 370A5555AEBF673C3156EA5B5FBABD8030F2EE7A3A6BD0FCB1B4B6C93FA56A03
+   (Get-FileHash ".\apple-driver\applewirelessmouse.sys" -Algorithm SHA256).Hash
+   # Expected: 08F33D7E3ECE2C73950A9706F1C4C9057894EAEAF1C4FB355F261F3C2333378F   (78,424 bytes)
    ```
+   `installer\SHA256SUMS.txt` publishes the same checksum in `sha256sum -c` format.
 
-2. **Certificate trust:** You will see a Windows Security prompt asking to trust the MagicMouseFix certificate
-   - Verify the certificate name: **CN=MagicMouseFix**
-   - Verify the thumbprint: **16940C0F937D569363560D5FEC5CD8FA6D6D9BCE**
-   - Click **Install** only if these match
+2. **Verify the signature rather than trusting a certificate.** The shipped driver is Apple's
+   own binary, unmodified, so Windows already trusts it and nothing is added to a trust store:
+   ```powershell
+   $sig = Get-AuthenticodeSignature ".\apple-driver\applewirelessmouse.sys"
+   $sig.Status                              # Valid
+   $sig.SignerCertificate.Subject           # CN=Microsoft Windows Hardware Compatibility Publisher, ...
+   ```
+   If `Status` is anything other than `Valid`, stop: the file has been altered. The installer
+   makes the same check and refuses to continue.
 
-3. **Run installer as Administrator:** The installer requires full administrative privileges
-   - Right-click PowerShell → Run as Administrator
-   - Paste installer path and execute
+3. **Run the installer as Administrator:** `Install.cmd` requests elevation itself. If you run
+   the PowerShell script directly, start an elevated PowerShell first.
 
 4. **Create a system restore point (optional but recommended):**
    ```powershell
-   Checkpoint-Computer -Description "Before MagicMousePatch v1.0.0"
+   Checkpoint-Computer -Description "Before MagicMousePatch"
    ```
 
 ### Windows Defender SmartScreen
 
-On Windows 10/11, you may see a "Windows protected your PC" warning. This is normal for drivers signed with a new certificate. To proceed:
+SmartScreen may warn on a freshly downloaded archive, as it does for any new download. The
+driver itself is Apple's, countersigned by Microsoft, so there is no self-signed certificate
+needing to build reputation on the shipped route.
 
-1. Click **More info**
-2. Click **Run anyway**
+### Legacy patched variant
 
-This warning appears because the MagicMouseFix certificate is new and not yet widely distributed. As users install this patch, the certificate will gain reputation and this warning will disappear.
+A previous release shipped a byte-patched copy of the driver re-signed as `CN=MagicMouseFix`
+(SHA256 `370A5555…`, 66,288 bytes, thumbprint `16940C0F937D569363560D5FEC5CD8FA6D6D9BCE`).
+Patching breaks Apple's Microsoft countersignature, so that variant required Windows Test Mode
+with Secure Boot and memory integrity off, and imported its certificate into
+`LocalMachine\TrustedPublisher` — never the Root store. **It is no longer shipped.** The values
+are recorded so an existing installation can be identified; the installer labels it as legacy.
 
 ### Uninstalling
 
@@ -91,15 +102,19 @@ This removes:
 - The driver binary
 - The Windows service
 - Registry entries
-- Certificates
+- Certificates, if the legacy variant installed one
 - Backup files
 
 Restore only the original Windows-signed applewirelessmouse.sys driver (if one exists).
 
 ## Driver Signing
 
-- **v1.0.0:** Signed with MagicMouseFix self-signed certificate (thumbprint: 16940C0F937D569363560D5FEC5CD8FA6D6D9BCE)
-- **v2.0.0 (future):** Will be signed with a commercial code-signing certificate for broader OS compatibility
+- **Shipped Apple-driver route:** no project signing. Apple's `applewirelessmouse.sys` is
+  redistributed unmodified and is already signed by Apple and countersigned by Microsoft
+  (`CN=Microsoft Windows Hardware Compatibility Publisher`).
+- **Legacy patched variant:** signed with the MagicMouseFix self-signed certificate
+  (thumbprint `16940C0F937D569363560D5FEC5CD8FA6D6D9BCE`). No longer shipped.
+- **v2 KMDF driver (future):** will need a commercial code-signing certificate.
 
 ## Known Security Boundaries
 

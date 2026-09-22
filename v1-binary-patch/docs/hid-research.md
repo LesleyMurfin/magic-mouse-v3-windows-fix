@@ -4,8 +4,8 @@
 
 | Model | Year | Bluetooth PID | VID | MAC prefix | This fix? |
 |-------|------|---------------|-----|------------|-----------|
-| Magic Mouse v1 | 2009 | `0x030D` | `0x004C` | varies | No |
-| Magic Mouse v2 | 2015 | `0x0269` | `0x004C` | varies | No |
+| Magic Mouse v1 | 2009 | `0x030D` | `0x004C` | varies | Yes (installer targets this PID) |
+| Magic Mouse v2 | 2015 | `0x0269` / `0x0310` (alt) | `0x004C` | varies | Yes (installer targets these PIDs) |
 | **Magic Mouse v3** | **2024** | **`0x0323`** | **`0x004C`** | `D0:C0:50:xx:xx:xx` | **Yes** |
 
 This document covers v3 (`0x0323`) only. v1/v2 use different HID descriptor structures and
