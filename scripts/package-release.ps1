@@ -3,32 +3,41 @@
 Packages the Magic Mouse v3 installer kit as a release asset.
 
 .DESCRIPTION
-Stages the installer scripts, checksums and legal/security documents into a
-temporary directory, generates an in-archive SHA256SUMS manifest, then writes
-dist/magic-mouse-v3-fix-<Tag>-installer.zip plus a .sha256 sidecar.
+Builds dist/magic-mouse-v3-fix-<Tag>-installer.zip plus a .sha256 sidecar from
+the tracked repository tree, and writes an in-archive SHA256SUMS manifest that
+covers every packaged file.
 
-Two applewirelessmouse.sys binaries are known and each has its own rules:
+The archive reproduces the repository layout instead of flattening it, because
+Install.cmd resolves its two payload paths relative to its own folder:
 
-  apple   Apple's unmodified driver, tracked at v1-binary-patch/apple-driver/.
-          Microsoft-countersigned, so it installs with no certificate at all
-          and ships on its own.
-  legacy  The byte-patched copy re-signed as CN=MagicMouseFix, not tracked in
-          git (see DMCA-NOTICE.md). It and MagicMouseFix.cer are one payload,
-          never two options: Install-MagicMousePatch.ps1 imports the .cer into
-          LocalMachine\TrustedPublisher before it copies the .sys and refuses
-          to run without either, so staging exactly one of them is a hard
-          failure -- a kit that carries half the payload looks complete and
-          cannot install.
+    Install.cmd                              <- double-click, self-elevating
+    installer\Install-MagicMousePatch.ps1    <- %HERE%installer\...
+    installer\Uninstall-MagicMousePatch.ps1
+    installer\SHA256SUMS.txt
+    apple-driver\applewirelessmouse.sys      <- %HERE%apple-driver\...
+    LICENSE, SECURITY.md, DMCA-NOTICE.md, README.txt, SHA256SUMS
 
-The kit ships exactly one driver, so staging both is refused rather than
-resolved by search order, and a staged driver must hash to the triple its
-location promises: apple-driver/ to the Apple constants pinned below, the
-installer directory or the patch root to the $PatchedSha256 / $PatchedSize
-constants in Install-MagicMousePatch.ps1. Shipping a binary that contradicts
-our own documentation is a hard failure.
+A flattened kit contains every file and still breaks the one-click route, so the
+layout is part of the contract, not cosmetics.
 
-When no driver is staged this produces a scripts-only kit and reports
-binary_included=false so the release notes can say so explicitly.
+Apple's applewirelessmouse.sys is the shipped route. It is tracked in git,
+unmodified and Microsoft-countersigned, so it needs no certificate and no test
+signing. It is a required payload file: packaging hashes the real bytes and
+refuses to publish unless they match the checksum published for
+apple-driver/applewirelessmouse.sys in installer/SHA256SUMS.txt. The file on
+disk and the checksum the kit publishes for it cannot disagree in a release.
+
+MagicMouseFix.cer belongs to the legacy PatchedResigned variant only -- the
+byte-patched, re-signed driver that is no longer shipped. It is therefore
+OPTIONAL: a kit without it is the normal, complete Apple-route kit. When it is
+staged it is packaged next to the installer, where $CertPath expects it.
+
+Step output note: binary_included kept its name and its meaning ("the kernel
+driver ships in this asset"), but it can no longer be false. The driver used to
+be an untracked, out-of-band payload that might be absent, producing a
+scripts-only kit; it is tracked now, so its absence is a packaging failure
+rather than a publishable variant. cert_included carries the one thing that is
+genuinely optional today, and driver_sha256 publishes the verified hash.
 
 .PARAMETER Tag
 Release tag, e.g. v1.0.0. Becomes part of the asset filename.
@@ -59,6 +68,20 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference    = 'SilentlyContinue'
 
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+# Archive path of the shipped driver, and the name it is published under in
+# installer/SHA256SUMS.txt -- the same string, because the kit ships the repo
+# layout.
+$ShippedDriverEntry = 'apple-driver/applewirelessmouse.sys'
+
+# Byte length of the exact Apple build whose SHA256 is published in
+# installer/SHA256SUMS.txt. The hash already fixes the bytes; the length is
+# checked first so a truncated or substituted file is reported in bytes instead
+# of as an opaque hash mismatch. Both move together if a newer Boot Camp build
+# is ever shipped.
+$ShippedDriverSize = 78424
+
 # ============================================================================
 # Helpers
 # ============================================================================
@@ -70,31 +93,25 @@ function Write-Failure {
     Write-Host "[ERROR] $Message" -ForegroundColor Red
 }
 
-# The shipped Apple driver. Install-MagicMousePatch.ps1 identifies it by Authenticode
-# signer rather than by hash, so the constants of the copy this repository ships are
-# pinned here; Test-ReleaseProvenance.ps1 fails if this pin drifts from the tree.
-$AppleSha256 = '08f33d7e3ece2c73950a9706f1c4c9057894eaeaf1c4fb355f261f3c2333378f'
-$AppleSize   = [int64]78424
-
-function Get-InstallerFact {
-    param([string]$Path)
-
-    $text = Get-Content -LiteralPath $Path -Raw
-    $sha  = [regex]::Match($text, '\$PatchedSha256\s*=\s*"([0-9A-Fa-f]{64})"')
-    $size = [regex]::Match($text, '\$PatchedSize\s*=\s*([0-9]+)')
-    if (-not $sha.Success -or -not $size.Success) {
-        throw "Unable to read PatchedSha256/PatchedSize from $Path"
-    }
-    return [pscustomobject]@{
-        Sha256 = $sha.Groups[1].Value.ToLowerInvariant()
-        Size   = [int64]$size.Groups[1].Value
-    }
-}
-
 function Get-Sha256Hex {
     param([string]$Path)
 
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+# Reads one checksum out of a sha256sum -c manifest. Comment lines and the
+# hashes recorded there as prose (the legacy and known-bad artifacts) never
+# match, which is exactly why they are comments.
+function Get-PublishedSha256 {
+    param([string]$Path, [string]$Entry)
+
+    foreach ($line in (Get-Content -LiteralPath $Path)) {
+        $match = [regex]::Match($line, '^([0-9a-fA-F]{64})\s\s?(\S.*)$')
+        if ($match.Success -and $match.Groups[2].Value.Trim() -eq $Entry) {
+            return $match.Groups[1].Value.ToLowerInvariant()
+        }
+    }
+    return $null
 }
 
 function Write-StepOutput {
@@ -112,7 +129,9 @@ function Write-StepOutput {
 $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
 $patchDir     = Join-Path $RepoRoot 'v1-binary-patch'
 $installerDir = Join-Path $patchDir 'installer'
-$installerPs1 = Join-Path $installerDir 'Install-MagicMousePatch.ps1'
+$driverDir    = Join-Path $patchDir 'apple-driver'
+$sumsPath     = Join-Path $installerDir 'SHA256SUMS.txt'
+$driverPath   = Join-Path $driverDir 'applewirelessmouse.sys'
 
 if (-not [System.IO.Path]::IsPathRooted($OutDir)) {
     $OutDir = Join-Path $RepoRoot $OutDir
@@ -125,15 +144,18 @@ Write-Host "Packaging $zipName" -ForegroundColor Cyan
 Write-Host "  RepoRoot: $RepoRoot" -ForegroundColor Gray
 Write-Host "  OutDir:   $OutDir" -ForegroundColor Gray
 
-# name inside the archive <- source on disk
+# name inside the archive <- source on disk. Entry names use '/' so the kit
+# extracts with the same layout on every tool; Windows reads them the same way.
 $plan = @(
-    [pscustomobject]@{ Name = 'Install-MagicMousePatch.ps1'   ; Source = $installerPs1 }
-    [pscustomobject]@{ Name = 'Uninstall-MagicMousePatch.ps1' ; Source = (Join-Path $installerDir 'Uninstall-MagicMousePatch.ps1') }
-    [pscustomobject]@{ Name = 'SHA256SUMS.txt'                ; Source = (Join-Path $installerDir 'SHA256SUMS.txt') }
-    [pscustomobject]@{ Name = 'LICENSE'                       ; Source = (Join-Path $RepoRoot 'LICENSE') }
-    [pscustomobject]@{ Name = 'SECURITY.md'                   ; Source = (Join-Path $RepoRoot 'SECURITY.md') }
-    [pscustomobject]@{ Name = 'DMCA-NOTICE.md'                ; Source = (Join-Path $RepoRoot 'DMCA-NOTICE.md') }
-    [pscustomobject]@{ Name = 'README.txt'                    ; Source = (Join-Path $patchDir 'README.md') }
+    [pscustomobject]@{ Name = 'Install.cmd'                             ; Source = (Join-Path $patchDir 'Install.cmd') }
+    [pscustomobject]@{ Name = 'installer/Install-MagicMousePatch.ps1'   ; Source = (Join-Path $installerDir 'Install-MagicMousePatch.ps1') }
+    [pscustomobject]@{ Name = 'installer/Uninstall-MagicMousePatch.ps1' ; Source = (Join-Path $installerDir 'Uninstall-MagicMousePatch.ps1') }
+    [pscustomobject]@{ Name = 'installer/SHA256SUMS.txt'                ; Source = $sumsPath }
+    [pscustomobject]@{ Name = $ShippedDriverEntry                       ; Source = $driverPath }
+    [pscustomobject]@{ Name = 'LICENSE'                                 ; Source = (Join-Path $RepoRoot 'LICENSE') }
+    [pscustomobject]@{ Name = 'SECURITY.md'                             ; Source = (Join-Path $RepoRoot 'SECURITY.md') }
+    [pscustomobject]@{ Name = 'DMCA-NOTICE.md'                          ; Source = (Join-Path $RepoRoot 'DMCA-NOTICE.md') }
+    [pscustomobject]@{ Name = 'README.txt'                              ; Source = (Join-Path $patchDir 'README.md') }
 )
 
 $missing = @($plan | Where-Object { -not (Test-Path -LiteralPath $_.Source -PathType Leaf) })
@@ -144,104 +166,94 @@ if ($missing.Count -gt 0) {
     exit 1
 }
 
-$facts = Get-InstallerFact -Path $installerPs1
-
-# Where each driver may live and what it must hash to. Exactly one of these may be
-# staged: the kit ships a single applewirelessmouse.sys, so a tree holding two of them
-# is ambiguous and is refused rather than silently resolved by search order.
-$driverSources = @(
-    [pscustomobject]@{ Driver = 'apple'  ; Path = (Join-Path (Join-Path $patchDir 'apple-driver') 'applewirelessmouse.sys'); Sha256 = $AppleSha256    ; Size = $AppleSize    ; NeedsCert = $false }
-    [pscustomobject]@{ Driver = 'legacy' ; Path = (Join-Path $installerDir 'applewirelessmouse.sys')                       ; Sha256 = $facts.Sha256 ; Size = $facts.Size ; NeedsCert = $true }
-    [pscustomobject]@{ Driver = 'legacy' ; Path = (Join-Path $patchDir 'applewirelessmouse.sys')                           ; Sha256 = $facts.Sha256 ; Size = $facts.Size ; NeedsCert = $true }
-)
-
-Write-Host "  apple driver  SHA256 $AppleSha256 / $AppleSize bytes" -ForegroundColor Gray
-Write-Host "  legacy driver SHA256 $($facts.Sha256) / $($facts.Size) bytes" -ForegroundColor Gray
-
 # ============================================================================
-# Optional payload: the driver, plus the certificate the legacy driver needs
+# The shipped driver must match the checksum the kit publishes for it
 # ============================================================================
 
-$staged = @($driverSources | Where-Object { Test-Path -LiteralPath $_.Path -PathType Leaf })
-if ($staged.Count -gt 1) {
-    Write-Failure ("More than one applewirelessmouse.sys is staged: " + (($staged | ForEach-Object { "$($_.Path) ($($_.Driver))" }) -join ', ') + ". The kit ships exactly one driver; remove the copies it must not publish.")
+$publishedHash = Get-PublishedSha256 -Path $sumsPath -Entry $ShippedDriverEntry
+if (-not $publishedHash) {
+    Write-Failure "No checksum line for '$ShippedDriverEntry' in $sumsPath. The shipped driver must be published there in sha256sum -c format; refusing to publish a driver the kit makes no claim about."
     exit 1
 }
 
-$driver     = $staged | Select-Object -First 1
+$driverSize = (Get-Item -LiteralPath $driverPath).Length
+if ($driverSize -ne $ShippedDriverSize) {
+    Write-Failure "Size mismatch for $driverPath - expected $ShippedDriverSize bytes, got $driverSize."
+    exit 1
+}
+
+$driverHash = Get-Sha256Hex -Path $driverPath
+if ($driverHash -ne $publishedHash) {
+    Write-Failure "SHA256 mismatch for $driverPath - $sumsPath publishes $publishedHash, the file hashes to $driverHash. Refusing to publish a driver that contradicts the checksums shipped beside it."
+    exit 1
+}
+
+Write-Host "  Apple driver verified: $driverHash ($driverSize bytes)" -ForegroundColor Green
+Write-Host "  Published in $($sumsPath): $ShippedDriverEntry" -ForegroundColor Gray
+
+# ============================================================================
+# Optional payload: the legacy certificate
+# ============================================================================
+
+# MagicMouseFix.cer only ever mattered to the PatchedResigned variant, which is
+# not shipped. Its absence is the normal case and is not a failure. When it is
+# staged it goes beside the installer, because Install-MagicMousePatch.ps1
+# resolves $CertPath as Join-Path $ScriptRoot 'MagicMouseFix.cer'.
 $certSource = $null
 foreach ($dir in @($installerDir, $patchDir)) {
-    $candidate = Join-Path $dir 'MagicMouseFix.cer'
-    if ($null -eq $certSource -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { $certSource = $candidate }
+    if ($null -eq $certSource) {
+        $candidate = Join-Path $dir 'MagicMouseFix.cer'
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { $certSource = $candidate }
+    }
 }
 
-$needsCert = ($null -ne $driver) -and $driver.NeedsCert
-$hasCert   = $null -ne $certSource
-
-if ($needsCert -and -not $hasCert) {
-    Write-Failure "MagicMouseFix.cer not found in $installerDir or $patchDir, but the legacy patched driver is staged at $($driver.Path). That driver and its certificate are one payload - Install-MagicMousePatch.ps1 imports the certificate before it copies the driver. Stage the certificate or remove the driver; refusing to publish half a kit."
-    exit 1
-}
-if ($hasCert -and -not $needsCert) {
-    Write-Failure "MagicMouseFix.cer is staged at $certSource, but no legacy patched driver is. That certificate exists only to trust the re-signed legacy binary - Apple's driver is Microsoft-countersigned and needs no certificate at all. Stage the legacy driver or remove the certificate; refusing to publish a file the kit cannot use."
-    exit 1
-}
-
-$binaryIncluded = $null -ne $driver
-if ($binaryIncluded) {
-    $actualHash = Get-Sha256Hex -Path $driver.Path
-    $actualSize = (Get-Item -LiteralPath $driver.Path).Length
-
-    if ($actualHash -ne $driver.Sha256) {
-        Write-Failure "SHA256 mismatch for $($driver.Path) - this location must hold the $($driver.Driver) driver $($driver.Sha256), got $actualHash. Refusing to publish a binary that contradicts our own documentation."
-        exit 1
-    }
-    if ($actualSize -ne $driver.Size) {
-        Write-Failure "Size mismatch for $($driver.Path) - the $($driver.Driver) driver is $($driver.Size) bytes, got $actualSize."
-        exit 1
-    }
-
-    $plan += [pscustomobject]@{ Name = 'applewirelessmouse.sys' ; Source = $driver.Path }
-    Write-Host "  Driver verified and included: $($driver.Path) ($($driver.Driver))" -ForegroundColor Green
-    if ($needsCert) {
-        $plan += [pscustomobject]@{ Name = 'MagicMouseFix.cer' ; Source = $certSource }
-        Write-Host "  Certificate included:         $certSource" -ForegroundColor Green
-    }
+$certIncluded = $null -ne $certSource
+if ($certIncluded) {
+    $plan += [pscustomobject]@{ Name = 'installer/MagicMouseFix.cer' ; Source = $certSource }
+    Write-Host "  Legacy certificate staged and included: $certSource" -ForegroundColor Green
 } else {
-    Write-Host "  No driver present in tree - building scripts-only kit" -ForegroundColor Yellow
+    Write-Host "  No MagicMouseFix.cer staged - Apple-route kit, no certificate needed" -ForegroundColor Gray
 }
 
 # ============================================================================
-# Stage, manifest, compress
+# Manifest and archive
 # ============================================================================
 
-$staging = Join-Path ([System.IO.Path]::GetTempPath()) ('mmv3-release-' + [guid]::NewGuid().ToString('N'))
+$manifest = foreach ($item in ($plan | Sort-Object -Property Name)) {
+    '{0}  {1}' -f (Get-Sha256Hex -Path $item.Source), $item.Name
+}
+
 $zipPath = Join-Path $OutDir $zipName
 
+if (-not (Test-Path -LiteralPath $OutDir -PathType Container)) {
+    New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+}
+if (Test-Path -LiteralPath $zipPath) {
+    Remove-Item -LiteralPath $zipPath -Force
+}
+
+# Entries are written by name rather than by zipping a staged directory: the
+# name in $plan is then the literal entry path, with no dependency on how the
+# host platform spells a directory separator.
+$archive = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create)
 try {
-    New-Item -ItemType Directory -Path $staging -Force | Out-Null
-
-    foreach ($item in $plan) {
-        Copy-Item -LiteralPath $item.Source -Destination (Join-Path $staging $item.Name) -Force
+    foreach ($item in ($plan | Sort-Object -Property Name)) {
+        [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $archive, $item.Source, $item.Name,
+            [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
     }
 
-    $manifest = foreach ($item in ($plan | Sort-Object -Property Name)) {
-        '{0}  {1}' -f (Get-Sha256Hex -Path (Join-Path $staging $item.Name)), $item.Name
+    $entry  = $archive.CreateEntry('SHA256SUMS', [System.IO.Compression.CompressionLevel]::Optimal)
+    $stream = $entry.Open()
+    $writer = [System.IO.StreamWriter]::new($stream, [System.Text.ASCIIEncoding]::new())
+    try {
+        foreach ($line in $manifest) { $writer.Write($line); $writer.Write("`r`n") }
+    } finally {
+        $writer.Dispose()
+        $stream.Dispose()
     }
-    Set-Content -LiteralPath (Join-Path $staging 'SHA256SUMS') -Value $manifest -Encoding ascii
-
-    if (-not (Test-Path -LiteralPath $OutDir -PathType Container)) {
-        New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
-    }
-    if (Test-Path -LiteralPath $zipPath) {
-        Remove-Item -LiteralPath $zipPath -Force
-    }
-
-    Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $zipPath -CompressionLevel Optimal
 } finally {
-    if (Test-Path -LiteralPath $staging) {
-        Remove-Item -LiteralPath $staging -Recurse -Force
-    }
+    $archive.Dispose()
 }
 
 $zipPath   = (Resolve-Path -LiteralPath $zipPath).Path
@@ -252,7 +264,9 @@ Set-Content -LiteralPath "$zipPath.sha256" -Value ('{0}  {1}' -f $zipHash, $zipN
 Write-StepOutput -Name 'zip'             -Value $zipPath
 Write-StepOutput -Name 'zip_name'        -Value $zipName
 Write-StepOutput -Name 'zip_sha256'      -Value $zipHash
-Write-StepOutput -Name 'binary_included' -Value ($binaryIncluded.ToString().ToLowerInvariant())
+Write-StepOutput -Name 'binary_included' -Value 'true'
+Write-StepOutput -Name 'cert_included'   -Value ($certIncluded.ToString().ToLowerInvariant())
+Write-StepOutput -Name 'driver_sha256'   -Value $driverHash
 
 Write-Host ""
 Write-Host "Packaged $($plan.Count + 1) files" -ForegroundColor Cyan
@@ -263,7 +277,9 @@ Write-Host "  zip:             $zipPath" -ForegroundColor Gray
 Write-Host "  size:            $zipLength bytes" -ForegroundColor Gray
 Write-Host "  sha256:          $zipHash" -ForegroundColor Gray
 Write-Host "  sidecar:         $zipPath.sha256" -ForegroundColor Gray
-Write-Host "  binary_included: $($binaryIncluded.ToString().ToLowerInvariant())" -ForegroundColor Gray
+Write-Host "  driver_sha256:   $driverHash" -ForegroundColor Gray
+Write-Host "  binary_included: true" -ForegroundColor Gray
+Write-Host "  cert_included:   $($certIncluded.ToString().ToLowerInvariant())" -ForegroundColor Gray
 Write-Host ""
 
 exit 0
