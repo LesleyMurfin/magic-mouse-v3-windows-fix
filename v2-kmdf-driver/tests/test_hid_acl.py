@@ -171,6 +171,17 @@ def _inf_code(text: str) -> str:
     return "\n".join(out)
 
 
+def _c_code(text: str) -> str:
+    """C source with comments removed, so source-shape checks cannot be
+    satisfied by prose. A comment quoting the gate it guards would make the
+    check vacuous: Driver.c:382 names `origCap >= MM_MOUSE_REPORT_LEN` in the
+    diversion rationale, which would keep that guard green even if the real
+    test at Driver.c:527 were weakened.
+    """
+    text = re.sub(r"/\*.*?\*/", "\n", text, flags=re.S)
+    return re.sub(r"//[^\n]*", "", text)
+
+
 class _Run:
     def __init__(self) -> None:
         self.failed: list[str] = []
@@ -484,7 +495,7 @@ def test_c_source_control_channel_gate(run: _Run) -> None:
         run.check("C_SOURCE_CONTROL_CHANNEL_GATE", False, f"missing {DRV_C}")
         return
 
-    drv = DRV_C.read_text(encoding="utf-8")
+    drv = _c_code(DRV_C.read_text(encoding="utf-8"))
 
     # Diversion floor: a whole report, never a header-first 1-byte read.
     has_floor = (
