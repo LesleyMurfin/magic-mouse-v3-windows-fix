@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Report a Security Vulnerability
+    url: https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/blob/main/SECURITY.md
+    about: Do not open a public issue. Email riley@revivebusiness.ca per SECURITY.md.
+  - name: Magic Mouse v1 or v2 Scroll Fix
+    url: https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows
+    about: This repo is v3-only (PID 0x0323). v1 (0x030D) and v2 (0x0269) are handled upstream.

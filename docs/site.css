@@ -110,6 +110,7 @@ code {
   border: 1px solid var(--line);
   border-radius: 0.3rem;
   padding: 0.05em 0.32em;
+  overflow-wrap: anywhere;
 }
 pre {
   overflow-x: auto;
