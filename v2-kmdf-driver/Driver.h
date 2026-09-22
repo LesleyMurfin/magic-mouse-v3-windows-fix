@@ -123,11 +123,13 @@ typedef struct _MM_REQUEST_CONTEXT
     PVOID OrigBuffer;
     PMDL  OrigMdl;
     ULONG OrigBufferSize;
-    // BufferSize and RemainingBufferSize are two halves of one capacity
-    // (OnAclTransferComplete computes capacity = BufferSize +
-    // RemainingBufferSize). Diverting to the scratch buffer overwrites both,
-    // so both must be saved and restored or the profile driver sees a
-    // capacity that never belonged to its buffer.
+    // Saved so the WdfRequestSend failure path can roll the BRB back to
+    // exactly what the profile driver submitted. It is deliberately NOT the
+    // value handed back on a completed transfer: bthddi.h defines
+    // RemainingBufferSize as the space left in the buffer after the BRB call,
+    // and OnAclTransferComplete rewrites BufferSize to the translated or
+    // clamped length, so it recomputes the residue from OrigBufferSize
+    // instead. Restoring the scratch read's leftover is what #38 reported.
     ULONG OrigRemainingBufferSize;
     ULONG OrigFlags;
     BOOLEAN UsedScratch;

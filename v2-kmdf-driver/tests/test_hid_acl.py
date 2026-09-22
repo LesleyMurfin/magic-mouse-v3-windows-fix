@@ -550,6 +550,52 @@ def test_c_source_control_channel_gate(run: _Run) -> None:
     )
 
 
+def test_c_source_acl_residue(run: _Run) -> None:
+    """Fail-closed vs Driver.c: BufferSize and RemainingBufferSize stay one pair.
+
+    bthddi.h defines RemainingBufferSize as the space left in the buffer after
+    the BRB call, and the scratch diversion rewrites BufferSize to the
+    translated or clamped length. #38 was the transport's scratch leftover
+    surviving into the caller's BRB. Handing back the *submitted* residue
+    instead is the same class of bug: a length the filter no longer reports.
+    Deleting the recompute, or dropping either of the two rollback sites the
+    saved field exists for, must turn this red.
+    """
+    if not DRV_C.is_file():
+        run.check("C_SOURCE_ACL_RESIDUE", False, f"missing {DRV_C}")
+        return
+
+    drv = _c_code(DRV_C.read_text(encoding="utf-8"))
+
+    # Residue recomputed from the caller's capacity and the final length.
+    has_recompute = (
+        re.search(
+            r"BrbL2caAclTransfer\.RemainingBufferSize\s*=\s*"
+            r"[\s\S]{0,80}?origCap\s*-\s*\w+",
+            drv,
+        )
+        is not None
+    )
+    # Both rollback sites survive: the WdfRequestSend failure path, and the
+    # OnAclTransferComplete path where nothing was delivered. One occurrence
+    # means one of them was dropped.
+    n_rollback = len(
+        re.findall(
+            r"BrbL2caAclTransfer\.RemainingBufferSize\s*=\s*"
+            r"\s*reqCtx->OrigRemainingBufferSize",
+            drv,
+        )
+    )
+
+    ok = has_recompute and n_rollback >= 2
+    run.check(
+        "C_SOURCE_ACL_RESIDUE",
+        ok,
+        f"recompute origCap-finalLen={has_recompute} "
+        f"OrigRemainingBufferSize rollback sites={n_rollback} (need 2)",
+    )
+
+
 def main() -> int:
     run = _Run()
     test_battery_passthrough(run)
@@ -561,6 +607,7 @@ def main() -> int:
     test_unique_scm(run)
     test_c_source_acl_contract(run)
     test_c_source_control_channel_gate(run)
+    test_c_source_acl_residue(run)
     return 1 if run.failed else 0
 
 

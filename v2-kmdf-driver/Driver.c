@@ -563,6 +563,19 @@ OnAclTransferComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
                     pBrb->BrbL2caAclTransfer.BufferSize = reqCtx->OrigBufferSize;
                 }
             }
+
+            // bthddi.h: RemainingBufferSize is "the amount of space, in bytes,
+            // left in the buffer after the BRB call" - an output field the
+            // profile driver reads on completion, and the same pair this
+            // routine reconstructs a capacity from below. Every branch above
+            // rewrote BufferSize, so the residue must follow it against the
+            // caller's real capacity. Restoring the submitted value instead
+            // would describe the caller's buffer with a length the filter no
+            // longer reports. origCap is the MDL byte count when the caller
+            // passed an MDL, which can be under OrigBufferSize, so clamp.
+            ULONG finalLen = pBrb->BrbL2caAclTransfer.BufferSize;
+            pBrb->BrbL2caAclTransfer.RemainingBufferSize =
+                (finalLen < origCap) ? (origCap - finalLen) : 0;
         }
     }
     else if (NT_SUCCESS(status) && ctx != NULL && pBrb != NULL &&
