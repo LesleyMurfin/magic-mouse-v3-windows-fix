@@ -77,6 +77,47 @@ MmInvalidateClosedChannelStateLocked(_In_ PDEVICE_CONTEXT ctx,
     }
 }
 
+// Does this BRB open the HID control channel (PSM 0x11)?
+//
+// The channel must be learned from BOTH directions of the open.
+// BRB_L2CA_OPEN_CHANNEL is the HOST-initiated open (pnputil /restart-device,
+// boot, re-pair). BRB_L2CA_OPEN_CHANNEL_RESPONSE is how a DEVICE-initiated
+// reconnect arrives - the Apple mouse dropping its link on idle and coming
+// back on its own - and it was never handled, so MtControlHandle stayed NULL
+// for the entire life of that connection. With it NULL the pass-through at
+// the ACL intercept cannot fire, every control-channel read is processed by
+// this filter, and the GET_REPORT(Input, 0x90) response is destroyed:
+// measured on hardware 2026-09-17, the wire carried A1 90 04 10 (0x10 = 16%)
+// on every one of 112 captured frames while userspace read 90 00 00.
+//
+// Both types share the _BRB_L2CA_OPEN_CHANNEL layout but not the field.
+// bthddi.h puts Response/ResponseStatus and Psm in ONE anonymous union, and
+// Psm is documented "Used only with BRB_L2CA_OPEN_CHANNEL", so on a RESPONSE
+// BRB those 16 bits are the accept code we hand back, never a PSM. Testing
+// Psm there is unreachable: the PSM of a device-initiated open is simply not
+// recoverable from this BRB, which is why an accepted RESPONSE is reported as
+// a control-channel candidate and OnOpenChannelComplete resolves it under
+// ctx->Lock.
+static BOOLEAN
+MmBrbOpensControlChannel(_In_opt_ PBRB Brb)
+{
+    if (Brb == NULL ||
+        Brb->BrbHeader.Length < sizeof(struct _BRB_L2CA_OPEN_CHANNEL))
+    {
+        return FALSE;
+    }
+
+    if (Brb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL)
+    {
+        return (BOOLEAN)(Brb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM);
+    }
+    if (Brb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL_RESPONSE)
+    {
+        return (BOOLEAN)(Brb->BrbL2caOpenChannel.Response == 0);
+    }
+    return FALSE;
+}
+
 VOID
 EvtDeviceContextCleanup(_In_ WDFOBJECT Object)
 {
@@ -282,37 +323,13 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
         PIO_STACK_LOCATION sl = IoGetCurrentIrpStackLocation(irp);
         PBRB pBrb = (PBRB)sl->Parameters.Others.Argument1;
 
-        // Learn the HID control channel from BOTH directions of the open.
-        //
-        // BRB_L2CA_OPEN_CHANNEL is the HOST-initiated open (pnputil
-        // /restart-device, boot, re-pair). BRB_L2CA_OPEN_CHANNEL_RESPONSE is
-        // how a DEVICE-initiated reconnect arrives - the Apple mouse dropping
-        // its link on idle and coming back on its own - and it was never
-        // handled, so MtControlHandle stayed NULL for the entire life of that
-        // connection. With it NULL the pass-through at the ACL intercept below
-        // cannot fire, every control-channel read is processed by this filter,
-        // and the GET_REPORT(Input,0x90) response is destroyed: measured on
-        // hardware 2026-09-17, the wire carried A1 90 04 10 (16%) on every
-        // probe while userspace read 90 00 00. Both BRB types share the
-        // _BRB_L2CA_OPEN_CHANNEL layout, so one intercept serves both.
-        BOOLEAN isControlOpen = FALSE;
-        if (pBrb != NULL &&
-            pBrb->BrbHeader.Length >= sizeof(struct _BRB_L2CA_OPEN_CHANNEL))
-        {
-            if (pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL &&
-                pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM)
-            {
-                isControlOpen = TRUE;
-            }
-            else if (pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL_RESPONSE &&
-                     pBrb->BrbL2caOpenChannel.Response == 0 &&
-                     (pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM || ctx->MtControlHandle == NULL))
-            {
-                isControlOpen = TRUE;
-            }
-        }
-
-        if (isControlOpen)
+        // Learn the HID control channel from both directions of the open;
+        // MmBrbOpensControlChannel documents why both BRB types matter and
+        // why the RESPONSE case cannot be resolved from the PSM. Intercept
+        // unconditionally: which channel wins the latch is decided in
+        // OnOpenChannelComplete under ctx->Lock, never in this
+        // parallel-dispatch routine.
+        if (MmBrbOpensControlChannel(pBrb))
         {
             PMM_REQUEST_CONTEXT reqCtx = GetRequestContext(Request);
             reqCtx->Brb = pBrb;
@@ -325,7 +342,6 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
             }
             return;
         }
-
 
         if (pBrb != NULL &&
             pBrb->BrbHeader.Type == BRB_L2CA_ACL_TRANSFER &&
@@ -395,24 +411,28 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
             ctx->LastInFlags = pBrb->BrbL2caAclTransfer.TransferFlags;
             WdfSpinLockRelease(ctx->Lock);
 
-            // Divert to the scratch buffer only when the caller's buffer is a
-            // whole input report. HidBth reads the HID control channel
-            // header-first - BufferSize 1 for the 0xA1 DATA byte - so a
-            // scratch read of MM_ACL_MAX_PARSE with ACL_SHORT_TRANSFER_OK
-            // consumes the entire GET_REPORT response while only 1 byte can
-            // be copied back to the caller. That is why Input 0x90 on COL02
-            // returned 90 00 00 with STATUS_SUCCESS: the percent arrived off
-            // the air and was discarded here. Interrupt-channel reports are
-            // posted with a 9-byte buffer, so the multitouch read this filter
-            // exists for is still diverted and translated, and
-            // OnAclTransferComplete already refuses to translate below
-            // origCap >= MM_MOUSE_REPORT_LEN - a shorter diversion could only
-            // ever swallow data, never produce a wheel report.
-            ULONG inCap = pBrb->BrbL2caAclTransfer.BufferSize;
-            if (pBrb->BrbL2caAclTransfer.BufferMDL != NULL)
-            {
-                inCap = MmGetMdlByteCount(pBrb->BrbL2caAclTransfer.BufferMDL);
-            }
+            // Divert to the scratch buffer only when the caller's buffer can
+            // hold a whole input report. The BufferSize floor is what rejects
+            // HidBth's header-first control read (BufferSize 1 for the 0xA1
+            // DATA byte, 90a10fd): handing that a MM_ACL_MAX_PARSE scratch
+            // with ACL_SHORT_TRANSFER_OK consumes the entire
+            // GET_REPORT(Input, 0x90) response while only 1 byte can be
+            // copied back to the caller. The inCap conjunct guarantees
+            // something else - that the capacity the copy-back in
+            // OnAclTransferComplete measures itself against
+            // (MmGetMdlByteCount, the same quantity origCap is derived from
+            // there) holds a whole report, because an MDL can describe fewer
+            // bytes than BufferSize claims. Neither conjunct is the battery
+            // fix: that is the control-channel pass-through above, keyed on
+            // MtControlHandle. Interrupt-channel reports are posted with a
+            // 9-byte buffer, so the multitouch read this filter exists for is
+            // still diverted and translated, and OnAclTransferComplete
+            // refuses to translate below origCap >= MM_MOUSE_REPORT_LEN
+            // anyway - a shorter diversion could only ever swallow data,
+            // never produce a wheel report.
+            ULONG inCap = (pBrb->BrbL2caAclTransfer.BufferMDL != NULL)
+                              ? MmGetMdlByteCount(pBrb->BrbL2caAclTransfer.BufferMDL)
+                              : pBrb->BrbL2caAclTransfer.BufferSize;
 
             if (sdpOk &&
                 pBrb->BrbL2caAclTransfer.BufferSize >= MM_MOUSE_REPORT_LEN &&
@@ -585,8 +605,13 @@ OnAclTransferComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
             }
             if (!wrote)
             {
+                // Clamp to the caller's buffer and to what it asked for:
+                // origCap is the MDL byte count, which can exceed the
+                // BufferSize HidBth posted, and reporting a transfer longer
+                // than the caller requested violates the BRB contract.
                 ULONG pass = received;
                 if (pass > origCap) { pass = origCap; }
+                if (pass > reqCtx->OrigBufferSize) { pass = reqCtx->OrigBufferSize; }
                 __try
                 {
                     RtlCopyMemory(orig, scratch, pass);
@@ -597,6 +622,19 @@ OnAclTransferComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
                     pBrb->BrbL2caAclTransfer.BufferSize = reqCtx->OrigBufferSize;
                 }
             }
+
+            // bthddi.h: RemainingBufferSize is "the amount of space, in
+            // bytes, left in the buffer after the BRB call" - an output field
+            // the profile driver reads on completion, and the same pair this
+            // routine reconstructs a capacity from below. Every branch above
+            // rewrote BufferSize, so the residue must follow it against the
+            // caller's real capacity; restoring the submitted value instead
+            // would describe the caller's buffer with a length the filter no
+            // longer reports. origCap is the MDL byte count when the caller
+            // passed an MDL, which can be under OrigBufferSize, so clamp.
+            ULONG finalLen = pBrb->BrbL2caAclTransfer.BufferSize;
+            pBrb->BrbL2caAclTransfer.RemainingBufferSize =
+                (finalLen < origCap) ? (origCap - finalLen) : 0;
         }
     }
     else if (NT_SUCCESS(status) && ctx != NULL && pBrb != NULL &&
@@ -668,35 +706,35 @@ OnOpenChannelComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
     PMM_REQUEST_CONTEXT reqCtx = GetRequestContext(Request);
     PBRB pBrb = (reqCtx != NULL) ? (PBRB)reqCtx->Brb : NULL;
 
-    BOOLEAN isControlOpen = FALSE;
-    if (NT_SUCCESS(status) && ctx != NULL && pBrb != NULL &&
-        pBrb->BrbHeader.Length >= sizeof(struct _BRB_L2CA_OPEN_CHANNEL) &&
+    if (NT_SUCCESS(status) && ctx != NULL && MmBrbOpensControlChannel(pBrb) &&
         pBrb->BrbL2caOpenChannel.ChannelHandle != NULL)
     {
-        if (pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL &&
-            pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM)
-        {
-            isControlOpen = TRUE;
-        }
-        else if (pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL_RESPONSE &&
-                 pBrb->BrbL2caOpenChannel.Response == 0 &&
-                 (pBrb->BrbL2caOpenChannel.Psm == MM_HID_CONTROL_PSM || ctx->MtControlHandle == NULL))
-        {
-            isControlOpen = TRUE;
-        }
-    }
-
-    if (isControlOpen)
-    {
+        BOOLEAN latched = FALSE;
         WdfSpinLockAcquire(ctx->Lock);
-        ctx->MtControlHandle = pBrb->BrbL2caOpenChannel.ChannelHandle;
-        RtlCopyMemory(ctx->MtBtAddress,
-                      &pBrb->BrbL2caOpenChannel.BtAddress,
-                      sizeof(ctx->MtBtAddress));
-        ctx->MtEnableTries = 0;
-        ctx->MtEnableSent = FALSE;
+        // Decide and latch under one lock. EvtIoInternalDeviceControl is a
+        // parallel-dispatch queue, so testing MtControlHandle outside the
+        // lock let two accepted channels both observe NULL; the interrupt
+        // channel winning routes every multitouch report through the
+        // control-channel pass-through and kills scroll for the life of the
+        // connection. BRB_L2CA_OPEN_CHANNEL carries the PSM, so it is
+        // authoritative and always wins. On BRB_L2CA_OPEN_CHANNEL_RESPONSE
+        // the PSM is unknowable, so first-accepted-wins is a heuristic
+        // resting on HID connecting its control channel before its interrupt
+        // channel.
+        if (pBrb->BrbHeader.Type == BRB_L2CA_OPEN_CHANNEL ||
+            ctx->MtControlHandle == NULL)
+        {
+            ctx->MtControlHandle = pBrb->BrbL2caOpenChannel.ChannelHandle;
+            RtlCopyMemory(ctx->MtBtAddress,
+                          &pBrb->BrbL2caOpenChannel.BtAddress,
+                          sizeof(ctx->MtBtAddress));
+            ctx->MtEnableTries = 0;
+            ctx->MtEnableSent = FALSE;
+            latched = TRUE;
+        }
         WdfSpinLockRelease(ctx->Lock);
-        if (ctx->DiagWorkItem != NULL)
+
+        if (latched && ctx->DiagWorkItem != NULL)
         {
             WdfWorkItemEnqueue(ctx->DiagWorkItem);
         }
@@ -753,10 +791,19 @@ OnReadComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
     }
 
     SIZE_T bytesRead = Params->IoStatus.Information;
+    // Params->IoStatus.Information is the transport's claim about how much it
+    // wrote; only bufLen is proven allocation. TranslateMouse2ToHid takes
+    // this as the parse length and AccumulateSurfaceScroll walks
+    // (inLen - 14) / 8 touch slots off it, so an oversized Information reads
+    // past the IRP buffer - and a completion routine can run at
+    // DISPATCH_LEVEL, where the __try/__except below cannot catch the fault.
+    // The ACL path clamps its parse length the same way.
+    if (bytesRead > bufLen) { bytesRead = bufLen; }
+
     BOOLEAN sdpOk = FALSE;
     WdfSpinLockAcquire(ctx->Lock);
     ctx->HidReadCount++;
-    if (bytesRead > 0 && bytesRead <= bufLen && (buf[0] == 0x12 || buf[0] == 0x27))
+    if (bytesRead > 0 && (buf[0] == 0x12 || buf[0] == 0x27))
     {
         ctx->Rid12Count++;
     }

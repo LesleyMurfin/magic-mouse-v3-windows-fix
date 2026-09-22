@@ -355,6 +355,27 @@ def main() -> int:
         "InputHandler.c writes only via RtlCopyMemory",
     )
 
+    # --- Out-of-bounds parse length (OnReadComplete) ---
+    # Params->IoStatus.Information is the transport's claim; only the buffer
+    # WdfRequestRetrieveOutputBuffer handed back is proven allocation. Used
+    # unclamped as the parse length it walks (inLen - 14) / 8 touch slots off
+    # the end of the IRP buffer, at DISPATCH_LEVEL where __except cannot
+    # catch it.
+    read_path = _function_body(_code(drv), "OnReadComplete")
+    oob_clamp = re.search(
+        r"bytesRead\s*>\s*bufLen\s*\)[^;]{0,24}bytesRead\s*=\s*bufLen",
+        read_path,
+    )
+    oob_parse = re.search(r"TranslateMouse2ToHid\s*\(\s*buf\s*,\s*bytesRead", read_path)
+    run.check(
+        "BSOD_OOB_READ_PARSE_LEN",
+        oob_clamp is not None
+        and oob_parse is not None
+        and oob_clamp.start() < oob_parse.start(),
+        "OnReadComplete must clamp IoStatus.Information to the retrieved "
+        "bufLen before passing it as the parse length",
+    )
+
     # --- Event 41 ---
     run.check(
         "BSOD_41_SDP_GATE",

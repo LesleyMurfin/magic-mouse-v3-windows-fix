@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Spec 4 executable gate — unique 2.0.4.3 KMDF scroll + 135-byte SDP overlay.
+"""Spec 4 executable gate — unique 2.0.4.6 KMDF scroll + 135-byte SDP overlay.
 
 RED-first. Unique INF / kernel already at 7087f4b is not a pass (tautology).
 Keyword presence in a Python self-model is not a pass.
@@ -12,8 +12,10 @@ Fails until:
   * v2-kmdf-driver/tests/test_bsod_regress.py quotes 090126-18750 / BSOD_50 /
     buf[4] / 0x87 / applewirelessmouse
   * tests/test_sdp_walk.py must not gate PATCHED_0x25_IS_108 (that 0x50'd)
-  * v2-kmdf-driver/tests/test_scroll_threshold.py quotes SCROLL_STEP_8
-    against GestureEngine.c (missing token is RED)
+  * v2-kmdf-driver/tests/test_scroll_threshold.py binds SCROLL_STEP_8 to
+    GestureEngine.c (that test owns the detent / one-finger assertions, which
+    it makes against comment-stripped source; re-grepping the tokens here
+    would only re-pass on prose)
 """
 from __future__ import annotations
 
@@ -28,7 +30,6 @@ BSOD = ROOT / "v2-kmdf-driver" / "tests" / "test_bsod_regress.py"
 WALK = ROOT / "v2-kmdf-driver" / "tests" / "test_sdp_walk.py"
 MT = ROOT / "v2-kmdf-driver" / "tests" / "test_mt_enable.py"
 SCROLL_THRESHOLD = ROOT / "v2-kmdf-driver" / "tests" / "test_scroll_threshold.py"
-GESTURE = ROOT / "v2-kmdf-driver" / "GestureEngine.c"
 NATIVE_PREFIX = "09 02 06 35 8D 35 8B 08 22 25 87"
 
 fails = 0
@@ -285,16 +286,6 @@ def check_scroll_threshold() -> None:
     else:
         fail_(
             "test_scroll_threshold.py does not quote SCROLL_STEP_8 / GestureEngine.c"
-        )
-    ge = ""
-    if GESTURE.is_file():
-        ge = GESTURE.read_text(encoding="utf-8", errors="replace")
-    if "SCROLL_STEP_8" in ge and "TWO_FINGER" in ge:
-        pass_("GestureEngine.c has SCROLL_STEP_8 and TWO_FINGER")
-    else:
-        fail_(
-            "GestureEngine.c missing SCROLL_STEP_8 and/or TWO_FINGER "
-            "(1-finger must not emit; detent = MM_SCROLL_STEP in GestureEngine.h)"
         )
 
 def main() -> int:

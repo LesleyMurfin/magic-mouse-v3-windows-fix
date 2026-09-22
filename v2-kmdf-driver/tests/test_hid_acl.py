@@ -33,6 +33,7 @@ from hostmodel import (  # noqa: E402
     clamp_i8,
     make_mt,
     pack_touch,
+    strip_c_comments,
 )
 
 HID_MSG_DATA_INPUT = 0xA1
@@ -169,6 +170,22 @@ def _inf_code(text: str) -> str:
         if code.strip():
             out.append(code)
     return "\n".join(out)
+
+
+def _function_body(code: str, name: str) -> str:
+    """Return one production C function body, including nested blocks."""
+    match = re.search(r"\b" + re.escape(name) + r"\s*\([^;{}]*\)\s*\{", code, re.S)
+    if not match:
+        return ""
+    depth = 1
+    pos = match.end()
+    while depth and pos < len(code):
+        if code[pos] == "{":
+            depth += 1
+        elif code[pos] == "}":
+            depth -= 1
+        pos += 1
+    return code[match.end() : pos - 1] if depth == 0 else ""
 
 
 class _Run:
@@ -428,8 +445,10 @@ def test_c_source_acl_contract(run: _Run) -> None:
         run.check("C_SOURCE_ACL_CONTRACT", False, f"missing {DRV_C}")
         return
 
+    # AclTranslate.c is read raw on purpose: the passthrough rationale below
+    # is prose. Driver.c is checked for code symbols, so comments are stripped.
     acl = ACL_C.read_text(encoding="utf-8")
-    drv = DRV_C.read_text(encoding="utf-8")
+    drv = strip_c_comments(DRV_C.read_text(encoding="utf-8"))
 
     has_rid = "MM_REPORT_ID_BATTERY" in acl or "0x90" in acl
     # Battery path is passthrough: never rewrite; return FALSE; buffer unchanged.
@@ -471,46 +490,93 @@ def test_c_source_acl_contract(run: _Run) -> None:
     )
 
 
-def test_c_source_control_channel_learned_both_ways(run: _Run) -> None:
-    """Fail-closed vs Driver.c: the control channel must be learned from
-    device-initiated reconnects, not only host-initiated opens.
+def test_c_source_control_channel_latch(run: _Run) -> None:
+    """Fail-closed vs Driver.c: one control-open predicate, latched atomically.
 
     The diversion gate alone does not keep the battery readable. The only path
     that makes this filter transparent to the control channel is the
     pass-through taken when an inbound ACL transfer's ChannelHandle equals
-    ctx->MtControlHandle. That handle was learned solely from
+    ctx->MtControlHandle. That handle was once learned solely from
     BRB_L2CA_OPEN_CHANNEL - the HOST-initiated open - while an Apple mouse
     coming back from an idle drop reconnects on its own and arrives as
     BRB_L2CA_OPEN_CHANNEL_RESPONSE. With that case unhandled the handle stays
     NULL for the life of the connection, every control-channel read is
-    processed by the filter, and GET_REPORT(Input, 0x90) is destroyed.
+    processed by the filter, and GET_REPORT(Input, 0x90) is destroyed: on
+    hardware 2026-09-17 the wire carried A1 90 04 10 (0x10 = 16%) on all 112
+    captured frames while userspace read 90 00 00.
 
-    Measured on hardware 2026-09-17 with the gate fix already installed and
-    2.0.4.4 confirmed live: the wire carried A1 90 04 10 (0x10 = 16%) on every
-    one of 112 captured frames while userspace read 90 00 00. Deleting either
-    BRB type from the request intercept or from OnOpenChannelComplete must
-    turn this red.
+    Both BRB types must therefore stay handled, by one predicate shared by the
+    request intercept and the completion, and that predicate must not test Psm
+    on a RESPONSE BRB: bthddi.h unions Psm with Response/ResponseStatus, so
+    `Response == 0 && Psm == MM_HID_CONTROL_PSM` is unreachable, and code that
+    looks like it resolves the PSM there hides the fact that it cannot be.
+    Because it cannot, the choice is first-accepted-wins, which is only sound
+    if the test and the assignment share one acquisition of ctx->Lock -
+    EvtIoInternalDeviceControl dispatches in parallel, and two channels both
+    observing NULL lets the interrupt channel take the latch and kills scroll.
+
+    Deleting either BRB type, re-splitting the predicate, resurrecting the
+    dead Psm clause, reading MtControlHandle outside the lock, or guarding the
+    latch on the (reconnect-stale) MtChannelHandle must turn this red.
     """
     if not DRV_C.is_file():
-        run.check("C_SOURCE_CONTROL_CHANNEL_LEARNED_BOTH_WAYS", False, f"missing {DRV_C}")
+        run.check("C_SOURCE_CONTROL_CHANNEL_LATCH", False, f"missing {DRV_C}")
         return
 
-    drv = DRV_C.read_text(encoding="utf-8")
+    drv = strip_c_comments(DRV_C.read_text(encoding="utf-8"))
 
-    # Both BRB types must appear, and RESPONSE must be paired with the control
-    # PSM rather than mentioned only in a comment.
-    n_open = len(re.findall(r"BrbHeader\.Type\s*==\s*BRB_L2CA_OPEN_CHANNEL(?![_A-Z])", drv))
-    n_resp = len(re.findall(r"BrbHeader\.Type\s*==\s*BRB_L2CA_OPEN_CHANNEL_RESPONSE", drv))
-    # Two sites must handle both: the request intercept and the completion.
-    both_sites = n_open >= 2 and n_resp >= 2
-    psm_guarded = (
+    # One predicate, used by the intercept and by the completion.
+    predicate = _function_body(drv, "MmBrbOpensControlChannel")
+    n_calls = len(re.findall(r"MmBrbOpensControlChannel\s*\(", drv)) - 1
+    # It decides on the BRB alone - no device context, so no lock to race.
+    brb_only = bool(predicate) and "ctx->" not in predicate
+    handles_both = (
         re.search(
-            r"BRB_L2CA_OPEN_CHANNEL_RESPONSE[\s\S]{0,200}?"
-            r"BrbL2caOpenChannel\.Psm\s*==\s*MM_HID_CONTROL_PSM",
+            r"BrbHeader\.Type\s*==\s*BRB_L2CA_OPEN_CHANNEL(?![_A-Z])"
+            r"[\s\S]{0,200}?BrbL2caOpenChannel\.Psm\s*==\s*MM_HID_CONTROL_PSM",
+            predicate,
+        )
+        is not None
+        and re.search(
+            r"BrbHeader\.Type\s*==\s*BRB_L2CA_OPEN_CHANNEL_RESPONSE"
+            r"[\s\S]{0,200}?BrbL2caOpenChannel\.Response\s*==\s*0",
+            predicate,
+        )
+        is not None
+    )
+    # The dead union clause must not come back anywhere in the file.
+    dead_psm = (
+        re.search(
+            r"BrbL2caOpenChannel\.Response\s*==\s*0[\s\S]{0,200}?"
+            r"BrbL2caOpenChannel\.Psm",
             drv,
         )
         is not None
     )
+
+    # The latch: every mention of MtControlHandle in the completion lives
+    # between one Acquire and the matching Release, and the RESPONSE case is
+    # the first-accepted-wins test.
+    latch = _function_body(drv, "OnOpenChannelComplete")
+    acquire = latch.find("WdfSpinLockAcquire")
+    release = latch.find("WdfSpinLockRelease")
+    touches = [m.start() for m in re.finditer(r"MtControlHandle", latch)]
+    atomic = (
+        acquire >= 0
+        and release > acquire
+        and len(touches) >= 2
+        and all(acquire < at < release for at in touches)
+        and re.search(r"MtControlHandle\s*==\s*NULL", latch) is not None
+        and re.search(
+            r"ctx->MtControlHandle\s*=\s*pBrb->BrbL2caOpenChannel\.ChannelHandle",
+            latch,
+        )
+        is not None
+    )
+    # MtChannelHandle is the last inbound channel and goes stale across a
+    # reconnect; gating the latch on it would block relearning (the #40 bug).
+    no_stale_guard = bool(latch) and "MtChannelHandle" not in latch
+
     # The pass-through that the learned handle enables must still exist.
     passthrough = (
         re.search(
@@ -519,13 +585,23 @@ def test_c_source_control_channel_learned_both_ways(run: _Run) -> None:
         )
         is not None
     )
-    ok = both_sites and psm_guarded and passthrough
+
+    ok = (
+        n_calls >= 2
+        and brb_only
+        and handles_both
+        and not dead_psm
+        and atomic
+        and no_stale_guard
+        and passthrough
+    )
     run.check(
-        "C_SOURCE_CONTROL_CHANNEL_LEARNED_BOTH_WAYS",
+        "C_SOURCE_CONTROL_CHANNEL_LATCH",
         ok,
-        f"OPEN_CHANNEL sites={n_open} OPEN_CHANNEL_RESPONSE sites={n_resp} "
-        f"(both>=2: {both_sites}); RESPONSE guarded by control PSM={psm_guarded}; "
-        f"ctlHandle passthrough present={passthrough}",
+        f"shared predicate call sites={n_calls} (need 2) brb_only={brb_only}; "
+        f"both BRB types={handles_both} dead Psm-on-RESPONSE clause={dead_psm}; "
+        f"latch under one lock={atomic} no stale MtChannelHandle guard="
+        f"{no_stale_guard}; ctlHandle passthrough present={passthrough}",
     )
 
 
@@ -545,7 +621,7 @@ def test_c_source_control_channel_gate(run: _Run) -> None:
         run.check("C_SOURCE_CONTROL_CHANNEL_GATE", False, f"missing {DRV_C}")
         return
 
-    drv = DRV_C.read_text(encoding="utf-8")
+    drv = strip_c_comments(DRV_C.read_text(encoding="utf-8"))
 
     # Diversion floor: a whole report, never a header-first 1-byte read.
     has_floor = (
@@ -606,6 +682,65 @@ def test_c_source_control_channel_gate(run: _Run) -> None:
     )
 
 
+def test_c_source_acl_residue(run: _Run) -> None:
+    """Fail-closed vs Driver.c: BufferSize and RemainingBufferSize stay one pair.
+
+    bthddi.h defines RemainingBufferSize as the space left in the buffer after
+    the BRB call, and the scratch diversion rewrites BufferSize to the
+    translated or clamped length. #38 was the transport's scratch leftover
+    surviving into the caller's BRB. Handing back the *submitted* residue
+    instead is the same class of bug: a length the filter no longer reports.
+    The copy-back length is also clamped to what the caller asked for, not
+    just to the MDL it passed, so the pair can never describe more than the
+    profile driver posted. Deleting the recompute, dropping either of the two
+    rollback sites the saved field exists for, or dropping the OrigBufferSize
+    clamp must turn this red.
+    """
+    if not DRV_C.is_file():
+        run.check("C_SOURCE_ACL_RESIDUE", False, f"missing {DRV_C}")
+        return
+
+    drv = strip_c_comments(DRV_C.read_text(encoding="utf-8"))
+
+    # Residue recomputed from the caller's capacity and the final length.
+    has_recompute = (
+        re.search(
+            r"BrbL2caAclTransfer\.RemainingBufferSize\s*=\s*"
+            r"[\s\S]{0,80}?origCap\s*-\s*\w+",
+            drv,
+        )
+        is not None
+    )
+    # Both rollback sites survive: the WdfRequestSend failure path, and the
+    # OnAclTransferComplete path where nothing was delivered. One occurrence
+    # means one of them was dropped.
+    n_rollback = len(
+        re.findall(
+            r"BrbL2caAclTransfer\.RemainingBufferSize\s*=\s*"
+            r"\s*reqCtx->OrigRemainingBufferSize",
+            drv,
+        )
+    )
+    # Copy-back never reports more than the caller requested.
+    has_req_clamp = (
+        re.search(
+            r"pass\s*>\s*reqCtx->OrigBufferSize[\s\S]{0,60}?"
+            r"pass\s*=\s*reqCtx->OrigBufferSize",
+            drv,
+        )
+        is not None
+    )
+
+    ok = has_recompute and n_rollback >= 2 and has_req_clamp
+    run.check(
+        "C_SOURCE_ACL_RESIDUE",
+        ok,
+        f"recompute origCap-finalLen={has_recompute} "
+        f"OrigRemainingBufferSize rollback sites={n_rollback} (need 2); "
+        f"copy-back clamped to OrigBufferSize={has_req_clamp}",
+    )
+
+
 def main() -> int:
     run = _Run()
     test_battery_passthrough(run)
@@ -617,7 +752,8 @@ def main() -> int:
     test_unique_scm(run)
     test_c_source_acl_contract(run)
     test_c_source_control_channel_gate(run)
-    test_c_source_control_channel_learned_both_ways(run)
+    test_c_source_control_channel_latch(run)
+    test_c_source_acl_residue(run)
     return 1 if run.failed else 0
 
 
