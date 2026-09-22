@@ -1,20 +1,40 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Verifies the v1 driver provenance triple is identical everywhere it is documented.
+    Verifies that every documented driver constant agrees with the artifact it describes.
 
 .DESCRIPTION
-    The patched driver is described by three empirical constants: its SHA256, its byte
-    size, and the Authenticode certificate thumbprint used to sign it. Those constants
-    are hand-copied into the installer, the uninstaller, SHA256SUMS.txt, and six
-    markdown documents. A single stale copy makes the security documentation lie, which
-    trains users to accept a binary nobody verified.
+    This repository documents two different driver binaries, and confusing them is the
+    exact failure this check exists to prevent:
 
-    v1-binary-patch/installer/Install-MagicMousePatch.ps1 is the single source of truth.
-    This script scrapes the triple out of it, then proves every other occurrence agrees,
-    that no documenting file has silently dropped its copy, that SHA256SUMS.txt is in
-    real sha256sum format and publishes the driver's checksum under its own filename,
-    and that no signing key material is tracked in git.
+      shipped  Apple's UNMODIFIED applewirelessmouse.sys, tracked at
+               v1-binary-patch/apple-driver/applewirelessmouse.sys. This is the default
+               install route. It needs no test signing and no certificate. Its truth is
+               the bytes on disk: this script hashes the real file.
+
+      legacy   The byte-patched copy re-signed as CN=MagicMouseFix. No longer shipped,
+               still documented, still installable from an existing copy. Its truth is
+               the $PatchedSha256 / $PatchedSize / $CertThumbprint triple declared in
+               v1-binary-patch/installer/Install-MagicMousePatch.ps1.
+
+    The installer deliberately does NOT hash-pin Apple's binary at runtime: Apple has
+    shipped more than one Boot Camp build, so the installer identifies the Apple variant
+    by Authenticode status, signer subject and PE OriginalFilename. That is the correct
+    runtime model and this script does not second-guess it. Release provenance is a
+    different question: the repository ships one specific copy of that binary, so the
+    shipped copy IS hash-verifiable here, which is strictly stronger than scraping a
+    constant out of a script.
+
+    This script proves that:
+      * the tracked .sys is present, and hashes to the pinned release artifact;
+      * the legacy triple is still declared in the installer;
+      * every 64-hex string and 40-hex thumbprint in every documenting file belongs to
+        a known subject, so no file carries a stale or invented constant;
+      * every byte-count citation belongs to a known subject;
+      * no documenting constant has silently vanished from the tree;
+      * SHA256SUMS.txt is real sha256sum output and publishes the shipped checksum
+        under apple-driver/applewirelessmouse.sys;
+      * no signing key material is tracked in git.
 
     Emits GitHub Actions error annotations for every finding. Exits 1 on any finding,
     0 when the tree is consistent.
@@ -24,7 +44,7 @@
     installer is not found there, parent directories are searched before failing.
 
 .PARAMETER Quiet
-    Suppress the summary table. Annotations and the binary SKIP line are always emitted.
+    Suppress the summary table. Annotations are always emitted.
 
 .EXAMPLE
     pwsh -File scripts/Test-ReleaseProvenance.ps1
@@ -45,8 +65,45 @@ $script:FindingCount = 0
 $script:ResultRows = New-Object 'System.Collections.Generic.List[object]'
 
 $InstallerRelativePath = 'v1-binary-patch/installer/Install-MagicMousePatch.ps1'
+$ShippedRelativePath = 'v1-binary-patch/apple-driver/applewirelessmouse.sys'
+$SumsRelativePath = 'v1-binary-patch/installer/SHA256SUMS.txt'
+$SelfRelativePath = 'scripts/Test-ReleaseProvenance.ps1'
+
+# The release artifact this repository ships. The tracked .sys must hash to exactly
+# this; the pin is what turns "some Apple driver" into "the reviewed Apple driver".
+$ShippedPinnedSha256 = '08f33d7e3ece2c73950a9706f1c4c9057894eaeaf1c4fb355f261f3c2333378f'
+$ShippedPinnedSize = 78424
+
+# The legacy artifact's expected byte size. The hash and thumbprint are scraped from
+# the installer (it is their source of truth); the size is pinned here as well so that
+# a silent edit of $PatchedSize cannot quietly relabel every document at once.
+$LegacyPinnedSize = 66288
+
+# SHA256SUMS.txt records this hash on purpose, as a comment, under "KNOWN BAD": it is
+# the patched-but-never-re-signed binary whose Authenticode reports HashMismatch and
+# which the installer refuses. It belongs to no shipped subject, so the generic
+# "unknown hash" rule would flag it. Documenting a rejected value is how a user
+# recognises the bad copy they already have, so it is allowlisted repository-wide
+# rather than being silently deleted from the manifest.
+$KnownBadSha256 = @(
+    'd22eb163d03a0830ee4ed9c9265044cdd4099974412fa62f4c249bef971129ec'
+)
+
 $Sha256Shape = '\b[0-9a-fA-F]{64}\b'
 $ThumbprintShape = '\b[0-9a-fA-F]{40}\b'
+
+# Byte counts are only in scope when the document actually calls them bytes. The docs
+# legitimately cite small struct sizes ("16 bytes") and version numbers, so the pattern
+# anchors on the word and accepts both the grouped ("78,424 bytes") and plain
+# ("66288 bytes") spellings that the tree uses today.
+$SizeShape = '(?i)\b(\d{1,3}(?:,\d{3})+|\d{5,})\s?bytes\b'
+
+# Binary and opaque payloads: never scanned for constants or key blocks.
+$BinaryExtensions = @(
+    '.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.bmp', '.pdf',
+    '.sys', '.cer', '.exe', '.dll', '.pdb', '.zip', '.gz', '.7z',
+    '.woff', '.woff2', '.ttf', '.otf', '.mp4', '.webm'
+)
 
 # ============================================================================
 # Helpers
@@ -108,9 +165,14 @@ function Get-PatternOccurrence {
     foreach ($line in [System.IO.File]::ReadAllLines($FullPath)) {
         $lineNumber++
         foreach ($match in [regex]::Matches($line, $Pattern)) {
+            $capture = $match.Value
+            if ($match.Groups.Count -gt 1 -and $match.Groups[1].Success) {
+                $capture = $match.Groups[1].Value
+            }
             $occurrences.Add([PSCustomObject]@{
                 LineNumber = $lineNumber
                 Value      = $match.Value
+                Capture    = $capture
             })
         }
     }
@@ -159,250 +221,114 @@ if ($resolvedRoot.Length -eq 0) {
 $RepoRoot = $resolvedRoot
 
 Write-Host "Provenance check: $RepoRoot"
-Write-Host "Source of truth:  $InstallerRelativePath"
 Write-Host ''
 
 # ============================================================================
-# Extract the source-of-truth triple
+# Subject 'shipped': the tracked Apple binary. Truth = the bytes on disk.
+# ============================================================================
+
+$shippedSha = $ShippedPinnedSha256
+$shippedSize = $ShippedPinnedSize
+$shippedOnDisk = $false
+
+$shippedFull = Join-RelativePath -Root $RepoRoot -RelativePath $ShippedRelativePath
+if (-not (Test-Path -LiteralPath $shippedFull -PathType Leaf)) {
+    # A finding, not a crash: the rest of the tree is still worth checking, and the
+    # pinned values stand in so documents can still be classified.
+    Add-Finding -Message "Shipped driver is missing from the tree. The Apple install route cannot work without it; expected SHA256 $ShippedPinnedSha256, $ShippedPinnedSize bytes." -RelativePath $ShippedRelativePath
+    Add-ResultRow -Name 'shipped [on-disk]' -Expected 'file present' -Found 'missing' -Result 'FAIL'
+}
+else {
+    $shippedOnDisk = $true
+    $actualSha = (Get-FileHash -LiteralPath $shippedFull -Algorithm SHA256).Hash
+    $actualSize = (Get-Item -LiteralPath $shippedFull).Length
+    $shippedSha = $actualSha
+    $shippedSize = [int]$actualSize
+
+    if ($actualSha -ine $ShippedPinnedSha256) {
+        Add-Finding -Message "Shipped driver hashes to '$actualSha' but the pinned release artifact is '$ShippedPinnedSha256'. Either the binary was swapped or the pin is stale; resolve deliberately." -RelativePath $ShippedRelativePath
+        Add-ResultRow -Name 'shipped [sha256]' -Expected $ShippedPinnedSha256 -Found $actualSha -Result 'FAIL'
+    }
+    else {
+        Add-ResultRow -Name 'shipped [sha256]' -Expected 'matches pinned artifact' -Found $actualSha -Result 'OK'
+    }
+
+    if ($shippedSize -ne $ShippedPinnedSize) {
+        Add-Finding -Message "Shipped driver is $shippedSize bytes but the pinned release artifact is $ShippedPinnedSize bytes." -RelativePath $ShippedRelativePath
+        Add-ResultRow -Name 'shipped [size]' -Expected "$ShippedPinnedSize" -Found "$shippedSize" -Result 'FAIL'
+    }
+    else {
+        Add-ResultRow -Name 'shipped [size]' -Expected "$ShippedPinnedSize" -Found "$shippedSize" -Result 'OK'
+    }
+}
+
+# ============================================================================
+# Subject 'legacy': the patched + re-signed copy. Truth = the installer constants.
 # ============================================================================
 
 $installerPath = Join-RelativePath -Root $RepoRoot -RelativePath $InstallerRelativePath
 $installerText = [System.IO.File]::ReadAllText($installerPath)
 
-$shaMatch = [regex]::Match($installerText, '(?m)^\s*\$ExpectedSha256\s*=\s*[''"]([0-9a-fA-F]{64})[''"]')
-$sizeMatch = [regex]::Match($installerText, '(?m)^\s*\$ExpectedSize\s*=\s*(\d+)')
-$thumbMatch = [regex]::Match($installerText, '(?m)^\s*\$CertThumbprint\s*=\s*[''"]([0-9a-fA-F]{40})[''"]')
+$legacyShaMatch = [regex]::Match($installerText, '(?m)^\s*\$PatchedSha256\s*=\s*[''"]([0-9a-fA-F]{64})[''"]')
+$legacySizeMatch = [regex]::Match($installerText, '(?m)^\s*\$PatchedSize\s*=\s*(\d+)')
+$legacyThumbMatch = [regex]::Match($installerText, '(?m)^\s*\$CertThumbprint\s*=\s*[''"]([0-9a-fA-F]{40})[''"]')
 
-if (-not $shaMatch.Success) {
-    Add-Finding -Message 'Could not extract $ExpectedSha256 (64 hex chars) from the installer. Provenance cannot be verified.' -RelativePath $InstallerRelativePath
+$legacyResolved = $true
+if (-not $legacyShaMatch.Success) {
+    Add-Finding -Message 'Could not extract $PatchedSha256 (64 hex chars) from the installer. The legacy driver is still documented; its source of truth must stay declared here.' -RelativePath $InstallerRelativePath
+    $legacyResolved = $false
 }
-if (-not $sizeMatch.Success) {
-    Add-Finding -Message 'Could not extract $ExpectedSize (integer) from the installer. Provenance cannot be verified.' -RelativePath $InstallerRelativePath
+if (-not $legacySizeMatch.Success) {
+    Add-Finding -Message 'Could not extract $PatchedSize (integer) from the installer. The legacy driver is still documented; its source of truth must stay declared here.' -RelativePath $InstallerRelativePath
+    $legacyResolved = $false
 }
-if (-not $thumbMatch.Success) {
-    Add-Finding -Message 'Could not extract $CertThumbprint (40 hex chars) from the installer. Provenance cannot be verified.' -RelativePath $InstallerRelativePath
-}
-if ($script:FindingCount -gt 0) {
-    Write-Host 'FAIL: source of truth is unreadable. No further checks performed.'
-    exit 1
+if (-not $legacyThumbMatch.Success) {
+    Add-Finding -Message 'Could not extract $CertThumbprint (40 hex chars) from the installer. The legacy driver is still documented; its source of truth must stay declared here.' -RelativePath $InstallerRelativePath
+    $legacyResolved = $false
 }
 
-$expectedSha = $shaMatch.Groups[1].Value
-$expectedSize = [int]$sizeMatch.Groups[1].Value
-$expectedThumb = $thumbMatch.Groups[1].Value
+$legacySha = ''
+$legacySize = 0
+$legacyThumb = ''
+if ($legacyResolved) {
+    $legacySha = $legacyShaMatch.Groups[1].Value
+    $legacySize = [int]$legacySizeMatch.Groups[1].Value
+    $legacyThumb = $legacyThumbMatch.Groups[1].Value
 
-Write-Host "  SHA256     $expectedSha"
-Write-Host "  Size       $expectedSize"
-Write-Host "  Thumbprint $expectedThumb"
+    Add-ResultRow -Name 'legacy [sha256]' -Expected 'declared in installer' -Found $legacySha -Result 'OK'
+    Add-ResultRow -Name 'legacy [thumbprint]' -Expected 'declared in installer' -Found $legacyThumb -Result 'OK'
+
+    if ($legacySize -ne $LegacyPinnedSize) {
+        Add-Finding -Message "Installer declares `$PatchedSize = $legacySize but the legacy artifact is $LegacyPinnedSize bytes." -RelativePath $InstallerRelativePath
+        Add-ResultRow -Name 'legacy [size]' -Expected "$LegacyPinnedSize" -Found "$legacySize" -Result 'FAIL'
+    }
+    else {
+        Add-ResultRow -Name 'legacy [size]' -Expected "$LegacyPinnedSize" -Found "$legacySize" -Result 'OK'
+    }
+}
+else {
+    Add-ResultRow -Name 'legacy [triple]' -Expected 'declared in installer' -Found 'unreadable' -Result 'FAIL'
+}
+
+Write-Host 'Subjects'
+Write-Host "  shipped  SHA256 $shippedSha  size $shippedSize  $(if ($shippedOnDisk) { 'hashed on disk' } else { 'pinned (binary absent)' })"
+if ($legacyResolved) {
+    Write-Host "  legacy   SHA256 $legacySha  size $legacySize  thumbprint $legacyThumb"
+}
+else {
+    Write-Host '  legacy   UNREADABLE'
+}
 Write-Host ''
 
-Add-ResultRow -Name 'source:$ExpectedSha256' -Expected '64 hex chars' -Found $expectedSha -Result 'OK'
-Add-ResultRow -Name 'source:$ExpectedSize' -Expected 'integer' -Found "$expectedSize" -Result 'OK'
-Add-ResultRow -Name 'source:$CertThumbprint' -Expected '40 hex chars' -Found $expectedThumb -Result 'OK'
-
 # ============================================================================
-# 1 + 2 + 5. Cross-file hex agreement and presence
+# Discover the documenting files
 # ============================================================================
 
-$hexTargets = @(
-    [PSCustomObject]@{ Path = 'README.md';                                             Sha = $true;  Thumb = $false; RequireSha = $true;  RequireThumb = $false }
-    [PSCustomObject]@{ Path = 'SECURITY.md';                                           Sha = $true;  Thumb = $true;  RequireSha = $true;  RequireThumb = $true }
-    [PSCustomObject]@{ Path = 'CHANGELOG.md';                                          Sha = $true;  Thumb = $true;  RequireSha = $true;  RequireThumb = $true }
-    [PSCustomObject]@{ Path = 'v1-binary-patch/README.md';                             Sha = $true;  Thumb = $true;  RequireSha = $true;  RequireThumb = $true }
-    [PSCustomObject]@{ Path = 'v1-binary-patch/installer/Uninstall-MagicMousePatch.ps1'; Sha = $true; Thumb = $true;  RequireSha = $false; RequireThumb = $true }
-    [PSCustomObject]@{ Path = 'v1-binary-patch/docs/architecture.md';                   Sha = $false; Thumb = $true;  RequireSha = $false; RequireThumb = $false }
-)
-
-foreach ($target in $hexTargets) {
-    $fullPath = Join-RelativePath -Root $RepoRoot -RelativePath $target.Path
-    if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
-        Add-Finding -Message "Documenting file is missing from the tree: $($target.Path)" -RelativePath $target.Path
-        Add-ResultRow -Name "$($target.Path)" -Expected 'file present' -Found 'missing' -Result 'FAIL'
-        continue
-    }
-
-    $checks = @()
-    if ($target.Sha) {
-        $checks += [PSCustomObject]@{ Label = 'sha256'; Shape = $Sha256Shape; Expected = $expectedSha; Required = $target.RequireSha }
-    }
-    if ($target.Thumb) {
-        $checks += [PSCustomObject]@{ Label = 'thumbprint'; Shape = $ThumbprintShape; Expected = $expectedThumb; Required = $target.RequireThumb }
-    }
-
-    foreach ($check in $checks) {
-        $occurrences = Get-PatternOccurrence -FullPath $fullPath -Pattern $check.Shape
-        $bad = 0
-        foreach ($occurrence in $occurrences) {
-            if ($occurrence.Value -ine $check.Expected) {
-                Add-Finding -Message "$($check.Label) mismatch: found '$($occurrence.Value)' but the installer declares '$($check.Expected)'" -RelativePath $target.Path -LineNumber $occurrence.LineNumber
-                $bad++
-            }
-        }
-
-        $good = $occurrences.Count - $bad
-        if ($check.Required -and $good -eq 0) {
-            Add-Finding -Message "$($check.Label) is absent: this file must document '$($check.Expected)' and no longer does" -RelativePath $target.Path
-            Add-ResultRow -Name "$($target.Path) [$($check.Label)]" -Expected 'at least 1 match' -Found '0 matches' -Result 'FAIL'
-            continue
-        }
-
-        $result = 'OK'
-        if ($bad -gt 0) { $result = 'FAIL' }
-        Add-ResultRow -Name "$($target.Path) [$($check.Label)]" -Expected 'all occurrences match' -Found "$good ok / $bad bad" -Result $result
-    }
-}
-
-# ============================================================================
-# 3. Byte size cited in the bug analysis
-# ============================================================================
-
-$sizeDocPath = 'v1-binary-patch/docs/bug-analysis.md'
-$sizeDocFull = Join-RelativePath -Root $RepoRoot -RelativePath $sizeDocPath
-if (-not (Test-Path -LiteralPath $sizeDocFull -PathType Leaf)) {
-    Add-Finding -Message "Documenting file is missing from the tree: $sizeDocPath" -RelativePath $sizeDocPath
-    Add-ResultRow -Name "$sizeDocPath [size]" -Expected 'file present' -Found 'missing' -Result 'FAIL'
-}
-else {
-    # Only file-size citations are in scope. bug-analysis.md legitimately cites small
-    # struct sizes ("16 bytes", "4 bytes", "560 bytes"); a kernel driver is never that
-    # small, so 5-or-more-digit byte counts are the driver-size citations.
-    $sizeHits = Get-PatternOccurrence -FullPath $sizeDocFull -Pattern '\b\d{5,} bytes\b'
-    $agree = 0
-    foreach ($hit in $sizeHits) {
-        $cited = [int]([regex]::Match($hit.Value, '\d+').Value)
-        if ($cited -ne $expectedSize) {
-            Add-Finding -Message "size mismatch: cites '$($hit.Value)' but the installer declares $expectedSize bytes" -RelativePath $sizeDocPath -LineNumber $hit.LineNumber
-        }
-        else {
-            $agree++
-        }
-    }
-    if ($agree -eq 0) {
-        Add-Finding -Message "size is absent: this file must cite '$expectedSize bytes' and no longer does" -RelativePath $sizeDocPath
-        Add-ResultRow -Name "$sizeDocPath [size]" -Expected "$expectedSize bytes" -Found 'no citation' -Result 'FAIL'
-    }
-    else {
-        $result = 'OK'
-        if ($agree -ne $sizeHits.Count) { $result = 'FAIL' }
-        Add-ResultRow -Name "$sizeDocPath [size]" -Expected "$expectedSize bytes" -Found "$agree ok / $($sizeHits.Count - $agree) bad" -Result $result
-    }
-}
-
-# ============================================================================
-# 4. SHA256SUMS.txt is real sha256sum output and its driver entry agrees
-# ============================================================================
-
-# This manifest is the single justified exception to file-wide hash matching. It is a
-# multi-entry sha256sum file: MagicMouseFix.cer (and any future payload) legitimately
-# carries a different checksum, so comparing every hex64 here to the driver hash would
-# fail on a correct edit. The format is parsed structurally anyway, so the driver hash
-# is asserted against the entry named applewirelessmouse.sys instead. Every other
-# documenting file stays strict on purpose: a bare hex64 in prose or in the uninstaller
-# can only be the driver hash, so any other value there is a stale copy.
-
-$sumsPath = 'v1-binary-patch/installer/SHA256SUMS.txt'
-$sumsFull = Join-RelativePath -Root $RepoRoot -RelativePath $sumsPath
-$driverEntryName = 'applewirelessmouse.sys'
-if (-not (Test-Path -LiteralPath $sumsFull -PathType Leaf)) {
-    Add-Finding -Message "Documenting file is missing from the tree: $sumsPath" -RelativePath $sumsPath
-    Add-ResultRow -Name "$sumsPath [format]" -Expected 'file present' -Found 'missing' -Result 'FAIL'
-}
-else {
-    $sumsLineCount = 0
-    $sumsBad = 0
-    $driverEntryLine = 0
-    $driverEntryHash = ''
-    $lineNumber = 0
-    foreach ($line in [System.IO.File]::ReadAllLines($sumsFull)) {
-        $lineNumber++
-        if ($line.Trim().Length -eq 0 -or $line.TrimStart().StartsWith('#')) { continue }
-        $sumsLineCount++
-        $entry = [regex]::Match($line, '^([0-9a-f]{64})  (\S+)$')
-        if (-not $entry.Success) {
-            Add-Finding -Message "malformed sha256sum line: expected '<64 lowercase hex><two spaces><filename>', got '$line'" -RelativePath $sumsPath -LineNumber $lineNumber
-            $sumsBad++
-            continue
-        }
-        if ($entry.Groups[2].Value -ine $driverEntryName) { continue }
-        $driverEntryLine = $lineNumber
-        $driverEntryHash = $entry.Groups[1].Value
-        if ($driverEntryHash -ine $expectedSha) {
-            Add-Finding -Message "checksum mismatch for '$driverEntryName': got '$driverEntryHash', installer declares '$expectedSha'" -RelativePath $sumsPath -LineNumber $lineNumber
-            $sumsBad++
-        }
-    }
-    if ($sumsLineCount -eq 0) {
-        Add-Finding -Message 'contains no checksum entries; every entry was blank or commented out' -RelativePath $sumsPath
-        $sumsBad++
-    }
-    $result = 'OK'
-    if ($sumsBad -gt 0) { $result = 'FAIL' }
-    Add-ResultRow -Name "$sumsPath [format]" -Expected 'sha256sum format' -Found "$sumsLineCount entries / $sumsBad bad" -Result $result
-
-    if ($driverEntryLine -eq 0) {
-        Add-Finding -Message "no '$driverEntryName' entry: this manifest must publish the driver checksum '$expectedSha'" -RelativePath $sumsPath
-        Add-ResultRow -Name "$sumsPath [$driverEntryName]" -Expected $expectedSha -Found 'no entry' -Result 'FAIL'
-    }
-    else {
-        $driverResult = 'OK'
-        if ($driverEntryHash -ine $expectedSha) { $driverResult = 'FAIL' }
-        Add-ResultRow -Name "$sumsPath [$driverEntryName]" -Expected 'matches installer' -Found $driverEntryHash -Result $driverResult
-    }
-}
-
-# ============================================================================
-# 6. Real binary, when it happens to be present
-# ============================================================================
-
-$binaryCandidates = @(
-    'v1-binary-patch/installer/applewirelessmouse.sys',
-    'v1-binary-patch/applewirelessmouse.sys'
-)
-$binaryFound = $false
-foreach ($candidate in $binaryCandidates) {
-    $candidateFull = Join-RelativePath -Root $RepoRoot -RelativePath $candidate
-    if (-not (Test-Path -LiteralPath $candidateFull -PathType Leaf)) { continue }
-    $binaryFound = $true
-
-    $actualHash = (Get-FileHash -LiteralPath $candidateFull -Algorithm SHA256).Hash
-    $actualSize = (Get-Item -LiteralPath $candidateFull).Length
-
-    if ($actualHash -ine $expectedSha) {
-        Add-Finding -Message "on-disk SHA256 is '$actualHash' but the installer declares '$expectedSha'" -RelativePath $candidate
-        Add-ResultRow -Name "$candidate [sha256]" -Expected $expectedSha -Found $actualHash -Result 'FAIL'
-    }
-    else {
-        Add-ResultRow -Name "$candidate [sha256]" -Expected 'matches installer' -Found $actualHash -Result 'OK'
-    }
-
-    if ($actualSize -ne $expectedSize) {
-        Add-Finding -Message "on-disk size is $actualSize bytes but the installer declares $expectedSize" -RelativePath $candidate
-        Add-ResultRow -Name "$candidate [size]" -Expected "$expectedSize" -Found "$actualSize" -Result 'FAIL'
-    }
-    else {
-        Add-ResultRow -Name "$candidate [size]" -Expected "$expectedSize" -Found "$actualSize" -Result 'OK'
-    }
-}
-
-if (-not $binaryFound) {
-    Write-Host 'SKIP: binary not present in tree (expected; see DMCA-NOTICE.md)'
-    Write-Host '::notice::SKIP: applewirelessmouse.sys not present in tree (expected; see DMCA-NOTICE.md)'
-    Add-ResultRow -Name 'applewirelessmouse.sys [on-disk]' -Expected 'hash + size verified' -Found 'not in tree' -Result 'SKIP'
-}
-
-# ============================================================================
-# 7. Secret hygiene: no signing key material may ever be tracked
-# ============================================================================
-
-# Assembled from fragments so this scanner does not flag its own source.
-$keyBlockPattern = '-----BEGIN ' + '(RSA |DSA |EC |OPENSSH |ENCRYPTED )?' + 'PRIVATE' + ' KEY-----'
-$forbiddenExtensions = @('.pfx', '.p12', '.snk', '.key')
-$skipExtensions = @(
-    '.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.bmp', '.pdf',
-    '.sys', '.cer', '.exe', '.dll', '.pdb', '.zip', '.gz', '.7z',
-    '.woff', '.woff2', '.ttf', '.otf', '.mp4', '.webm'
-)
-
+# Discovered, never hard-coded: a stale list silently stops covering files that were
+# added after it was written. docs/ is the generated GitHub Pages site and is out of
+# scope for this pull request's provenance model; .git/ is never a document; and this
+# script is skipped because it necessarily contains the constants and the known-bad
+# allowlist itself.
 $trackedFiles = @()
 $gitUsable = $false
 try {
@@ -415,6 +341,222 @@ try {
 catch {
     Write-Host "NOTE: git ls-files unavailable ($($_.Exception.Message))"
 }
+
+$documentCandidates = @()
+foreach ($tracked in $trackedFiles) {
+    if ($tracked -eq $SelfRelativePath) { continue }
+    if ($tracked -like 'docs/*') { continue }
+    $extension = [System.IO.Path]::GetExtension($tracked).ToLowerInvariant()
+    if ($BinaryExtensions -contains $extension) { continue }
+    $candidateFull = Join-RelativePath -Root $RepoRoot -RelativePath $tracked
+    if (-not (Test-Path -LiteralPath $candidateFull -PathType Leaf)) { continue }
+    $documentCandidates += $tracked
+}
+
+# ============================================================================
+# Classify every constant-shaped string in every documenting file
+# ============================================================================
+
+$constantCarriers = 0
+$shippedShaMentions = 0
+$legacyShaMentions = 0
+$shippedSizeMentions = 0
+$legacySizeMentions = 0
+$legacyThumbMentions = 0
+
+if (-not $gitUsable) {
+    Write-Host 'SKIP: git ls-files unavailable, documenting files could not be discovered'
+    Write-Host '::notice::SKIP: git ls-files unavailable, documenting files could not be discovered'
+    Add-ResultRow -Name 'documenting files' -Expected 'discovered via git' -Found 'git unavailable' -Result 'SKIP'
+}
+elseif (-not $legacyResolved) {
+    # Without the legacy triple, every legacy citation in the tree would be reported as
+    # an unknown constant. That is noise on top of a already-reported root cause.
+    Write-Host 'SKIP: legacy triple unreadable, cross-file constant classification not performed'
+    Add-ResultRow -Name 'documenting files' -Expected 'all constants known' -Found 'legacy truth missing' -Result 'SKIP'
+}
+else {
+    foreach ($relative in $documentCandidates) {
+        $fullPath = Join-RelativePath -Root $RepoRoot -RelativePath $relative
+
+        # SHA256SUMS.txt is a multi-entry sha256sum manifest: MagicMouseFix.cer and any
+        # future payload legitimately carry their own checksums, so its well-formed
+        # checksum lines are verified structurally below (by filename) instead of being
+        # compared to a driver hash here. Its comment lines stay in scope, because a
+        # hash quoted in prose can only be a driver hash.
+        $structuralLines = @{}
+        if ($relative -eq $SumsRelativePath) {
+            $sumsLineNumber = 0
+            foreach ($line in [System.IO.File]::ReadAllLines($fullPath)) {
+                $sumsLineNumber++
+                if ([regex]::IsMatch($line, '^[0-9a-f]{64}  \S+$')) {
+                    $structuralLines[$sumsLineNumber] = $true
+                }
+            }
+        }
+
+        $fileShipped = 0
+        $fileLegacy = 0
+        $fileKnownBad = 0
+        $fileUnknown = 0
+
+        foreach ($occurrence in (Get-PatternOccurrence -FullPath $fullPath -Pattern $Sha256Shape)) {
+            if ($structuralLines.ContainsKey($occurrence.LineNumber)) { continue }
+            if ($occurrence.Value -ieq $shippedSha) {
+                $fileShipped++
+                $shippedShaMentions++
+            }
+            elseif ($occurrence.Value -ieq $legacySha) {
+                $fileLegacy++
+                $legacyShaMentions++
+            }
+            elseif ($KnownBadSha256 -contains $occurrence.Value.ToLowerInvariant()) {
+                $fileKnownBad++
+            }
+            else {
+                Add-Finding -Message "unknown driver hash '$($occurrence.Value)': it is neither the shipped Apple driver ($shippedSha) nor the legacy patched driver ($legacySha)" -RelativePath $relative -LineNumber $occurrence.LineNumber
+                $fileUnknown++
+            }
+        }
+
+        # GitHub Actions pins reusable actions by 40-hex commit SHA, which is exactly the
+        # shape of a certificate thumbprint. Workflow files are therefore scanned for
+        # driver hashes but not for thumbprints.
+        $extension = [System.IO.Path]::GetExtension($relative).ToLowerInvariant()
+        if ($extension -ne '.yml' -and $extension -ne '.yaml') {
+            foreach ($occurrence in (Get-PatternOccurrence -FullPath $fullPath -Pattern $ThumbprintShape)) {
+                if ($occurrence.Value -ieq $legacyThumb) {
+                    $fileLegacy++
+                    $legacyThumbMentions++
+                }
+                else {
+                    Add-Finding -Message "unknown certificate thumbprint '$($occurrence.Value)': the only signing certificate this project documents is $legacyThumb (CN=MagicMouseFix, legacy route)" -RelativePath $relative -LineNumber $occurrence.LineNumber
+                    $fileUnknown++
+                }
+            }
+        }
+
+        foreach ($occurrence in (Get-PatternOccurrence -FullPath $fullPath -Pattern $SizeShape)) {
+            $cited = [int]($occurrence.Capture -replace ',', '')
+            if ($cited -eq $shippedSize) {
+                $fileShipped++
+                $shippedSizeMentions++
+            }
+            elseif ($cited -eq $legacySize) {
+                $fileLegacy++
+                $legacySizeMentions++
+            }
+            else {
+                Add-Finding -Message "unknown driver size '$($occurrence.Value)': it is neither the shipped Apple driver ($shippedSize bytes) nor the legacy patched driver ($legacySize bytes)" -RelativePath $relative -LineNumber $occurrence.LineNumber
+                $fileUnknown++
+            }
+        }
+
+        $total = $fileShipped + $fileLegacy + $fileKnownBad + $fileUnknown
+        if ($total -eq 0) { continue }
+        $constantCarriers++
+
+        $result = 'OK'
+        if ($fileUnknown -gt 0) { $result = 'FAIL' }
+        $found = "$fileShipped shipped / $fileLegacy legacy"
+        if ($fileKnownBad -gt 0) { $found += " / $fileKnownBad known-bad" }
+        if ($fileUnknown -gt 0) { $found += " / $fileUnknown unknown" }
+        Add-ResultRow -Name "$relative [constants]" -Expected 'known subjects only' -Found $found -Result $result
+    }
+
+    # A scan that matched nothing would otherwise pass silently, which is the one way
+    # this check can lie: it would report a clean tree while verifying nothing at all.
+    if ($constantCarriers -eq 0) {
+        Add-Finding -Message "No documenting file carries a provenance constant. $($documentCandidates.Count) file(s) were scanned; either discovery broke or the documentation lost its constants wholesale."
+        Add-ResultRow -Name 'documenting files' -Expected 'at least 1 carrier' -Found "0 of $($documentCandidates.Count) scanned" -Result 'FAIL'
+    }
+    else {
+        Add-ResultRow -Name 'documenting files' -Expected 'at least 1 carrier' -Found "$constantCarriers of $($documentCandidates.Count) scanned" -Result 'OK'
+    }
+
+    # Presence: a document that silently drops its copy of a constant is as bad as one
+    # that carries a stale copy, and a pure "all occurrences agree" rule cannot see it.
+    # The installer's own declarations are excluded so the legacy triple cannot satisfy
+    # this check by quoting itself.
+    $presenceChecks = @(
+        [PSCustomObject]@{ Label = 'shipped sha256';    Count = $shippedShaMentions;  Value = $shippedSha }
+        [PSCustomObject]@{ Label = 'shipped size';      Count = $shippedSizeMentions; Value = "$shippedSize bytes" }
+        [PSCustomObject]@{ Label = 'legacy sha256';     Count = $legacyShaMentions;   Value = $legacySha }
+        [PSCustomObject]@{ Label = 'legacy size';       Count = $legacySizeMentions;  Value = "$legacySize bytes" }
+        [PSCustomObject]@{ Label = 'legacy thumbprint'; Count = $legacyThumbMentions; Value = $legacyThumb }
+    )
+    foreach ($presence in $presenceChecks) {
+        if ($presence.Count -eq 0) {
+            Add-Finding -Message "$($presence.Label) is documented nowhere in the tree: '$($presence.Value)' must remain verifiable by a reader and no longer appears."
+            Add-ResultRow -Name "documented:$($presence.Label)" -Expected 'at least 1 mention' -Found '0 mentions' -Result 'FAIL'
+        }
+        else {
+            Add-ResultRow -Name "documented:$($presence.Label)" -Expected 'at least 1 mention' -Found "$($presence.Count) mentions" -Result 'OK'
+        }
+    }
+}
+
+# ============================================================================
+# SHA256SUMS.txt is real sha256sum output and publishes the shipped checksum
+# ============================================================================
+
+$sumsFull = Join-RelativePath -Root $RepoRoot -RelativePath $SumsRelativePath
+$shippedEntryName = 'apple-driver/applewirelessmouse.sys'
+if (-not (Test-Path -LiteralPath $sumsFull -PathType Leaf)) {
+    Add-Finding -Message "Checksum manifest is missing from the tree: $SumsRelativePath" -RelativePath $SumsRelativePath
+    Add-ResultRow -Name "$SumsRelativePath [format]" -Expected 'file present' -Found 'missing' -Result 'FAIL'
+}
+else {
+    $sumsLineCount = 0
+    $sumsBad = 0
+    $shippedEntryLine = 0
+    $shippedEntryHash = ''
+    $lineNumber = 0
+    foreach ($line in [System.IO.File]::ReadAllLines($sumsFull)) {
+        $lineNumber++
+        if ($line.Trim().Length -eq 0 -or $line.TrimStart().StartsWith('#')) { continue }
+        $sumsLineCount++
+        $entry = [regex]::Match($line, '^([0-9a-f]{64})  (\S+)$')
+        if (-not $entry.Success) {
+            Add-Finding -Message "malformed sha256sum line: expected '<64 lowercase hex><two spaces><path>', got '$line'" -RelativePath $SumsRelativePath -LineNumber $lineNumber
+            $sumsBad++
+            continue
+        }
+        if ($entry.Groups[2].Value -ine $shippedEntryName) { continue }
+        $shippedEntryLine = $lineNumber
+        $shippedEntryHash = $entry.Groups[1].Value
+        if ($shippedEntryHash -ine $shippedSha) {
+            Add-Finding -Message "checksum mismatch for '$shippedEntryName': manifest says '$shippedEntryHash', the tracked binary hashes to '$shippedSha'" -RelativePath $SumsRelativePath -LineNumber $lineNumber
+            $sumsBad++
+        }
+    }
+    if ($sumsLineCount -eq 0) {
+        Add-Finding -Message 'contains no checksum entries; every line was blank or commented out, so `sha256sum -c` verifies nothing' -RelativePath $SumsRelativePath
+        $sumsBad++
+    }
+    $result = 'OK'
+    if ($sumsBad -gt 0) { $result = 'FAIL' }
+    Add-ResultRow -Name "$SumsRelativePath [format]" -Expected 'sha256sum format' -Found "$sumsLineCount entries / $sumsBad bad" -Result $result
+
+    if ($shippedEntryLine -eq 0) {
+        Add-Finding -Message "no '$shippedEntryName' entry: this manifest must publish the shipped driver checksum '$shippedSha'" -RelativePath $SumsRelativePath
+        Add-ResultRow -Name "$SumsRelativePath [$shippedEntryName]" -Expected $shippedSha -Found 'no entry' -Result 'FAIL'
+    }
+    else {
+        $entryResult = 'OK'
+        if ($shippedEntryHash -ine $shippedSha) { $entryResult = 'FAIL' }
+        Add-ResultRow -Name "$SumsRelativePath [$shippedEntryName]" -Expected 'matches tracked binary' -Found $shippedEntryHash -Result $entryResult
+    }
+}
+
+# ============================================================================
+# Secret hygiene: no signing key material may ever be tracked
+# ============================================================================
+
+# Assembled from fragments so this scanner does not flag its own source.
+$keyBlockPattern = '-----BEGIN ' + '(RSA |DSA |EC |OPENSSH |ENCRYPTED )?' + 'PRIVATE' + ' KEY-----'
+# .cer is a public certificate and is allowed; .pfx/.p12/.snk/.key carry private keys.
+$forbiddenExtensions = @('.pfx', '.p12', '.snk', '.key')
 
 if (-not $gitUsable) {
     Write-Host 'SKIP: git ls-files unavailable, secret hygiene gate not enforced'
@@ -430,7 +572,7 @@ else {
             $secretHits++
             continue
         }
-        if ($skipExtensions -contains $extension) { continue }
+        if ($BinaryExtensions -contains $extension) { continue }
 
         $trackedFull = Join-RelativePath -Root $RepoRoot -RelativePath $tracked
         if (-not (Test-Path -LiteralPath $trackedFull -PathType Leaf)) { continue }
@@ -456,9 +598,9 @@ if (-not $Quiet) {
 Write-Host ''
 if ($script:FindingCount -gt 0) {
     Write-Host "FAIL: $($script:FindingCount) finding(s); see the annotations above."
-    Write-Host 'For provenance mismatches, Install-MagicMousePatch.ps1 is the source of truth: update the other files to match it.'
+    Write-Host 'Truth for the shipped Apple driver is the tracked binary itself; truth for the legacy patched driver is Install-MagicMousePatch.ps1. Update the documents to match, never the other way around.'
     exit 1
 }
 
-Write-Host 'PASS: driver provenance is consistent across every documenting file.'
+Write-Host 'PASS: every documented constant agrees with the artifact it describes.'
 exit 0

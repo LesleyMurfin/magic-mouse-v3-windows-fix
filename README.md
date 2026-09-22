@@ -48,42 +48,60 @@ Apple Magic Mouse v3 on Windows 10/11 loses scroll capability after Bluetooth id
 
 | Model | Year | Bluetooth PID | Supported? |
 |-------|------|---------------|------------|
-| Magic Mouse v1 | 2009 | `0x030D` | ❌ Not supported — see [sbagirici's repo](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) |
-| Magic Mouse v2 | 2015 | `0x0269` | ❌ Not supported — see [sbagirici's repo](https://github.com/sbagirici/apple-magic-mouse-scroll-fix-windows) |
-| Magic Mouse v3 | 2024 | `0x0323` | ✅ This repo |
+| Magic Mouse v1 | 2009 | `0x030D` | ✅ This repo (Apple-driver route) |
+| Magic Mouse v2 | 2015 | `0x0269` | ✅ This repo (Apple-driver route) |
+| Magic Mouse v2 (alt PID) | 2015 | `0x0310` | ✅ This repo (Apple-driver route) |
+| Magic Mouse v3 | 2024 | `0x0323` | ✅ This repo (Apple-driver route) |
 
-**Verify your PID:** Device Manager → Human Interface Devices → Apple Magic Mouse → Properties → Details → Hardware Ids. Look for `PID&030D`, `PID&0269`, or `PID&0323`.
+**Verify your PID:** Device Manager → Human Interface Devices → Apple Magic Mouse → Properties → Details → Hardware Ids. Look for `PID&030D`, `PID&0269`, `PID&0310`, or `PID&0323`.
 
 ## System Requirements
 
-- Windows 10 build 14393 or later, or Windows 11 any version
-- Apple Magic Mouse v3 (PID `0x0323`) paired over Bluetooth
+- Windows 10 build 14393 or later, or Windows 11 any version, x64
+- A Magic Mouse paired over Bluetooth: `0x030D`, `0x0269`, `0x0310` or `0x0323`
 - Administrator account for installation
+- Fast Startup off (`powercfg /h off`, then reboot) — the installer refuses to run otherwise
 - Reboot access
 
-## Quick Install (3 Steps)
+## Quick Install
 
-### Step 1: Download & Verify
+### Step 1: Download & verify
+
+Download the repository or a release ZIP and extract it, then verify the driver you are about
+to install from the extracted `v1-binary-patch/` folder:
 
 ```powershell
-# Download v1.0.0 release
-# Extract to C:\Program Files\MagicMousePatch\
-
-# Verify binary integrity (mandatory)
-$sys = "C:\Program Files\MagicMousePatch\v1-binary-patch\applewirelessmouse.sys"
+$sys = ".\apple-driver\applewirelessmouse.sys"
 (Get-FileHash $sys -Algorithm SHA256).Hash
-# Expected: 370A5555AEBF673C3156EA5B5FBABD8030F2EE7A3A6BD0FCB1B4B6C93FA56A03
+# Expected: 08F33D7E3ECE2C73950A9706F1C4C9057894EAEAF1C4FB355F261F3C2333378F   (78,424 bytes)
+
+# This is Apple's own driver, unmodified. Confirm Windows agrees:
+(Get-AuthenticodeSignature $sys).Status
+# Valid
+(Get-AuthenticodeSignature $sys).SignerCertificate.Subject
+# CN=Microsoft Windows Hardware Compatibility Publisher, ...
 ```
 
-### Step 2: Run Installer
+`installer\SHA256SUMS.txt` carries the same checksum in `sha256sum -c` format.
+
+### Step 2: Run the installer
+
+Double-click `v1-binary-patch\Install.cmd`. It requests Administrator itself, so there is
+nothing to type and no execution-policy change.
+
+The same thing explicitly, if you prefer a shell:
 
 ```powershell
-# Open PowerShell as Administrator
-cd "C:\Program Files\MagicMousePatch\v1-binary-patch\installer"
-.\Install-MagicMousePatch.ps1
+# Elevated PowerShell
+cd .\v1-binary-patch\installer
+.\Install-MagicMousePatch.ps1 -DriverPath ..\apple-driver\applewirelessmouse.sys
 
-# Accept certificate trust prompt when prompted
+# Other options: -FromDriverStore, -TargetPid <030D|0310|0269|0323>, -DryRun
 ```
+
+No certificate prompt: the shipped binary is Apple's own, countersigned by Microsoft, so
+nothing has to be added to a trust store. The legacy byte-patched variant did require a
+certificate and Test Mode; it is no longer shipped.
 
 ### Step 3: Reboot
 
@@ -96,13 +114,15 @@ shutdown /r /t 60 /c "MagicMousePatch installer - rebooting"
 
 | Item | Change |
 |------|--------|
-| Certificate | MagicMouseFix cert imported to LocalMachine\TrustedPublisher and Root store |
-| Driver file | C:\Windows\System32\drivers\applewirelessmouse.sys (66 KB) |
+| Certificate | None for the shipped Apple-driver route. The legacy patched variant imported MagicMouseFix to `LocalMachine\TrustedPublisher` only — never the Root store |
+| Driver file | `C:\Windows\System32\drivers\applewirelessmouse.sys` (78,424 bytes, Apple's, unmodified) |
 | Service | applewirelessmouse service created, demand-start (Type 1, Start 3) |
 | Registry | HKLM\SYSTEM\CurrentControlSet\Enum\BTHENUM\...\Device Parameters\LowerFilters |
 | Backup | Original driver backed up to C:\ProgramData\MagicMousePatch\backup\ |
 
-The patch acts as a WDM lower filter on the Bluetooth HID stack, intercepting device initialization before HID collection structures can collapse.
+The driver is registered as a WDM lower filter on the Bluetooth HID stack, so it initialises the
+device before the HID collection structures can collapse. Nothing Apple shipped is modified — the
+fix is the registration, which Windows does not perform on a non-Mac PC.
 
 ## Verify It Worked
 

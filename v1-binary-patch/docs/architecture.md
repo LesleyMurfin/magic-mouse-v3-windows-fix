@@ -117,21 +117,23 @@ When PnP initializes a device, it reads the `LowerFilters` registry value:
 ```
 Registry Path:
   HKLM\SYSTEM\CurrentControlSet\Enum\BTHENUM
-    \{00001124-...}_VID&0001004C_PID&0323\...\0
-      \Device Parameters
-        ├── LowerFilters: REG_SZ = "applewirelessmouse"
-        └── DynamicCachedServices: REG_BINARY
+    \{00001124-...}_VID&0001004C_PID&0323\...\0    ← device-instance key
+      ├── LowerFilters: REG_MULTI_SZ = "applewirelessmouse"
+      └── Device Parameters
+          └── DynamicCachedServices: REG_BINARY
 ```
 
 **Registry Entry Meaning:**
 - **Subkey:** The unique device instance for Magic Mouse v3
-- **LowerFilters:** List of driver names to load below the class driver
-- **Value:** "applewirelessmouse" tells PnP to insert applewirelessmouse.sys into the stack
+- **LowerFilters:** List of driver names to load below the class driver, stored on the
+  device-instance key itself (**not** in its `Device Parameters` subkey)
+- **Value:** A `REG_MULTI_SZ` list; the installer prepends "applewirelessmouse" to any
+  filters already present, which tells PnP to insert applewirelessmouse.sys into the stack
 
 ### Loading Sequence
 
 1. **Device enumeration:** BTHENUM detects Magic Mouse (PID 0x0323)
-2. **Registry read:** PnP manager reads `Device Parameters\LowerFilters`
+2. **Registry read:** PnP manager reads the `LowerFilters` value on the device-instance key
 3. **Driver load:** PnP calls `DriverEntry` in applewirelessmouse.sys
 4. **Stack insertion:** applewirelessmouse.sys is inserted below HIDClass but above BTHHID
 5. **Initialization:** applewirelessmouse.sys receives `IRP_MN_START_DEVICE`
@@ -300,8 +302,8 @@ When the system boots or device connects:
    └─ BTHENUM enumerates Magic Mouse (VID 0x0001004C, PID 0x0323)
 
 2. Registry Lookup
-   └─ Read HKLM\...\Device Parameters\LowerFilters
-   └─ Found: "applewirelessmouse"
+   └─ Read LowerFilters (REG_MULTI_SZ) on HKLM\SYSTEM\CurrentControlSet\Enum\<InstanceId>
+   └─ Found: "applewirelessmouse" in the filter list
 
 3. Driver Load
    └─ Load applewirelessmouse.sys from System32\drivers\
@@ -344,7 +346,11 @@ To remove the filter:
 
 1. **Remove registry entry:**
    ```
-   Delete: HKLM\...\Device Parameters\LowerFilters
+   Delete the value named LowerFilters from the device-instance key itself:
+   Remove-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Enum\<InstanceId>" -Name LowerFilters
+   (<InstanceId> is the full PnP instance id, e.g.
+    BTHENUM\{00001124-...}_VID&0001004C_PID&0323\8&2a5f42e5&0&AABBCCDDEEFF_C00000000;
+    the value is NOT inside that key's Device Parameters subkey)
    ```
 
 2. **Unload driver:**
@@ -376,7 +382,7 @@ To remove the filter:
    - Third-party development (no kernel source required)
    - Easy deployment via LowerFilters registry key
    - Clean uninstallation (no system file modification)
-   - Device-specific targeting (only Magic Mouse, PID 0x0323)
+   - Device-specific targeting (only Magic Mouse: PID 0x030D / 0x0310 / 0x0269 / 0x0323)
 
 ### Why Binary Patch Instead of KMDF?
 
