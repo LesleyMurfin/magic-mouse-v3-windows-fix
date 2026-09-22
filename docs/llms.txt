@@ -19,7 +19,7 @@
 | Windows Test Mode | Not required; Secure Boot and memory integrity can stay on | Required, because the signature is one you generate: Secure Boot and memory integrity must be off |
 | Install | Turn Fast Startup off (`powercfg /h off`, reboot), then double-click `v1-binary-patch/Install.cmd`; it self-elevates, no PowerShell window, no execution-policy change, reboot to finish | Build with the WDK or Enterprise WDK, then `Setup-Community.cmd` creates a local certificate, signs the package and runs `pnputil` |
 | Scroll | Apple's own Mac-style translation; sensitivity fixed | Generated from the touch surface (HID Wheel + AC Pan); sensitivity tunable through the `ScrollStep` registry value |
-| Battery (via Magic Tray) | Brief temporary Mode A <-> Mode B flip, then flips back | Direct read of HID Input `0x90` on COL02; no flip needed |
+| Battery (via Magic Tray) | Briefly removes `applewirelessmouse` from `LowerFilters` to flip the mouse from Mode A to Mode B and expose `COL02`, reads HID input report `0x90` there, then restores the filter; two-finger scroll is unavailable for those few seconds | Direct read of HID Input `0x90` on COL02; no flip needed |
 
 ## Quick answers
 
@@ -29,7 +29,7 @@
 - Q: Does it recover by itself? A: No; previously only a driver reinstall or re-pair restored scroll.
 - Q: Do I need Windows Test Mode? A: Not for the Apple-driver route. The KMDF route does need it, because you sign that driver with a certificate you generate yourself, and Secure Boot plus memory integrity must be off.
 - Q: Does it support Magic Mouse v1 or v2? A: Yes, via the Apple-driver route (`0x030D`, `0x0269`, `0x0310`, `0x0323`), verified on a real paired v1 alongside a v3 on the same PC. The KMDF route is `0x0323` only.
-- Q: Does either driver show battery percentage? A: No — Windows has no UI for it on this mouse. Battery is read in userspace by the Magic Tray app: through the Apple-driver route's temporary mode flip, or straight from HID Input `0x90` on COL02 when the KMDF driver is installed.
+- Q: Does either driver show battery percentage? A: No — Windows has no UI for it on this mouse. Battery is read in userspace by the Magic Tray app: through the Apple-driver route's brief temporary `LowerFilters` change that exposes `COL02`, or straight from HID Input `0x90` on COL02 when the KMDF driver is installed.
 - Q: What about battery on v1/v2? A: Not yet characterised on v1 `0x030D`, v2 `0x0269` and v2-alt `0x0310`. Those models use different HID descriptor structures from the 2024 mouse, so the collection that carries report `0x90` on `0x0323` has not been mapped on them; no claim either way.
 - Q: Can I install both? A: No. Install one route, not both — they attach to the same Bluetooth HID stack.
 - Q: Cost? A: Free, MIT licensed, no subscription.
@@ -87,5 +87,5 @@ It detects which driver state a machine reports: Apple/Microsoft default, the Ap
 - KMDF route (`v2-kmdf-driver/`): complete C source, INF, host gates and build/sign scripts, obtained by downloading the repository; no compiled or signed `.sys` is distributed, and the current 2.0.4.6 source has not been built or signed yet. `0x0323` only. Building it needs the Windows WDK or Enterprise WDK; loading it needs Test Mode with Secure Boot and memory integrity off, because the signature is one you generate.
 - Signing: only the KMDF route needs Test Mode. Removing that requirement needs an EV code-signing certificate plus Microsoft Partner Center attestation signing, renewed annually - a funding problem, not a code problem: https://magictray.app/funding.html
 - OS support for the shipped Apple-driver route: Windows 10 build 14393 or later, Windows 11 any build, x64.
-- Battery percentage is not surfaced by Windows itself. Magic Tray reads it in userspace: via a brief temporary mode flip on the Apple-driver route, or directly from HID Input `0x90` on COL02 with the KMDF driver. Battery on v1 `0x030D`, v2 `0x0269` and v2-alt `0x0310` is not yet characterised.
+- Battery percentage is not surfaced by Windows itself, and is not read by the Apple driver. Magic Tray reads it in userspace: via a brief temporary `LowerFilters` change that exposes `COL02` on the Apple-driver route, or directly from HID Input `0x90` on COL02 with the KMDF driver. Battery on v1 `0x030D`, v2 `0x0269` and v2-alt `0x0310` is not yet characterised.
 - License: MIT, Copyright 2026 Revive Business Solutions. Free. Not affiliated with Apple.

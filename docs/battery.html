@@ -92,7 +92,7 @@
           "@id": "https://drivers.magictray.app/battery.html#breadcrumb"
         },
         "datePublished": "2026-05-01",
-        "dateModified": "2026-09-15",
+        "dateModified": "2026-09-22",
         "inLanguage": "en",
         "publisher": {
           "@id": "https://magictray.app/#person"
@@ -141,13 +141,13 @@
       <section class="hero">
         <div>
           <h1>Magic Mouse battery percentage on Windows 11</h1>
-          <p class="lead">This driver does not read battery. The free <a href="https://magictray.app/">Magic Tray</a> app does it in userspace: on the 2024 mouse it briefly flips <strong>Mode A to Mode B</strong>, reads Input report <code>0x90</code>, then flips the device back.</p>
+          <p class="lead">This driver does not read battery. The free <a href="https://magictray.app/">Magic Tray</a> app does it in userspace: on the 2024 mouse it briefly removes <code>applewirelessmouse</code> from the mouse&rsquo;s <code>LowerFilters</code>, which splits the HID path and exposes the <code>COL02</code> collection, reads Input report <code>0x90</code> there, then restores the filter. Two-finger scroll is unavailable for the few seconds that takes.</p>
           <p class="cta">
-            <a class="btn btn-primary" href="https://magictray.app/battery.html"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#battery"/></svg> Battery on Windows: full guide</a>
-            <a class="btn btn-ghost" href="install.html#apple-route"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#wrench"/></svg> Install the scroll driver</a>
+            <a class="btn primary" href="https://magictray.app/battery.html"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#battery"/></svg> Battery on Windows: full guide</a>
+            <a class="btn ghost" href="install.html#apple-route"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#wrench"/></svg> Install the scroll driver</a>
           </p>
         </div>
-        <figure class="hero-media">
+        <figure class="hero-media shot">
           <img src="img/magic-tray-screenshot.png" width="330" height="189" fetchpriority="high" decoding="async" alt="Windows 11 system tray flyout with installed tray icons, including Magic Tray, the app that shows Magic Mouse battery percentage next to the clock">
           <span class="tag badge badge-accent">Live screenshot</span>
         </figure>
@@ -165,8 +165,8 @@
           <div class="device-card">
             <div class="thumb">
               <picture>
-                <source srcset="img/magic-mouse-v3-underside-usbc.webp" type="image/webp">
-                <img src="img/magic-mouse-v3-underside-usbc.jpg" width="1144" height="1144" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2024 (v3), USB-C port">
+                <source srcset="img/magic-mouse-v3-underside-usbc-192.webp" type="image/webp">
+                <img src="img/magic-mouse-v3-underside-usbc-192.jpg" width="192" height="192" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2024 (v3), USB-C port">
               </picture>
             </div>
             <div class="meta">
@@ -178,8 +178,8 @@
           <div class="device-card">
             <div class="thumb">
               <picture>
-                <source srcset="img/magic-mouse-v2-underside-lightning-alt.webp" type="image/webp">
-                <img src="img/magic-mouse-v2-underside-lightning-alt.jpg" width="1600" height="1200" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2), Lightning port">
+                <source srcset="img/magic-mouse-v2-underside-lightning-alt-192.webp" type="image/webp">
+                <img src="img/magic-mouse-v2-underside-lightning-alt-192.jpg" width="192" height="192" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2), Lightning port">
               </picture>
             </div>
             <div class="meta">
@@ -191,8 +191,8 @@
           <div class="device-card">
             <div class="thumb">
               <picture>
-                <source srcset="img/magic-mouse-v2-underside-lightning-alt.webp" type="image/webp">
-                <img src="img/magic-mouse-v2-underside-lightning-alt.jpg" width="1600" height="1200" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2-alt), Lightning port">
+                <source srcset="img/magic-mouse-v2-underside-lightning-alt-192.webp" type="image/webp">
+                <img src="img/magic-mouse-v2-underside-lightning-alt-192.jpg" width="192" height="192" loading="lazy" decoding="async" alt="Underside of Magic Mouse 2 (v2-alt), Lightning port">
               </picture>
             </div>
             <div class="meta">
@@ -204,8 +204,8 @@
           <div class="device-card">
             <div class="thumb">
               <picture>
-                <source srcset="img/magic-mouse-v1-underside-aa-door.webp" type="image/webp">
-                <img src="img/magic-mouse-v1-underside-aa-door.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Underside of Magic Mouse (v1), AA battery door">
+                <source srcset="img/magic-mouse-v1-underside-aa-door-192.webp" type="image/webp">
+                <img src="img/magic-mouse-v1-underside-aa-door-192.jpg" width="192" height="192" loading="lazy" decoding="async" alt="Underside of Magic Mouse (v1), AA battery door">
               </picture>
             </div>
             <div class="meta">
