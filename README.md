@@ -3,11 +3,11 @@
 A free, MIT-licensed **Magic Mouse v3 Windows driver** for the USB-C **Apple Magic Mouse 2024** (Bluetooth **PID 0323**) on **Windows 10/11**. Apple ships no Windows driver for PID `0x0323` and its Boot Camp INF has no `0323` entry, so two-finger scroll dies after a Bluetooth idle disconnect while the cursor keeps working. This project restores and protects scroll by keeping the HID collection stack from collapsing. Not v1 (`030D`) or v2 (`0269`).
 
 **Read the guides:**
-[Magic Mouse v3 Windows driver site](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/) ·
-[Install the driver on Windows 11](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/install.html) ·
-[Fix Magic Mouse scroll not working](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/scroll-fix.html) ·
-[Magic Mouse battery percentage on Windows](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/battery.html) ·
-[Magic Mouse v3 driver FAQ](https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/faq.html)
+[Magic Mouse v3 Windows driver site](https://drivers.magictray.app/) ·
+[Install the driver on Windows 11](https://drivers.magictray.app/install.html) ·
+[Fix Magic Mouse scroll not working](https://drivers.magictray.app/scroll-fix.html) ·
+[Magic Mouse battery percentage on Windows](https://drivers.magictray.app/battery.html) ·
+[Magic Mouse v3 driver FAQ](https://drivers.magictray.app/faq.html)
 
 **Battery percentage:** use [Magic Tray (Windows app)](https://github.com/LesleyMurfin/magic-tray) — a Windows system-tray utility (software, not a physical desk tray) that reads HID Input `0x90` COL02 and installs the KMDF package from this repo. Site: [Magic Tray (Windows app) home](https://magictray.app/).
 
