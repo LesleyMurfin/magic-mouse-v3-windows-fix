@@ -1,287 +1,90 @@
-# v2.0.0 — KMDF Driver (Work in Progress)
+# MagicMouseDriver (KMDF) — PID 0x0323 only
 
-**STATUS: WORK IN PROGRESS — NOT PRODUCTION READY**
+**Unique 2.0.4.6 scroll package** (`DriverVer 09/20/2026,2.0.4.6`) — **source only, not yet built or signed.** Over 2.0.4.4, the HID control channel is now learned from device-initiated reconnects (`BRB_L2CA_OPEN_CHANNEL_RESPONSE`) as well as host-initiated opens (2.0.4.5), a control read shorter than a mouse report is no longer diverted into the ACL scratch, and the watcher re-arms multitouch by itself after sleep/wake (2.0.4.6) — together keeping the battery percent readable and scroll alive across an idle disconnect and a resume. 2.0.4.4 had carried two fixes over 2.0.4.3: the COL02 Input `0x90` battery read is no longer swallowed by the ACL scratch diversion, and every dragging contact emits wheel notches again (default detent `ScrollStep` 8 -> **16**). **2026-09-15 hardware (the signed 2.0.4.3 build):** pointer + **2-finger** surface scroll + battery `0x90`. 1-finger glass does not scroll. Detent is the registry tunable `ScrollStep`.
 
-This directory contains the roadmap and architecture for v2.0.0, a from-scratch KMDF (Kernel Mode Driver Framework) filter driver implementation. v2 replaces the v1 binary patch with native source code, eliminating dependency on Apple firmware patching.
+**Other PCs ($0):** `Setup-Community.cmd` (testsigning, Secure Boot off). **How to help test:** `COMMUNITY-TESTING.md`. Current state: `STATUS.md`. Ship plan: `SHIPPING.md`. Developer path: thumb `16940C0F` + `Install-KMDF.cmd`.
 
-## Why v2?
 
-### v1 Limitations
 
-| Issue | v1 Binary Patch | v2 KMDF Source |
-|-------|---|---|
-| Transparency | Binary only (opaque) | Full source code |
-| Apple dependency | Patches Apple firmware | Independent implementation |
-| Signing | Self-signed cert | Windows-signed (future) |
-| Maintainability | Requires re-patching firmware | Direct source modifications |
-| SmartScreen | Warnings on new systems | Better reputation over time |
-| Compliance | Custom certificate trust | Standard driver signing |
+**Do not install an unsigned copy-over on the live Apr 30 PC.** That machine keeps
+`MagicMouseDriver.sys` SHA256 `AD5D244B…` (oem16 `f7bf31c7`, pointer OK, no wheel).
+The failed 2.0.4 (`845435CE…`) reused `MagicMouseDriver.inf` / `MagicMouseDriver.cat` /
+`MagicMouseDriver.sys` and overwrote DriverStore oem26 (`79beb68f1da25da4`) so System32
+was a hardlink. Restore needed Safe Mode takeown. This package uses a **new INF + catalog
++ dest filename** so Windows creates a new DriverStore folder beside Apr 30.
 
-### v2 Advantages
+## Artifact names (do not mix these up)
 
-1. **Open source:** Full implementation visible for audit and modification
-2. **No Apple dependency:** Standalone KMDF driver, no firmware patching
-3. **Better signing:** Compatible with Microsoft code signing and certification
-4. **Cleaner deployment:** No custom certificate imports, standard Windows driver model
-5. **Long-term support:** Source code can be maintained across Windows versions
-6. **Transparency:** Security research and third-party review possible
+| Filename | FileVersion | Role |
+|----------|-------------|------|
+| **`MagicMouseDriver.sys`** | not 2.0.4.6 | **Apr 30 live / restore name only.** SHA `AD5D244B…`. Do not ship a second copy. |
+| **`MagicMouseDriver-kmdf-apr30-pointer-AD5D244B.sys`** | not 2.0.4.6 | Package label for that pointer-only binary. |
+| **`MagicMouseDriver-kmdf-may20-pointerdead-559B136A.sys`** | 2.0.2.0 | Pointer-dead. Refuse. |
+| **`MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys`** | **2.0.4.6** | **Canonical scroll artifact** after freeze-hash. |
+| **`MagicMouseDriver-kmdf-204-scroll.sys`** | **2.0.4.6** | INF dest / ServiceBinary (same bytes as the sha8 file). |
+| **`applewirelessmouse-patched-pathA-SHIPBLOCKER.sys`** | PATH-A v1 | **SHIPBLOCKER.** Never this product. |
 
-## Architecture
+Do not install PATH-A. Do not install May 20. Do not install SHA `845435CE…`. No dual-filter.
 
-### KMDF vs WDM
+## Release identity — 2.0.4.6 (source), 2.0.4.3 (last signed)
 
-| Aspect | v1 (WDM Lower Filter) | v2 (KMDF Filter) |
-|--------|---|---|
-| Framework | Windows Driver Model (WDM) | Kernel Mode Driver Framework (KMDF) |
-| Code size | ~66 KB binary | ~150 KB source (compiled similar size) |
-| Complexity | Direct IRP handling | Object-oriented framework |
-| Debuggability | Standard kernel debugging | KMDF-aware tools |
-| Best practice | Older, but functional | Modern Windows driver development |
+| Field | 2.0.4.6 — this tree | 2.0.4.3 — last built/signed/installed |
+|-------|---------------------|---------------------------------------|
+| DriverVer | `09/20/2026,2.0.4.6` | `09/15/2026,2.0.4.3` |
+| Unsigned freeze SHA256 | not built yet | `25A3287AE7FBF62873354B71F32B16F7DC47CEA65C165C760A9AFBC28C74F6B2` (26112 bytes) |
+| Signed `.sys` SHA256 | not signed yet | `0CC4458B2D70C58BDFB89AD3C4D5BCDB594D6EE34DEFD0E6C831E56FE22540ED` |
+| Cert thumb | `16940C0F` (private key on the PC, never in git) | `16940C0F` |
+| Diag | default `ScrollStep=16` | measured `ScrollStep=8` |
 
-### File Structure
+The 2.0.4.3 hashes above are the only ones that describe a real build of this package so far;
+2.0.4.6 gets its own freeze hash when a Windows host compiles it. `AD5D244B…` is the Apr 30
+restore baseline and `845435CE…` is the refused 2.0.4.0 package.
+
+## Install (signed pnputil only)
+
+See `SIGN-AND-INSTALL.md` and `FREEZE-HASH.md`.
+
+**Where is the compiler?** `BUILDING.md` — Visual Studio + WDK, or a mounted Enterprise WDK, plus `signtool` and `Inf2Cat` from the same kit.
+
+1. Windows WDK build → `Freeze-KmdfArtifact.ps1` → `SHA256SUMS.txt`.
+2. Human signs `.sys` + `.cat` with cert thumb **16940C0F** (private key on the PC, not in git).
+3. `pnputil /add-driver MagicMouseDriver-kmdf-204-scroll.inf /install`  
+   or `Install-KMDF.cmd` after the signed catalog exists.
+
+`Install-KMDF.cmd` does **not** copy onto System32 or DriverStore, does **not** delete oem16,
+does **not** create a cert, and refuses unsigned files.
+
+## HID contract
+
+Documented in `HID-CONTRACT.md`. Short form:
+
+- Keep Apr 30 pointer usages **X/Y 0x0030/0x0031** on report **0x12**.
+- Add wheel **0x0038** (and AC Pan) as **extra**, not a replacement.
+- Battery stays HID Input **0x90** COL02. Do not use feature **0x47**.
+- Do not reintroduce PATH-A.
+
+## Honest limits
+
+| Topic | What actually happens |
+|-------|------------------------|
+| **No `.sys` on GitHub** | Linux cannot compile a kernel driver. Hash is frozen after a Windows WDK build. |
+| **Test signing** | Self-signed `.sys` needs `bcdedit /set testsigning on` and a reboot. |
+| **HVCI / Memory Integrity** | Windows 11 Core isolation blocks self-signed kernel drivers. |
+| **Event 41** | Hunch only: DriverEntry/PnP in `845435CE…`, or the oem26 hardlink overwrite. This tree uses a unique package and will not grow ACL reports past proven capacity. Not proven until hardware. |
+| **PATH-A** | `applewirelessmouse.sys` is a SHIPBLOCKER (BSOD 0xD1). |
+
+## Layout
 
 ```
 v2-kmdf-driver/
-├── README.md (this file)
-├── src/
-│   ├── main.c            # DriverEntry, device creation
-│   ├── filter.c          # Filter dispatch routines
-│   ├── magic_mouse.c     # Magic Mouse-specific logic
-│   ├── ioctl_handlers.c  # Device I/O control handling
-│   └── common.h          # Shared definitions
-├── inc/
-│   ├── filter.h
-│   ├── magic_mouse.h
-│   └── version.h
-├── magic_mouse_v3.vcxproj    # Visual Studio project
-├── magic_mouse_v3.sln        # Visual Studio solution
-├── build.cmd                 # Build script
-├── BUILDING.md               # Build instructions
-└── docs/
-    ├── KMDF_MIGRATION.md     # Migration notes from WDM
-    └── TEST_PLAN.md          # Comprehensive test plan
+  MagicMouseDriver-kmdf-204-scroll.inf
+  Install-KMDF.cmd / Install-KMDF.ps1   ← pnputil /add-driver only
+  Uninstall-KMDF.cmd                    ← unique package only; leaves oem16
+  SIGN-AND-INSTALL.md
+  FREEZE-HASH.md
+  HID-CONTRACT.md
+  scripts/Freeze-KmdfArtifact.ps1
+  scripts/Kmdf-Common.ps1
 ```
 
-## Development Status
-
-### Completed
-
-- [ ] Architecture design (pending)
-- [ ] KMDF framework skeleton (pending)
-- [ ] Magic Mouse PID detection (pending)
-- [ ] IRP filtering logic (pending)
-- [ ] DynamicCachedServices interception (pending)
-- [ ] Error handling (pending)
-- [ ] Unit tests (pending)
-- [ ] Integration tests (pending)
-- [ ] Code review (pending)
-
-### In Progress
-
-- KMDF initialization
-- Device enumeration and filtering
-
-### Planned
-
-- IRP interception and validation
-- Registry manipulation safeguards
-- Comprehensive testing (all 6 test scenarios)
-- Public source code release
-- Microsoft signing certification
-
-## Building v2 (When Available)
-
-### Prerequisites
-
-- Windows Driver Kit (WDK) 10.0 or later
-- Visual Studio 2019 or later
-- .NET Framework 4.7+ (for build tools)
-
-### Build Steps
-
-```powershell
-# Open Visual Studio as Administrator
-# File → Open Solution → magic_mouse_v3.sln
-# Build → Build Solution (F7)
-# Output: magic_mouse_v3.sys in output directory
-
-# Or command-line:
-msbuild magic_mouse_v3.sln /p:Configuration=Release /p:Platform=x64
-```
-
-### Signing (Pre-Release)
-
-```powershell
-# Test-sign for development
-signtool sign /f MagicMouseFix.pfx /p password /t http://timestamp.server.com ^
-  magic_mouse_v3.sys
-
-# Production (pending Microsoft certification)
-# Will be signed by Revive Business Solutions' code signing certificate
-```
-
-## Testing (When Available)
-
-v2 will be tested with the same 6-scenario test suite as v1:
-
-1. **Power off/on:** Scroll persists
-2. **69-minute idle:** Scroll stable after extended idle
-3. **pnputil rescan:** Device rescan compatible
-4. **Sleep/wake:** Cache integrity maintained
-5. **UsoClient force-DSM:** DSM property scan blocked
-6. **Cold reboot:** Multiple DSM runs don't trigger collapse
-
-See `docs/TEST_PLAN.md` for detailed procedures.
-
-## Deployment Roadmap
-
-### Phase 1: Internal Testing (Target: Q3 2026)
-
-- Complete source implementation
-- Run all 6 test scenarios
-- Code review and security audit
-- Document building and testing process
-
-### Phase 2: Beta Release (Target: Q4 2026)
-
-- Source code published to GitHub (this repo)
-- Beta version for experienced users
-- Feedback collection
-- Bug fixes based on testing
-
-### Phase 3: Production Release (Target: Q1 2027)
-
-- Microsoft code signing certification
-- v2.0.0 final release
-- v1.0.0 marked as deprecated (still supported)
-- Migration guide for v1 → v2
-
-## Design Principles
-
-### v2 KMDF Implementation Will Follow:
-
-1. **Minimal interception:** Only intercept critical DSM property queries, pass all others through
-2. **Fast path:** No complex algorithms, early exit for non-Magic Mouse devices
-3. **Error safety:** If uncertainty exists, allow request (fail-open for stability)
-4. **Logging:** Debug tracing for issue diagnosis without performance penalty
-5. **Isolation:** Device-specific filtering (PID 0x0323 only), no impact on other HID devices
-6. **Compliance:** Follow Windows Driver Frameworks best practices
-
-## Comparison: v1 vs v2
-
-### v1 (Binary Patch) — Current Production
-
-**Use v1 if:**
-- You need a fix now (before v2 is available)
-- You're comfortable with binary patches
-- You're not concerned about certificate trust prompts
-
-**Install:** See `/v1-binary-patch/README.md`
-
-### v2 (KMDF Source) — Future
-
-**Use v2 when:**
-- You want to audit the source code
-- You prefer open-source drivers
-- Microsoft-signed binaries become available
-- You're building a derivative project
-
-**Timeline:** v2 becomes available Q3 2026 (beta), Q1 2027 (production)
-
-## Migration Path: v1 → v2
-
-When v2.0.0 is released:
-
-1. **v1 continues to work:** v1.0.0 will remain available and supported
-2. **Side-by-side installation:** v1 and v2 can coexist (though only one should be active)
-3. **Migration script:** Uninstall v1, install v2 (simple PowerShell script)
-4. **No breaking changes:** v2 maintains same functionality and registry interface
-
-## Contributing
-
-v2 development will welcome contributions for:
-- Code implementation (KMDF driver skeleton, dispatch routines, etc.)
-- Testing on additional hardware configurations
-- Documentation improvements
-- Code review and security audit
-
-**Process:**
-1. Fork this repository
-2. Create feature branch: `git checkout -b ai/v2-feature-name`
-3. Implement feature + tests
-4. Open pull request with test evidence
-5. Code review before merge
-
-See `CONTRIBUTING.md` for details.
-
-## FAQ
-
-### Q: Why not release v2 now?
-
-A: KMDF driver development requires:
-- WDK environment setup
-- Driver architecture design
-- IRP routing and interception logic
-- Comprehensive testing on multiple Windows versions
-- Security audit before public release
-
-Releasing an untested driver would be irresponsible.
-
-### Q: When will v2 be ready?
-
-A: Target timeline:
-- **Architecture & design:** May–June 2026
-- **Implementation:** July–August 2026
-- **Testing:** September 2026
-- **Beta release:** October 2026
-- **Production release:** January 2027
-
-### Q: Can I help build v2?
-
-A: Yes! Contributors welcome once the source skeleton is available. See `CONTRIBUTING.md`.
-
-### Q: Will v1 stop working when v2 is released?
-
-A: No. v1 will continue to work and be supported. v2 is an alternative, not a replacement. You choose which to install.
-
-### Q: What about Windows 12 / ARM64?
-
-A: v2 architecture will support:
-- Windows 11 22H2+
-- Windows 10 build 14393+ (best-effort)
-- x64 architecture (primary target)
-- ARM64 (secondary, pending testing)
-
-v1 works on these now; v2 will maintain same compatibility.
-
-## Current Users (v1.0.0)
-
-If you've installed v1.0.0 and it's working, **no action is required**. v1 remains production-ready and fully supported.
-
-When v2 becomes available, you can optionally upgrade by:
-1. Uninstalling v1 (`Uninstall-MagicMousePatch.ps1`)
-2. Installing v2 (PowerShell or WiX installer)
-3. Rebooting
-
----
-
-## Resources
-
-### Windows Driver Development
-
-- [Microsoft Windows Driver Kit](https://learn.microsoft.com/en-us/windows-hardware/drivers/)
-- [KMDF Documentation](https://learn.microsoft.com/en-us/windows-hardware/drivers/wdf/kmdf-version-history)
-- [Windows Driver Samples](https://github.com/microsoft/Windows-driver-samples)
-
-### Related Projects
-
-- [Mouse Filter Driver Sample (moufiltr)](https://github.com/microsoft/Windows-driver-samples/tree/main/input/moufiltr)
-- [HID Minidriver Sample (vhidmini2)](https://github.com/microsoft/Windows-driver-samples/tree/main/hid/vhidmini2)
-
----
-
-**Document Version:** 1.0.0 (WIP)  
-**Last Updated:** 2026-05-18  
-**Status:** Not production ready — do not install on production systems  
-**Author:** Revive Business Solutions  
-**License:** MIT (when source is released)
+There is **no** `Invoke-KmdfInstall.ps1`, **no** `pr3-activate`, **no** `mm-dev.ps1`.

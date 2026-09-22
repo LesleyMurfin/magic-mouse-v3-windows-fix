@@ -7,19 +7,27 @@ Stages the installer scripts, checksums and legal/security documents into a
 temporary directory, generates an in-archive SHA256SUMS manifest, then writes
 dist/magic-mouse-v3-fix-<Tag>-installer.zip plus a .sha256 sidecar.
 
-The signed kernel driver (applewirelessmouse.sys) and its certificate
-(MagicMouseFix.cer) are not tracked in git (see DMCA-NOTICE.md). They are one
-payload, never two options: Install-MagicMousePatch.ps1 imports the .cer into
-LocalMachine\TrustedPublisher and copies the .sys, and refuses to run without
-either. So both are included when both are staged, neither when neither is,
-and staging exactly one is a hard failure -- a kit that carries half the
-payload looks complete and cannot install.
+Two applewirelessmouse.sys binaries are known and each has its own rules:
 
-When both are present the driver's real SHA256 and byte length must match the
-$ExpectedSha256 / $ExpectedSize constants in Install-MagicMousePatch.ps1 --
-shipping a binary that contradicts our own documentation is a hard failure.
+  apple   Apple's unmodified driver, tracked at v1-binary-patch/apple-driver/.
+          Microsoft-countersigned, so it installs with no certificate at all
+          and ships on its own.
+  legacy  The byte-patched copy re-signed as CN=MagicMouseFix, not tracked in
+          git (see DMCA-NOTICE.md). It and MagicMouseFix.cer are one payload,
+          never two options: Install-MagicMousePatch.ps1 imports the .cer into
+          LocalMachine\TrustedPublisher before it copies the .sys and refuses
+          to run without either, so staging exactly one of them is a hard
+          failure -- a kit that carries half the payload looks complete and
+          cannot install.
 
-When neither is present this produces a scripts-only kit and reports
+The kit ships exactly one driver, so staging both is refused rather than
+resolved by search order, and a staged driver must hash to the triple its
+location promises: apple-driver/ to the Apple constants pinned below, the
+installer directory or the patch root to the $PatchedSha256 / $PatchedSize
+constants in Install-MagicMousePatch.ps1. Shipping a binary that contradicts
+our own documentation is a hard failure.
+
+When no driver is staged this produces a scripts-only kit and reports
 binary_included=false so the release notes can say so explicitly.
 
 .PARAMETER Tag
@@ -62,14 +70,20 @@ function Write-Failure {
     Write-Host "[ERROR] $Message" -ForegroundColor Red
 }
 
+# The shipped Apple driver. Install-MagicMousePatch.ps1 identifies it by Authenticode
+# signer rather than by hash, so the constants of the copy this repository ships are
+# pinned here; Test-ReleaseProvenance.ps1 fails if this pin drifts from the tree.
+$AppleSha256 = '08f33d7e3ece2c73950a9706f1c4c9057894eaeaf1c4fb355f261f3c2333378f'
+$AppleSize   = [int64]78424
+
 function Get-InstallerFact {
     param([string]$Path)
 
     $text = Get-Content -LiteralPath $Path -Raw
-    $sha  = [regex]::Match($text, '\$ExpectedSha256\s*=\s*"([0-9A-Fa-f]{64})"')
-    $size = [regex]::Match($text, '\$ExpectedSize\s*=\s*([0-9]+)')
+    $sha  = [regex]::Match($text, '\$PatchedSha256\s*=\s*"([0-9A-Fa-f]{64})"')
+    $size = [regex]::Match($text, '\$PatchedSize\s*=\s*([0-9]+)')
     if (-not $sha.Success -or -not $size.Success) {
-        throw "Unable to read ExpectedSha256/ExpectedSize from $Path"
+        throw "Unable to read PatchedSha256/PatchedSize from $Path"
     }
     return [pscustomobject]@{
         Sha256 = $sha.Groups[1].Value.ToLowerInvariant()
@@ -131,59 +145,70 @@ if ($missing.Count -gt 0) {
 }
 
 $facts = Get-InstallerFact -Path $installerPs1
-Write-Host "  Installer expects SHA256 $($facts.Sha256) / $($facts.Size) bytes" -ForegroundColor Gray
+
+# Where each driver may live and what it must hash to. Exactly one of these may be
+# staged: the kit ships a single applewirelessmouse.sys, so a tree holding two of them
+# is ambiguous and is refused rather than silently resolved by search order.
+$driverSources = @(
+    [pscustomobject]@{ Driver = 'apple'  ; Path = (Join-Path (Join-Path $patchDir 'apple-driver') 'applewirelessmouse.sys'); Sha256 = $AppleSha256    ; Size = $AppleSize    ; NeedsCert = $false }
+    [pscustomobject]@{ Driver = 'legacy' ; Path = (Join-Path $installerDir 'applewirelessmouse.sys')                       ; Sha256 = $facts.Sha256 ; Size = $facts.Size ; NeedsCert = $true }
+    [pscustomobject]@{ Driver = 'legacy' ; Path = (Join-Path $patchDir 'applewirelessmouse.sys')                           ; Sha256 = $facts.Sha256 ; Size = $facts.Size ; NeedsCert = $true }
+)
+
+Write-Host "  apple driver  SHA256 $AppleSha256 / $AppleSize bytes" -ForegroundColor Gray
+Write-Host "  legacy driver SHA256 $($facts.Sha256) / $($facts.Size) bytes" -ForegroundColor Gray
 
 # ============================================================================
-# Optional payload: the driver and its certificate, all or nothing
+# Optional payload: the driver, plus the certificate the legacy driver needs
 # ============================================================================
 
-$binarySource = $null
-$certSource   = $null
-
-foreach ($dir in @($installerDir, $patchDir)) {
-    if ($null -eq $binarySource) {
-        $candidate = Join-Path $dir 'applewirelessmouse.sys'
-        if (Test-Path -LiteralPath $candidate -PathType Leaf) { $binarySource = $candidate }
-    }
-    if ($null -eq $certSource) {
-        $candidate = Join-Path $dir 'MagicMouseFix.cer'
-        if (Test-Path -LiteralPath $candidate -PathType Leaf) { $certSource = $candidate }
-    }
-}
-
-$hasBinary = $null -ne $binarySource
-$hasCert   = $null -ne $certSource
-
-if ($hasBinary -ne $hasCert) {
-    $searched = "$installerDir or $patchDir"
-    if ($hasBinary) {
-        Write-Failure "MagicMouseFix.cer not found in $searched, but applewirelessmouse.sys is staged at $binarySource. The driver and its certificate are one payload - Install-MagicMousePatch.ps1 imports the certificate before it copies the driver. Stage the certificate or remove the driver; refusing to publish half a kit."
-    } else {
-        Write-Failure "applewirelessmouse.sys not found in $searched, but MagicMouseFix.cer is staged at $certSource. The driver and its certificate are one payload - a certificate without a driver installs nothing. Stage the driver or remove the certificate; refusing to publish half a kit."
-    }
+$staged = @($driverSources | Where-Object { Test-Path -LiteralPath $_.Path -PathType Leaf })
+if ($staged.Count -gt 1) {
+    Write-Failure ("More than one applewirelessmouse.sys is staged: " + (($staged | ForEach-Object { "$($_.Path) ($($_.Driver))" }) -join ', ') + ". The kit ships exactly one driver; remove the copies it must not publish.")
     exit 1
 }
 
-$binaryIncluded = $hasBinary
+$driver     = $staged | Select-Object -First 1
+$certSource = $null
+foreach ($dir in @($installerDir, $patchDir)) {
+    $candidate = Join-Path $dir 'MagicMouseFix.cer'
+    if ($null -eq $certSource -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { $certSource = $candidate }
+}
+
+$needsCert = ($null -ne $driver) -and $driver.NeedsCert
+$hasCert   = $null -ne $certSource
+
+if ($needsCert -and -not $hasCert) {
+    Write-Failure "MagicMouseFix.cer not found in $installerDir or $patchDir, but the legacy patched driver is staged at $($driver.Path). That driver and its certificate are one payload - Install-MagicMousePatch.ps1 imports the certificate before it copies the driver. Stage the certificate or remove the driver; refusing to publish half a kit."
+    exit 1
+}
+if ($hasCert -and -not $needsCert) {
+    Write-Failure "MagicMouseFix.cer is staged at $certSource, but no legacy patched driver is. That certificate exists only to trust the re-signed legacy binary - Apple's driver is Microsoft-countersigned and needs no certificate at all. Stage the legacy driver or remove the certificate; refusing to publish a file the kit cannot use."
+    exit 1
+}
+
+$binaryIncluded = $null -ne $driver
 if ($binaryIncluded) {
-    $actualHash = Get-Sha256Hex -Path $binarySource
-    $actualSize = (Get-Item -LiteralPath $binarySource).Length
+    $actualHash = Get-Sha256Hex -Path $driver.Path
+    $actualSize = (Get-Item -LiteralPath $driver.Path).Length
 
-    if ($actualHash -ne $facts.Sha256) {
-        Write-Failure "SHA256 mismatch for $binarySource - expected $($facts.Sha256), got $actualHash. Refusing to publish a binary that contradicts Install-MagicMousePatch.ps1."
+    if ($actualHash -ne $driver.Sha256) {
+        Write-Failure "SHA256 mismatch for $($driver.Path) - this location must hold the $($driver.Driver) driver $($driver.Sha256), got $actualHash. Refusing to publish a binary that contradicts our own documentation."
         exit 1
     }
-    if ($actualSize -ne $facts.Size) {
-        Write-Failure "Size mismatch for $binarySource - expected $($facts.Size) bytes, got $actualSize."
+    if ($actualSize -ne $driver.Size) {
+        Write-Failure "Size mismatch for $($driver.Path) - the $($driver.Driver) driver is $($driver.Size) bytes, got $actualSize."
         exit 1
     }
 
-    $plan += [pscustomobject]@{ Name = 'applewirelessmouse.sys' ; Source = $binarySource }
-    $plan += [pscustomobject]@{ Name = 'MagicMouseFix.cer'      ; Source = $certSource }
-    Write-Host "  Driver verified and included: $binarySource" -ForegroundColor Green
-    Write-Host "  Certificate included:         $certSource" -ForegroundColor Green
+    $plan += [pscustomobject]@{ Name = 'applewirelessmouse.sys' ; Source = $driver.Path }
+    Write-Host "  Driver verified and included: $($driver.Path) ($($driver.Driver))" -ForegroundColor Green
+    if ($needsCert) {
+        $plan += [pscustomobject]@{ Name = 'MagicMouseFix.cer' ; Source = $certSource }
+        Write-Host "  Certificate included:         $certSource" -ForegroundColor Green
+    }
 } else {
-    Write-Host "  Driver and certificate not present in tree - building scripts-only kit" -ForegroundColor Yellow
+    Write-Host "  No driver present in tree - building scripts-only kit" -ForegroundColor Yellow
 }
 
 # ============================================================================

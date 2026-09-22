@@ -1,0 +1,41 @@
+# Building MagicMouseDriver-kmdf-2.0.4-scroll-\<sha8\>.sys
+
+Linux cannot produce a `.sys`. Build on Windows 10/11 x64 with Visual Studio + WDK, or a mounted
+Enterprise WDK.
+
+`msbuild` emits **`MagicMouseDriver-kmdf-204-scroll.sys`** (unique INF dest / ServiceBinary). Then freeze it as **`MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys`**. FileVersion / DriverVer is **2.0.4.6** (`DriverVer 09/20/2026,2.0.4.6`). 2.0.4.3 is frozen: it was already built and hashed, so the build script's `FROZEN-UNSIGNED` one-shot guard refuses to rebuild that version and every change must land under a new version number.
+
+Do **not** emit `MagicMouseDriver.sys`. That filename is the Apr 30 restore binary (`AD5D244B…`, oem16 `f7bf31c7`). Never name a KMDF build `applewirelessmouse*.sys`.
+
+## WDK / Visual Studio
+
+```bat
+msbuild MagicMouseDriver.vcxproj /t:Build /p:Configuration=Release /p:Platform=x64 /p:SignMode=Off /p:EnableInf2cat=false /p:StampInf=false
+```
+
+`EnableInf2cat=false` keeps the WDK `Build` target from running signability/Inf2Cat here; the script runs the desktop `InfVerif` check separately before freezing the `.sys`.
+
+```powershell
+powershell -NoProfile -File scripts\Freeze-KmdfArtifact.ps1 -SysPath x64\Release\MagicMouseDriver-kmdf-204-scroll.sys
+```
+
+`SignMode=Off` is required: WDK's inline sign task often deletes the `.sys` when `signtool` wants `/fd sha256`. A human signs afterwards with thumb **16940C0F** (private key on the PC). See `SIGN-AND-INSTALL.md`.
+
+## Enterprise WDK ISO
+
+1. Mount the EWDK ISO.
+2. Run `LaunchBuildEnv.cmd` (or `BuildEnv\SetupBuildEnv.cmd`).
+3. `msbuild` the vcxproj as above, then freeze.
+
+`scripts\kmdf-204-scroll-build.ps1` and `scripts\kmdf-204-scroll-sign.ps1` automate those steps.
+Both work out of a scratch queue root — synced source, per-version build dirs, sign stages, the
+NuGet-installed WDK/SDK tool packages — whose default is the one baked into those scripts; set the
+`MM_QUEUE_ROOT` environment variable (or pass `-QueueRoot`) to point them at your own layout.
+
+## After the `.sys` exists
+
+1. Freeze-hash (above).
+2. `inf2cat` + `signtool` with thumb `16940C0F…`.
+3. `pnputil /add-driver MagicMouseDriver-kmdf-204-scroll.inf /install`.
+
+Do not run unsigned activate. Do not `Copy-Item` onto System32 or DriverStore.
