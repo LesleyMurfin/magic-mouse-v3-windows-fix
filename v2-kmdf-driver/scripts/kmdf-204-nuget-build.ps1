@@ -1,10 +1,12 @@
 # kmdf-204-nuget-build.ps1
 # Build the unique KMDF package out-of-tree. Dest: MagicMouseDriver-kmdf-204-scroll.sys
-# Unlike kmdf-204-scroll-build.ps1 (which mounts the ISO itself, builds in
-# C:\mm-dev-queue and writes the FROZEN-UNSIGNED one-shot record), this script is a
-# plain compiler driver: -SourceDir in, -OutDir out, no freeze record, no drive
-# assumptions, nothing written outside -OutDir. Freezing/signing/installing stay
-# separate (Freeze-KmdfArtifact.ps1, kmdf-204-scroll-sign.ps1) and need elevation.
+# Unlike kmdf-204-scroll-build.ps1 (which mounts the ISO itself and builds in
+# C:\mm-dev-queue), this script is a plain compiler driver: -SourceDir in, -OutDir
+# out, no drive assumptions, nothing written outside -OutDir. It writes the same
+# FROZEN-UNSIGNED.txt hash record into <OutDir>\build, but without that script's
+# one-shot guard and without its INF/Driver.c source gates. Freezing/signing/
+# installing stay separate (Freeze-KmdfArtifact.ps1, kmdf-204-scroll-sign.ps1
+# -BuildDir <OutDir>\build) and need elevation.
 #
 # Two toolchains, in priority order:
 #
@@ -59,6 +61,16 @@ $ExitNoToolchain = 3
 $ExitBuildFailed = 4
 $ExitNoOutput = 5
 $ExitForbidden = 6
+
+# Known-bad artifacts that must never be built, frozen or signed: the Apple restore
+# binary, PATH-A packages and every superseded build. Same list kmdf-204-scroll-build.ps1
+# and kmdf-204-scroll-sign.ps1 enforce - a freeze record naming one of these is refused
+# here rather than three stages later.
+$ForbiddenSha8 = @(
+    '845435CE', '13BF983A', 'D3876B0A', 'A1289489', 'AD5D244B', '559B136A',
+    '370A5555', '6DF8575B', '9EF6C117', 'D22EB163', 'F02ECCED', 'B4582C50',
+    'EA1F80B4', '30F91397', '614DFA90', 'E0BC5661', '1405473F', 'A9450168'
+)
 
 function Write-Step {
     param([Parameter(Mandatory = $true)][string]$Message)
@@ -609,15 +621,21 @@ Copy-Item -LiteralPath $releaseInf -Destination (Join-Path $OutDir ($TargetName 
 $hash = (Get-FileHash -LiteralPath $outSys -Algorithm SHA256).Hash.ToUpperInvariant()
 $size = (Get-Item -LiteralPath $outSys).Length
 $sha8 = $hash.Substring(0, 8)
+if ($ForbiddenSha8 -contains $sha8) {
+    Exit-Fail $ExitForbidden ('REFUSE forbidden hash ' + $hash)
+}
 $infHash = (Get-FileHash -LiteralPath $releaseInf -Algorithm SHA256).Hash.ToUpperInvariant()
 $driverVer = ''
 foreach ($line in (Get-Content -LiteralPath $releaseInf)) {
     if ($line -match '^\s*DriverVer\s*=\s*(.+?)\s*$') { $driverVer = $Matches[1] }
 }
 
-# Same key/value shape kmdf-204-scroll-sign.ps1:32-42 parses, in the same build-dir
-# location, so the existing sign path works against this build unmodified. Unlike
-# kmdf-204-scroll-build.ps1 there is no one-shot guard: re-running overwrites this.
+# Same key/value shape kmdf-204-scroll-sign.ps1 parses, so that script signs this
+# build with -BuildDir <OutDir>\build (its default work dir is in C:\mm-dev-queue,
+# which -OutDir refuses by design). toolchain= is what lets the signer refuse a
+# NuGet-fallback binary; a record without it predates this script and is EWDK-built.
+# Unlike kmdf-204-scroll-build.ps1 there is no one-shot guard: re-running overwrites this.
+$toolchainUsed = if ($ewdk) { 'ewdk' } else { 'nuget' }
 $frozenFile = Join-Path $BuildDir 'FROZEN-UNSIGNED.txt'
 Set-Content -LiteralPath $frozenFile -Encoding ASCII -Value @(
     ('unsigned_sha256=' + $hash),
@@ -626,6 +644,7 @@ Set-Content -LiteralPath $frozenFile -Encoding ASCII -Value @(
     ('dest=' + $TargetName + '.sys'),
     ('artifact=MagicMouseDriver-kmdf-2.0.4-scroll-' + $sha8 + '.sys'),
     ('DriverVer=' + $driverVer),
+    ('toolchain=' + $toolchainUsed),
     ('source=' + $SourceDir)
 )
 
@@ -641,6 +660,11 @@ Write-Host ('inf    ' + $releaseInf)
 Write-Host ('frozen ' + $frozenFile)
 Write-Host ('build  ' + $releaseDir)
 Write-Host ''
-Write-Host 'Unsigned. Sign with scripts\kmdf-204-scroll-sign.ps1 (thumb 16940C0F) and install'
-Write-Host 'elevated - this script deliberately does neither.'
+if ($ewdk) {
+    Write-Host ('Unsigned. Sign elevated with scripts\kmdf-204-scroll-sign.ps1 -BuildDir ' + $BuildDir)
+    Write-Host 'then install - this script deliberately does neither.'
+}
+else {
+    Write-Warn 'toolchain=nuget: kmdf-204-scroll-sign.ps1 will REFUSE this build. Test binary only.'
+}
 exit 0
