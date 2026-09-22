@@ -1,0 +1,64 @@
+session_id: 2026-09-21-battery-col02-passthrough
+timestamp: 2026-09-21T20:40:00-0600
+branch: fix/battery-col02-control-channel-passthrough
+scope: "PR #39 maintainer review — ACL scratch diversion floor, RemainingBufferSize save/restore, 2.0.4.4 identity bump"
+apex_score: 8
+experts:
+  - name: AclLifecycleReview
+    agent: reviewer
+    verdict: APPROVE
+    finding: "OrigRemainingBufferSize is initialised at Driver.c:356, saved at :391-392 on the only path entering the diversion, and restored on both exits (:410-411 send failure, :489 completion, which runs for success, error and cancellation alike). Scratch is exactly MM_ACL_MAX_PARSE (142) and the diverted read is exactly 142. Buffer/BufferMDL move as a pair, no stale half. The MM_MOUSE_REPORT_LEN floor drops no legitimate multitouch report: the interrupt read is measured at capacity 9. Two P3 residuals only, both pre-existing: translated-completion residue under-reports capacity by <=1 byte (was a 133-byte over-report), and control reads of 8..141 bytes are still diverted while MtControlHandle is NULL (#40)."
+  - name: TestValueReview
+    agent: reviewer
+    verdict: CHANGES-NEEDED
+    finding: "C_SOURCE_CONTROL_CHANNEL_GATE advertised five guards; origCap >= MM_MOUSE_REPORT_LEN was satisfied by the comment at Driver.c:382, so weakening the real floor at :527 still passed. Same missing comment-strip would false-positive on any comment quoting the old BufferSize > 0 gate. Measured 80 host checks / 0 failures across six files."
+  - name: CodeRabbit
+    agent: coderabbitai
+    verdict: APPROVED
+    finding: "Minor, Driver.c:482-563 — recompute RemainingBufferSize after the final BufferSize is selected; the restored submitted value is stale once BufferSize becomes newLen/pass/original. Converged on the same line as AclLifecycleReview. Also a no-op note about clearing the field before the send (the clear at :356 precedes the capture at :391-392) and ruff FBT003 on the suite's positional run.check convention."
+  - name: VersionConsistencyReview
+    agent: scout
+    verdict: CHANGES-NEEDED
+    finding: "Bump is consistent across every tooling-enforced location (INF DriverVer, rc FILEVERSION/PRODUCTVERSION + all three string-table values, Driver.h MM_FILE_VERSION_STR, Install-KMDF.ps1 hard-throw gate character-for-character, all three script defaults); rank strictly monotonic vs installed 09/15/2026,2.0.4.3. specs/4-kmdf-204-unique-scroll.md:71 still pinned DriverVer 09/15/2026,2.0.4.3 as a standing MUST. validate-package.sh has 54 assertion sites, not the 25 the PR claimed."
+status: addressed
+outcome: |
+  Fixed in ec5620b:
+  - _c_code() strips block and line comments before the Driver.c source-shape regexes.
+    test_c_source_acl_contract untouched: it matches comment prose on purpose. Mutation-probed on
+    throwaway copies — gate reverted to BufferSize > 0, origCap floor weakened with the comment
+    intact, sdpOk conjunct dropped, and < MM_ACL_MAX_PARSE deleted each go red independently;
+    one-line reformat and a comment quoting BufferSize > 0 both stay green. The weakened-floor
+    mutation passed against the committed test, which is the defect.
+  - specs/4-kmdf-204-unique-scroll.md:71 now derives DriverVer from the build script's -Version /
+    -DriverVerDate defaults and its Fail 3 INF-mismatch guard (:72-76) instead of pinning a point
+    release. Banned oem26 / PR #3 collisions unchanged. specs/gate_4.py never read DriverVer.
+  - PR #39 description corrected: validate-package.sh is 54 OK, not 25/25.
+
+  Fixed in c98d63c - #38 bullet 4, closed rather than deferred. Two reviewers converged on the
+  line, so the semantic was checked against the primary source: bthddi.h defines
+  RemainingBufferSize as "the amount of space, in bytes, left in the buffer after the BRB call",
+  an output field. Restoring the submitted value was therefore wrong for the same reason the
+  scratch leftover was wrong. One clamped assignment after the wrote/!wrote branch selects the
+  final length covers translate, copy-back and copy-exception. New gate C_SOURCE_ACL_RESIDUE,
+  mutation-probed four-red / two-green. OrigRemainingBufferSize kept for the two rollbacks it
+  exists for, and Driver.h now documents the split.
+
+  Not fixed, recorded and justified:
+  - Control-channel diversion for 8..141-byte reads while MtControlHandle is NULL. The right
+    discriminator is channel/PSM, not a length bound — #40's territory, needs a hardware
+    reconnect test. Already stated under "Residual, not fixed here" in the PR description.
+  - MAGIC-TRAY.md:27 FileVersion 2.0.4.3 left alone: spec 4 line 66 lists that file under
+    "Do not touch", and 2.0.4.3 is still the only artifact ever built, so it is the only one the
+    tray can pull.
+
+  Gates on c98d63c: 81 host checks / 0 failures, validate-package.sh 54 OK, specs/gate_4.py
+  exit 0, GitHub PowerShell Lint pass. Base ai/magic-mouse-initial-release is 0 commits ahead,
+  merge state MERGEABLE.
+
+  Still NOT BUILT, NOT SIGNED, NOT LOADED. The Windows verification steps 1-6 in the PR
+  description remain mandatory, including CONTRIBUTING.md Test 3 (69-minute idle reconnect) before
+  the battery read is believed.
+factory_gate_footer: |
+  VERDICT: APPROVE for merge into ai/magic-mouse-initial-release; NOT approved for hardware claims
+  IR: IR-ALIGN
+  SUMMARY: diversion floor sound | vacuous test guard fixed | spec DriverVer invariant de-pinned | #38 closed in full via bthddi.h | #40 left open with reasons

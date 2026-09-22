@@ -10,7 +10,7 @@
 # "REFUSE hash not frozen" on every new build.
 [CmdletBinding()]
 param(
-    [string]$Version = '2.0.4.3'
+    [string]$Version = '2.0.4.4'
 )
 
 $ErrorActionPreference = 'Stop'
