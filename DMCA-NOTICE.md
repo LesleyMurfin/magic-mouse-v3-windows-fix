@@ -57,8 +57,9 @@ The KMDF driver is an independent implementation written from scratch in C again
 Windows Driver Kit. It is **not** derived from Apple's binary, contains no Apple code, and does not
 depend on Apple's driver being installed. It is a separate driver, not a replacement for the
 Apple-driver route; both are maintained. Its source and documentation are published in
-`v2-kmdf-driver/`, under this project's MIT licence; at the time of writing that directory holds
-the driver's documentation only, the C source being under review in a separate pull request.
+`v2-kmdf-driver/`, under this project's MIT licence: the C sources (`Driver.c`, `GestureEngine.c`,
+`AclTranslate.c`, `HidDescriptor.c`, `InputHandler.c` and their headers), the INF, the host-side
+test gates, and the build and signing scripts. No compiled or signed binary is distributed.
 
 ## DMCA Contact
 

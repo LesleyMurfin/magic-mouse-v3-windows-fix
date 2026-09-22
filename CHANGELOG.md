@@ -69,6 +69,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Driver 1 was documented as v3-only in the root README and in the Driver 1 Quick Start, which
   told v1 and v2 owners the fix would not help them. It supports all four PIDs
 
+## [2.0.4.6] - 2026-09-20
+
+Driver 2, the KMDF driver in `v2-kmdf-driver/`. `DriverVer 09/20/2026,2.0.4.6`. Source only: the
+last version built, signed and run on hardware is 2.0.4.3.
+
+### Fixed
+
+- Multitouch is recovered automatically after sleep/wake. `mm-auto-f1-watcher.ps1` polls the
+  driver's `Diag` key every 5 seconds and re-sends the `HidD_SetFeature([F1,02,01])` enable when
+  the device is reporting compact 9-byte input (`LastAclReceived = 9`) while `Rid12Count` is still
+  advancing — an actively used mouse that has silently dropped out of multitouch mode. Arrival
+  events and the startup reconcile cover reconnects and boot but never fire on resume, so scroll
+  previously stayed dead after a sleep/wake cycle until `mm-f1-once.ps1` was run by hand
+- A control-channel read whose mapped buffer is shorter than a mouse report is no longer diverted
+  into the ACL scratch. `BufferSize` alone was not enough: HidBth reads that channel header-first,
+  asking for one byte at a time, and the MDL byte count is what says how much the caller can
+  actually receive
+
+## [2.0.4.5] - 2026-09-17
+
+Driver 2. `DriverVer 09/17/2026,2.0.4.5`. Source only.
+
+### Fixed
+
+- The HID control channel is now learned from device-initiated reconnects as well as
+  host-initiated opens. Only `BRB_L2CA_OPEN_CHANNEL` was recognised, so after an idle disconnect —
+  which the mouse re-establishes itself, as `BRB_L2CA_OPEN_CHANNEL_RESPONSE` — the tracked channel
+  handle stayed `NULL`, the control-channel pass-through never engaged, and the COL02 Input `0x90`
+  battery percent read back as zero
+
+## [2.0.4.4] - 2026-09-16
+
+Driver 2. `DriverVer 09/16/2026,2.0.4.4`. Source only.
+
+### Changed
+
+- Every dragging contact emits its own wheel notches again. 2.0.4.3 had nominated one reference
+  finger — the lowest active drag slot — to halve an accidental double count, but every other
+  contact was still re-anchored, so its travel was discarded: whenever the lowest-id contact was
+  resting or moving slower than the detent, the finger that was actually sliding emitted nothing
+  and scroll was dead rather than merely coarse. Measured on hardware: 694 multitouch reports over
+  15 active seconds produced 0 wheel events, against 24 wheel events from the per-contact rule
+- The default scroll detent `MM_SCROLL_STEP` is **16**, up from 8, which answers the double count
+  the reference finger was aimed at without any gesture going silent. `ScrollStep` remains a
+  registry value with the same `[1,224]` clamp, so sensitivity is still tunable without a rebuild
+
+### Fixed
+
+- The COL02 Input `0x90` battery report is no longer swallowed by the ACL scratch diversion. A
+  1-byte control-channel read matched the old `BufferSize > 0` gate, so the filter substituted its
+  142-byte scratch buffer, the transport delivered the whole `GET_REPORT(Input, 0x90)` response into
+  it, and only one byte could be copied back — every layer saw `90 00 00` with `STATUS_SUCCESS`
+- `RemainingBufferSize` is restored after a diverted ACL transfer completes, instead of being left
+  holding the scratch buffer's size
+
 ## [1.0.0] - 2026-05-18
 
 ### Added

@@ -51,7 +51,7 @@ they are **independent** — separate binaries, separate installers, separate do
 | Secure Boot / memory integrity | Unchanged | **Expected to stay ON** | Must be off |
 | Touches Apple's driver? | — | Uses Apple's driver as-is; no bytes changed | No — Apple's `applewirelessmouse.sys` is left untouched |
 | Survives reconnect / reboot | Scroll does not | Filter persists; re-run if the device InstanceId changes after re-pairing | Yes — re-arms multitouch automatically on both |
-| Status | Baseline (the problem) | **Production ready** | **2.0.4.3, live and confirmed on hardware** |
+| Status | Baseline (the problem) | **Production ready** | **2.0.4.6 source — 2.0.4.3 was the last build signed and run on hardware** |
 
 **Why Driver 1 needs no signing:** the fix is *registration, not a binary patch*. Installing Apple's
 Boot Camp software alone does **not** give you scroll — on a non-Mac PC Apple's installer refuses to
@@ -178,9 +178,7 @@ What the installer does: copy the `.sys` into `System32\drivers`, create the ker
 
 ## Driver 2 — KMDF driver (`MagicMouseDriver-kmdf-204-scroll.sys`)
 
-**Status: 2.0.4.3, live and user-confirmed on hardware.** Details: [`v2-kmdf-driver/README.md`](v2-kmdf-driver/README.md), current state in `v2-kmdf-driver/STATUS.md`.
-
-**Not in this branch yet:** the `v2-kmdf-driver/` tree and every document linked in this section arrive with the Driver 2 pull request, so those links 404 until it merges.
+**Status: 2.0.4.6 is the current source; 2.0.4.3 was the last build that was signed and run on hardware.** Details: [`v2-kmdf-driver/README.md`](v2-kmdf-driver/README.md), current state in [`v2-kmdf-driver/STATUS.md`](v2-kmdf-driver/STATUS.md).
 
 A KMDF lower-filter driver written from scratch. It installs as its **own** driver package
 alongside Apple's, and never overwrites Apple's `applewirelessmouse.sys`. Instead of protecting Apple's
@@ -434,7 +432,7 @@ replacement for Driver 1 — they are different mechanisms with different requir
 - Apple-signed + Microsoft WHQL-countersigned, unmodified — no Test Mode expected, Secure Boot can stay on (not yet verified with `testsigning` off)
 - Open: characterise multi-day behaviour beyond the measured 3.1× reduction
 
-**Driver 2 — KMDF driver (`2.0.4.3`, live and confirmed)**
+**Driver 2 — KMDF driver (`2.0.4.6` source, `2.0.4.3` last signed and run on hardware)**
 - From-scratch WDF source, no Apple binary dependency
 - Its own driver package; Apple's `applewirelessmouse.sys` untouched
 - Two-finger surface scroll, tunable `ScrollStep`, automatic multitouch recovery on reconnect and reboot
