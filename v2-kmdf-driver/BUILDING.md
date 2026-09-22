@@ -16,10 +16,6 @@ Build on Windows 10/11 x64 with Visual Studio + WDK, or a mounted Enterprise WDK
 
 Do **not** emit `MagicMouseDriver.sys`. That filename is the Apr 30 restore binary (`AD5D244B…`, oem16 `f7bf31c7`). Never name a KMDF build `applewirelessmouse*.sys`.
 
-## Where is the compiler
-
-`TOOLCHAIN.md` is the durable inventory: EWDK location and discovery rule, the BuildTools + WDK NuGet fallback, signtool / Inf2Cat paths and the cert. Read it instead of searching for a toolchain again.
-
 ## WDK / Visual Studio
 
 ```bat
@@ -42,16 +38,22 @@ powershell -NoProfile -File scripts\Freeze-KmdfArtifact.ps1 -SysPath x64\Release
 
 ## Out-of-tree build: `scripts\kmdf-204-nuget-build.ps1`
 
-Same msbuild line as above, but source dir in / output dir out, nothing written to `C:\`, and no drive letter hardcoded anywhere:
+Same msbuild line as above, but source dir in / output dir out, nothing written to `C:\`, and no EWDK drive letter hardcoded anywhere:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\kmdf-204-nuget-build.ps1 `
     -SourceDir <dir with the .c/.h/.rc/.vcxproj/.inf> -OutDir <build+output dir> [-Configuration Release] [-Clean]
 ```
 
-Prints the produced `.sys` path, SHA256 and byte size, and exits non-zero on any compile/link failure (2 bad input, 3 no toolchain, 4 build failed, 5 no output, 6 refused output). Intermediates land in `<OutDir>\build`, the binary in `<OutDir>\build\x64\Release` and copied to `<OutDir>`, which is the layout `kmdf-204-scroll-sign.ps1` expects; it also writes `<OutDir>\build\FROZEN-UNSIGNED.txt` in that script's format. Unlike `kmdf-204-scroll-build.ps1` there is **no `FROZEN-UNSIGNED` one-shot guard** - re-running the same version overwrites the record, so the "one build per version number" rule is on you here.
+Prints the produced `.sys` path, SHA256 and byte size, and exits non-zero on any compile/link failure (2 bad input, 3 no toolchain, 4 build failed, 5 no output, 6 refused output). Intermediates land in `<OutDir>\build`, the binary in `<OutDir>\build\x64\Release` and copied to `<OutDir>`. It refuses a build whose SHA256 starts with any known-bad prefix, then writes `<OutDir>\build\FROZEN-UNSIGNED.txt` in the format `kmdf-204-scroll-sign.ps1` parses, plus a `toolchain=` key that script uses to refuse a fallback build. Unlike `kmdf-204-scroll-build.ps1` there is **no `FROZEN-UNSIGNED` one-shot guard** - re-running the same version overwrites the record, so the "one build per version number" rule is on you here.
 
-It does not sign, `pnputil`, or touch the DriverStore. Signing and installing stay a separate elevated step (`kmdf-204-scroll-sign.ps1`, `SIGN-AND-INSTALL.md`).
+It does not sign, `pnputil`, or touch the DriverStore. Signing stays a separate elevated step, pointed at the out-of-tree build dir (its default work dir is under `C:\mm-dev-queue`, which `-OutDir` refuses by design):
+
+```powershell
+powershell -NoProfile -File scripts\kmdf-204-scroll-sign.ps1 -Version 2.0.4.3 -BuildDir <OutDir>\build
+```
+
+See `SIGN-AND-INSTALL.md` for the install half.
 
 ### Primary toolchain: the mounted EWDK
 
@@ -65,7 +67,7 @@ For a host with no EWDK mounted, `-Toolchain NuGet` builds from VS 2022 Build To
 
 The NuGet packages ship the WDK MSBuild toolset but not the VSIX glue that registers `WindowsKernelModeDriver10.0`, and they are three separate roots where an installed kit is one, so the script generates a small overlay `VCTargetsPath` in `<OutDir>\vctargets-overlay` (toolset stub + the package's `ImportAfter` glue + explicit kit paths) and passes it as `AdditionalVCTargetsPath`. Details are commented in the script.
 
-**Spectre mitigation is off on this path** and the script warns about it: BuildTools has no `VC\Tools\MSVC\<ver>\lib\spectre`, which the EWDK image does have. A fallback-built `.sys` is a real codegen deviation from every frozen artifact - measured on the 2.0.4.3 sources, `.text` is 64 bytes smaller and does not match the EWDK build byte-for-byte. Ship EWDK builds; use this only to get a binary at all.
+**Spectre mitigation is off on this path** and the script warns about it: BuildTools has no `VC\Tools\MSVC\<ver>\lib\spectre`, which the EWDK image does have. A fallback-built `.sys` is a real codegen deviation from every frozen artifact - measured on the 2.0.4.3 sources, `.text` is 64 bytes smaller and does not match the EWDK build byte-for-byte. This is enforced, not advisory: the build records `toolchain=nuget` in `FROZEN-UNSIGNED.txt` and `kmdf-204-scroll-sign.ps1` refuses to sign it. Use this path only to get a binary at all.
 
 ### Toolchain proof (2.0.4.3, 2026-09-17)
 
