@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Install Magic Mouse 2024 (v3) Windows Driver</title>
-  <meta name="description" content="Install the Apple-driver route for the Magic Mouse scroll fix: download the project, then double-click Install.cmd. No Test Mode needed. The separate KMDF driver is unfinished, so there is nothing to install from it.">
+  <meta name="description" content="Install the Apple-driver route for the Magic Mouse scroll fix: download the project, then double-click Install.cmd. That route needs no Test Mode. The separate KMDF route ships as source you build and self-sign, and it does need Test Mode.">
   <link rel="canonical" href="https://drivers.magictray.app/install.html">
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
   <link rel="describedby" href="https://drivers.magictray.app/llms.txt">
@@ -12,7 +12,7 @@
   <meta property="og:site_name" content="Magic Mouse v3 Windows Driver">
   <meta property="og:locale" content="en_US">
   <meta property="og:title" content="How to install the Magic Mouse 2024 (v3) Windows driver">
-  <meta property="og:description" content="Install the Apple-driver route: download the project, then double-click Install.cmd. No Test Mode is required. The separate KMDF driver is unfinished and has nothing to install.">
+  <meta property="og:description" content="Install the Apple-driver route: download the project, then double-click Install.cmd. No Test Mode is required for it. The separate KMDF route ships as source you build and self-sign, which does require Test Mode.">
   <meta property="og:url" content="https://drivers.magictray.app/install.html">
   <meta property="og:image" content="https://drivers.magictray.app/og.png">
   <meta property="og:image:width" content="1200">
@@ -74,7 +74,7 @@
         "@id": "https://drivers.magictray.app/install.html#webpage",
         "url": "https://drivers.magictray.app/install.html",
         "name": "Install Magic Mouse 2024 (v3) Windows Driver",
-        "description": "Install the Apple-driver route for the Magic Mouse scroll fix: download the project, then double-click Install.cmd. No Windows Test Mode is needed. The separate KMDF driver is unfinished, so there is nothing to install from it.",
+        "description": "Install the Apple-driver route for the Magic Mouse scroll fix: download the project, then double-click Install.cmd. No Windows Test Mode is needed for that route. The separate KMDF route ships as source you build and self-sign, and it does require Test Mode.",
         "isPartOf": {
           "@id": "https://drivers.magictray.app/#website"
         },
@@ -197,7 +197,7 @@
       <div class="callout callout-warning">
         <svg class="icon" aria-hidden="true"><use href="img/icons.svg#lock-open"/></svg>
         <div>
-          <p><strong>Do not enable Windows Test Mode for this install.</strong> Test Mode loads kernel drivers signed with a certificate Windows does not trust by default, and normally requires Secure Boot and memory integrity (HVCI) to be off. This route requires none of it: Apple&rsquo;s binary is untouched and no catalog is installed, so <strong>no Test Mode is required</strong> and Secure Boot and memory integrity can stay on.</p>
+          <p><strong>Do not enable Windows Test Mode for this install.</strong> Test Mode loads kernel drivers signed with a certificate Windows does not trust by default, and normally requires Secure Boot and memory integrity (HVCI) to be off. The <strong>Apple-driver route</strong> requires none of it: Apple&rsquo;s binary is untouched and no catalog is installed, so <strong>no Test Mode is required</strong> for it and Secure Boot and memory integrity can stay on. The <strong>KMDF route is different</strong> &mdash; you build and self-sign that driver yourself, so it does require Test Mode with Secure Boot and memory integrity off.</p>
           <p>Never disable driver signature enforcement on a machine you do not control, and never install a kernel driver you have not hash-checked.</p>
         </div>
       </div>
@@ -284,30 +284,30 @@
 
       <section id="choose">
         <h2>What can I install today?</h2>
-        <p>There are two routes, and only one of them is ready. Install the Apple-driver route. The KMDF driver is still being written, so there is nothing to install from it.</p>
+        <p>There are two routes, and they are not equivalent. The Apple-driver route is a finished package you install. The KMDF route ships as <strong>source at 2.0.4.6 that has not been built or signed</strong>: you compile it yourself and sign it with a certificate you generate, so it is for people comfortable building a kernel driver. Never install both.</p>
         <div class="grid grid-2">
           <div class="route-card is-shipped">
             <div class="head">
               <h3>Apple-driver route</h3>
               <span class="badge badge-success"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#check-circle"/></svg> Ready</span>
             </div>
-            <p>Registers Apple&rsquo;s own signed driver as a lower filter. Package <code>v1-binary-patch/</code>, v1.0.0. Install this one.</p>
+            <p>Registers Apple&rsquo;s own signed driver as a lower filter. Package <code>v1-binary-patch/</code>, v1.0.0. Install this one. No Test Mode.</p>
           </div>
           <div class="route-card is-dev">
             <div class="head">
               <h3>KMDF route</h3>
-              <span class="badge badge-warning"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#warning-triangle"/></svg> Not ready</span>
+              <span class="badge badge-warning"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#warning-triangle"/></svg> Build it yourself</span>
             </div>
-            <p>Unfinished. <code>v2-kmdf-driver/</code> holds development notes only, so there is no driver to install.</p>
+            <p>Source only. <code>v2-kmdf-driver/</code> holds the full C source, INF and build/sign scripts at 2.0.4.6, but no built or signed binary. You build it with the WDK and self-sign it, which requires Test Mode.</p>
           </div>
         </div>
         <div class="callout callout-info" id="test-mode">
           <svg class="icon" aria-hidden="true"><use href="img/icons.svg#shield-check"/></svg>
-          <div><p>The <strong>KMDF driver is not finished</strong>: <code>v2-kmdf-driver/</code> holds its README and status notes only &mdash; no compiled <code>.sys</code>, no signed package, no installer. <strong>Do not follow KMDF installation instructions, do not enable Test Mode for it, and never combine the two routes.</strong> The Apple-driver route above is the one you install, and it needs no Test Mode.</p></div>
+          <div><p>The <strong>KMDF route is source, not a package</strong>: <code>v2-kmdf-driver/</code> carries the complete C source, <code>MagicMouseDriver-kmdf-204-scroll.inf</code> and the build/sign scripts at 2.0.4.6, but the project has <strong>not built or signed that version</strong> &mdash; the last binary it signed was 2.0.4.3. To use it you build it with the Windows WDK or Enterprise WDK, then run <code>Setup-Community.cmd</code>, which creates a local certificate, signs the package and installs it with <code>pnputil</code>. <strong>Because that signature is one you generate, the KMDF route does require Test Mode, with Secure Boot and memory integrity off &mdash; do not do that casually, and never combine the two routes.</strong> The Apple-driver route above is the one most people should install, and it needs no Test Mode.</p></div>
         </div>
         <details class="tech">
           <summary>KMDF development status</summary>
-          <p>Planned device: Apple Magic Mouse 2024 (USB-C), Bluetooth VID <code>05AC</code>, PID <code>0x0323</code> only. The planned driver is self-signed, so it would require Test Mode &mdash; but there is no package to install yet. Generated scroll and automatic recovery are development goals, not shipped behaviour, and no battery path applies until that driver is finished.</p>
+          <p>Device: Apple Magic Mouse 2024 (USB-C), Bluetooth VID <code>05AC</code>, PID <code>0x0323</code> only. Source version <code>2.0.4.6</code>, not yet built or signed by the project; <code>2.0.4.3</code> was the last version built, signed and installed on hardware. Build it with the WDK or Enterprise WDK, then <code>Setup-Community.cmd</code> creates a local certificate, signs the package and installs it with <code>pnputil</code> &mdash; see <code>SIGN-AND-INSTALL.md</code> and <code>COMMUNITY-TESTING.md</code> in that folder. The driver generates scroll from the touch surface (HID Wheel + AC Pan) with a tunable <code>ScrollStep</code>, and reads battery directly from HID Input <code>0x90</code> on <code>COL02</code>. Because the signature is self-generated, it requires Test Mode.</p>
         </details>
       </section>
 
