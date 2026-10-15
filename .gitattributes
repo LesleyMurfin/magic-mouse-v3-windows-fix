@@ -1,0 +1,9 @@
+# cmd.exe's batch parser is byte-oriented: it reads a script line by line as it
+# executes it. A .cmd file checked out with LF-only endings breaks the parser on
+# multi-line parenthesised blocks and on the "^" line-continuation that
+# Install.cmd uses, so batch files must stay CRLF on disk.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Driver binaries must never be line-ending converted or diffed as text.
+*.sys binary

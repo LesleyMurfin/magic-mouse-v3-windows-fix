@@ -17,14 +17,20 @@ first one, so a single run reports every defect:
   8. Packaged installer constants equal the repo installer's constants.
   9. Packaged SHA256SUMS.txt, README.txt and SECURITY.md agree with the
      packaged installer.
- 10. The driver and its certificate both ship, or neither does.
- 11. Shipped driver matches the packaged installer's SHA256 and size.
+ 10. The legacy patched driver and its certificate both ship, or neither does.
+ 11. Shipped driver is one of the two known binaries, at its documented size.
  12. Shipped driver is an AMD64 PE image.
  13. Asset filename carries the release tag.
 
 Check 7 validates the working tree. Checks 8-11 treat the ARCHIVE as the
 source of truth, so an asset built from a different tree, or shipping docs that
 contradict its own installer, fails even when the repo itself is consistent.
+
+Two applewirelessmouse.sys binaries are known: Apple's unmodified,
+Microsoft-countersigned driver, pinned below because the installer identifies
+it by signer rather than by hash and which needs no certificate; and the legacy
+byte-patched copy re-signed as CN=MagicMouseFix, whose constants the packaged
+installer declares and which cannot install without MagicMouseFix.cer.
 
 A missing asset is a hard failure, never a skip. The driver checks are
 no-ops-with-note when applewirelessmouse.sys is not redistributed in the
@@ -62,6 +68,11 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $script:CheckIndex = 0
 $script:Checks     = [System.Collections.Generic.List[object]]::new()
+
+# The shipped Apple driver; see the .DESCRIPTION note on why it is pinned here.
+# Test-ReleaseProvenance.ps1 fails if this pin drifts from the rest of the tree.
+$script:AppleSha256 = '08f33d7e3ece2c73950a9706f1c4c9057894eaeaf1c4fb355f261f3c2333378f'
+$script:AppleSize   = [int64]78424
 
 # ============================================================================
 # Helpers
@@ -153,11 +164,11 @@ function Get-InstallerFact {
     param([Parameter(Mandatory)][string]$Path)
 
     $text  = Get-Content -LiteralPath $Path -Raw
-    $sha   = [regex]::Match($text, '\$ExpectedSha256\s*=\s*[''"]([0-9A-Fa-f]{64})[''"]')
-    $size  = [regex]::Match($text, '\$ExpectedSize\s*=\s*([0-9]+)')
+    $sha   = [regex]::Match($text, '\$PatchedSha256\s*=\s*[''"]([0-9A-Fa-f]{64})[''"]')
+    $size  = [regex]::Match($text, '\$PatchedSize\s*=\s*([0-9]+)')
     $thumb = [regex]::Match($text, '\$CertThumbprint\s*=\s*[''"]([0-9A-Fa-f]{40})[''"]')
     if (-not $sha.Success -or -not $size.Success -or -not $thumb.Success) {
-        throw "Unable to read ExpectedSha256/ExpectedSize/CertThumbprint from $Path"
+        throw "Unable to read PatchedSha256/PatchedSize/CertThumbprint from $Path"
     }
     return [pscustomobject]@{
         Sha256     = $sha.Groups[1].Value.ToLowerInvariant()
@@ -405,23 +416,43 @@ try {
     if ($null -eq $packagedFacts) {
         $docProblems += 'packaged installer constants unavailable'
     } else {
-        # SHA256SUMS.txt is filename-scoped: only the driver's line is bound to
-        # the driver hash. Other entries (MagicMouseFix.cer) are legitimately
-        # different hashes and are not in scope.
+        $knownSha     = @($script:AppleSha256, $packagedFacts.Sha256)
+        $knownShaText = "apple $($script:AppleSha256) | legacy $($packagedFacts.Sha256)"
+
+        # SHA256SUMS.txt is filename-scoped: only the driver's line is bound to a
+        # driver hash. Other entries (MagicMouseFix.cer) are legitimately
+        # different hashes and are not in scope. Entries are path-qualified
+        # relative to v1-binary-patch/ ("apple-driver/..."), so the filename is
+        # matched on its basename and the entry is held to the driver its own
+        # path names.
         if ($entryNames -contains 'SHA256SUMS.txt') {
             $sumsText   = Get-ZipEntryText -Archive $archive -Name 'SHA256SUMS.txt'
-            $driverLine = [regex]::Match($sumsText, '(?m)^([0-9A-Fa-f]{64})\s\s?applewirelessmouse\.sys\s*$')
-            if (-not $driverLine.Success) {
+            $driverLine = $null
+            foreach ($sumsLine in ($sumsText -split "`r?`n")) {
+                $entry = [regex]::Match($sumsLine, '^([0-9A-Fa-f]{64})\s\s?(\S+)\s*$')
+                if ($entry.Success -and (Split-Path -Leaf $entry.Groups[2].Value) -ieq 'applewirelessmouse.sys') {
+                    $driverLine = $entry
+                    break
+                }
+            }
+
+            if ($null -eq $driverLine) {
                 $docProblems += 'SHA256SUMS.txt: no applewirelessmouse.sys entry in sha256sum format'
-            } elseif ($driverLine.Groups[1].Value.ToLowerInvariant() -ne $packagedFacts.Sha256) {
-                $docProblems += "SHA256SUMS.txt: applewirelessmouse.sys=$($driverLine.Groups[1].Value.ToLowerInvariant()) packaged installer=$($packagedFacts.Sha256)"
+            } else {
+                $entryName = $driverLine.Groups[2].Value
+                $entryHash = $driverLine.Groups[1].Value.ToLowerInvariant()
+                $entryExpected = if ($entryName -like 'apple-driver/*') { $script:AppleSha256 } else { $packagedFacts.Sha256 }
+                if ($entryHash -ne $entryExpected) {
+                    $docProblems += "SHA256SUMS.txt: $entryName=$entryHash but that path holds $entryExpected"
+                }
             }
         } else {
             $docProblems += 'SHA256SUMS.txt not in archive'
         }
 
-        # Strict by default: in a file that documents this driver, every 64-hex
-        # run is the driver hash and every 40-hex run is the cert thumbprint.
+        # Strict by default: in a file that documents these drivers, every 64-hex
+        # run names one of the two known binaries and every 40-hex run is the cert
+        # thumbprint. A value that is neither driver is a stale copy.
         foreach ($docName in @('README.txt', 'SECURITY.md')) {
             if ($entryNames -notcontains $docName) {
                 $docProblems += "$docName not in archive"
@@ -431,46 +462,36 @@ try {
             $docText   = Get-ZipEntryText -Archive $archive -Name $docName
             $shaHits   = @([regex]::Matches($docText, '\b[0-9A-Fa-f]{64}\b')   | ForEach-Object { $_.Value.ToLowerInvariant() })
             $thumbHits = @([regex]::Matches($docText, '\b[0-9A-Fa-f]{40}\b')   | ForEach-Object { $_.Value.ToLowerInvariant() })
-            $badSha    = @($shaHits   | Where-Object { $_ -ne $packagedFacts.Sha256 }     | Select-Object -Unique)
+            $badSha    = @($shaHits   | Where-Object { $knownSha -notcontains $_ }            | Select-Object -Unique)
             $badThumb  = @($thumbHits | Where-Object { $_ -ne $packagedFacts.Thumbprint } | Select-Object -Unique)
 
-            if ($shaHits.Count   -eq 0) { $docProblems += "${docName}: does not document the driver SHA256 $($packagedFacts.Sha256)" }
+            if ($shaHits.Count   -eq 0) { $docProblems += "${docName}: documents neither driver SHA256 ($knownShaText)" }
             if ($thumbHits.Count -eq 0) { $docProblems += "${docName}: does not document the certificate thumbprint $($packagedFacts.Thumbprint)" }
-            if ($badSha.Count   -gt 0) { $docProblems += "${docName}: sha256 $($badSha -join ', ') contradicts packaged $($packagedFacts.Sha256)" }
+            if ($badSha.Count   -gt 0) { $docProblems += "${docName}: sha256 $($badSha -join ', ') names no known driver ($knownShaText)" }
             if ($badThumb.Count -gt 0) { $docProblems += "${docName}: thumbprint $($badThumb -join ', ') contradicts packaged $($packagedFacts.Thumbprint)" }
         }
     }
 
     Write-Check -Name 'Packaged docs agree with the packaged installer' `
                 -Pass ($docProblems.Count -eq 0) `
-                -Detail $(if ($docProblems.Count -eq 0) { 'SHA256SUMS.txt, README.txt and SECURITY.md cite the packaged constants' } else { $docProblems -join ' | ' })
+                -Detail $(if ($docProblems.Count -eq 0) { 'SHA256SUMS.txt, README.txt and SECURITY.md name only known drivers and the packaged thumbprint' } else { $docProblems -join ' | ' })
 
     # ------------------------------------------------------------------------
-    # 10. Driver and certificate are one payload. Install-MagicMousePatch.ps1
-    #     imports the .cer and copies the .sys and refuses to run without
-    #     either, so a kit carrying exactly one of them cannot install while
-    #     looking complete.
+    # 10. The legacy patched driver and MagicMouseFix.cer are one payload:
+    #     Install-MagicMousePatch.ps1 imports the .cer before it copies that
+    #     .sys and refuses to run without either, so a kit carrying exactly one
+    #     of them cannot install while looking complete. Apple's driver is
+    #     Microsoft-countersigned and ships alone - a certificate alongside it
+    #     would be a file the kit cannot use.
     # ------------------------------------------------------------------------
 
     $hasDriver = $entryNames -contains 'applewirelessmouse.sys'
     $hasCert   = $entryNames -contains 'MagicMouseFix.cer'
 
-    $pairDetail = if ($hasDriver -and $hasCert) {
-        'full kit: applewirelessmouse.sys + MagicMouseFix.cer (binary_included=true)'
-    } elseif (-not $hasDriver -and -not $hasCert) {
-        'scripts-only kit: neither is redistributed (binary_included=false)'
-    } elseif ($hasDriver) {
-        'applewirelessmouse.sys ships without MagicMouseFix.cer - the installer imports the certificate before it copies the driver, so this kit cannot install'
-    } else {
-        'MagicMouseFix.cer ships without applewirelessmouse.sys - a certificate with no driver installs nothing'
-    }
-
-    Write-Check -Name 'Driver and certificate ship as a pair' -Pass ($hasDriver -eq $hasCert) -Detail $pairDetail
-
-    # ------------------------------------------------------------------------
-    # 11. Shipped driver matches the PACKAGED installer's expectations.
-    # 12. Shipped driver is an AMD64 PE image.
-    # ------------------------------------------------------------------------
+    $driverCopy    = $null
+    $driverHash    = ''
+    $driverSize    = 0
+    $shippedDriver = 'none'
 
     if ($hasDriver) {
         $driverCopy = Join-Path $extractDir 'applewirelessmouse.sys'
@@ -480,23 +501,48 @@ try {
         $driverHash = (Get-FileHash -LiteralPath $driverCopy -Algorithm SHA256).Hash.ToLowerInvariant()
         $driverSize = (Get-Item -LiteralPath $driverCopy).Length
 
-        if ($null -eq $packagedFacts) {
-            Write-Check -Name 'Shipped driver matches packaged installer SHA256 and size' `
-                        -Pass $false `
-                        -Detail "packaged installer constants unavailable; driver is $driverHash / $driverSize bytes"
-        } else {
-            $hashOk = $driverHash -eq $packagedFacts.Sha256
-            $sizeOk = $driverSize -eq $packagedFacts.Size
+        $shippedDriver = if ($driverHash -eq $script:AppleSha256) { 'apple' }
+                         elseif ($null -ne $packagedFacts -and $driverHash -eq $packagedFacts.Sha256) { 'legacy' }
+                         else { 'unknown' }
+    }
 
-            $driverDetail = if ($hashOk -and $sizeOk) {
-                "$driverHash / $driverSize bytes"
-            } else {
-                $parts = @()
-                if (-not $hashOk) { $parts += "sha256 packaged installer=$($packagedFacts.Sha256) actual=$driverHash" }
-                if (-not $sizeOk) { $parts += "size packaged installer=$($packagedFacts.Size) actual=$driverSize" }
-                $parts -join ' | '
-            }
-            Write-Check -Name 'Shipped driver matches packaged installer SHA256 and size' -Pass ($hashOk -and $sizeOk) -Detail $driverDetail
+    $certRequired = $shippedDriver -eq 'legacy'
+    $pairDetail = if (-not $hasDriver -and -not $hasCert) {
+        'scripts-only kit: no driver redistributed (binary_included=false)'
+    } elseif ($certRequired -and $hasCert) {
+        'full legacy kit: applewirelessmouse.sys + MagicMouseFix.cer (binary_included=true)'
+    } elseif ($certRequired) {
+        'the legacy patched applewirelessmouse.sys ships without MagicMouseFix.cer - the installer imports the certificate before it copies that driver, so this kit cannot install'
+    } elseif ($hasCert) {
+        "MagicMouseFix.cer ships alongside the $shippedDriver driver, which does not use it - that certificate only trusts the re-signed legacy binary"
+    } else {
+        "$shippedDriver driver ships alone, as it must: Microsoft-countersigned, no certificate to import (binary_included=true)"
+    }
+
+    Write-Check -Name 'Certificate ships exactly when the legacy driver does' -Pass ($hasCert -eq $certRequired) -Detail $pairDetail
+
+    # ------------------------------------------------------------------------
+    # 11. Shipped driver is one of the two known binaries, at its own size.
+    # 12. Shipped driver is an AMD64 PE image.
+    # ------------------------------------------------------------------------
+
+    if ($hasDriver) {
+        $expectedSize = switch ($shippedDriver) {
+            'apple'  { $script:AppleSize }
+            'legacy' { $packagedFacts.Size }
+            default  { 0 }
+        }
+
+        if ($shippedDriver -eq 'unknown') {
+            $known = if ($null -eq $packagedFacts) { "apple $($script:AppleSha256) (packaged installer constants unavailable)" } else { "apple $($script:AppleSha256) | legacy $($packagedFacts.Sha256)" }
+            Write-Check -Name 'Shipped driver is a known binary at its documented size' `
+                        -Pass $false `
+                        -Detail "sha256 $driverHash / $driverSize bytes matches no known driver ($known)"
+        } else {
+            $sizeOk = $driverSize -eq $expectedSize
+            Write-Check -Name 'Shipped driver is a known binary at its documented size' `
+                        -Pass $sizeOk `
+                        -Detail $(if ($sizeOk) { "$shippedDriver driver: $driverHash / $driverSize bytes" } else { "$shippedDriver driver: size expected $expectedSize actual $driverSize" })
         }
 
         $machine    = 0

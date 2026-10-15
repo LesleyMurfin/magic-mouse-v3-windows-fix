@@ -1,19 +1,31 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Verifies the v1 driver provenance triple is identical everywhere it is documented.
+    Verifies every documented driver provenance triple is identical everywhere it appears.
 
 .DESCRIPTION
-    The patched driver is described by three empirical constants: its SHA256, its byte
-    size, and the Authenticode certificate thumbprint used to sign it. Those constants
-    are hand-copied into the installer, the uninstaller, SHA256SUMS.txt, and six
-    markdown documents. A single stale copy makes the security documentation lie, which
-    trains users to accept a binary nobody verified.
+    This repository documents two distinct driver binaries, and a reader has to be able
+    to tell them apart:
 
-    v1-binary-patch/installer/Install-MagicMousePatch.ps1 is the single source of truth.
-    This script scrapes the triple out of it, then proves every other occurrence agrees,
-    that no documenting file has silently dropped its copy, that SHA256SUMS.txt is in
-    real sha256sum format and publishes the driver's checksum under its own filename,
+      apple   Apple's own applewirelessmouse.sys, unmodified, shipped in-tree under
+              v1-binary-patch/apple-driver/ and installed as-is. Microsoft-countersigned,
+              so no Test Mode. Install-MagicMousePatch.ps1 deliberately does not hash-pin
+              it - Apple has shipped more than one Boot Camp build and a pin there would
+              reject a legitimately signed newer copy - so the constants of the copy this
+              repository actually ships are pinned in this script instead.
+      legacy  The byte-patched, re-signed v1.0.0 artifact. No longer shipped, still
+              documented so an existing copy can be identified.
+              Install-MagicMousePatch.ps1 remains its source of truth and is scraped
+              below for its SHA256, byte size and signing certificate thumbprint.
+
+    Those constants are hand-copied into the installer, the uninstaller, SHA256SUMS.txt,
+    the release scripts and six markdown documents. A single stale copy makes the
+    security documentation lie, which trains users to accept a binary nobody verified.
+
+    This script proves every occurrence names one of the two known drivers, that no
+    documenting file has silently dropped its copy, that SHA256SUMS.txt is in real
+    sha256sum format and publishes the shipped Apple driver's checksum under its own
+    filename, that a driver present on disk hashes to the triple its location promises,
     and that no signing key material is tracked in git.
 
     Emits GitHub Actions error annotations for every finding. Exits 1 on any finding,
@@ -47,6 +59,13 @@ $script:ResultRows = New-Object 'System.Collections.Generic.List[object]'
 $InstallerRelativePath = 'v1-binary-patch/installer/Install-MagicMousePatch.ps1'
 $Sha256Shape = '\b[0-9a-fA-F]{64}\b'
 $ThumbprintShape = '\b[0-9a-fA-F]{40}\b'
+
+# The shipped Apple driver, pinned here because the installer identifies it by
+# Authenticode signer rather than by hash (see .DESCRIPTION). Every script that has to
+# recognise this binary carries the same constant, so scripts/ is one of the hex targets
+# below: a stale copy in any of them is a finding like any other.
+$AppleSha256 = '08F33D7E3ECE2C73950A9706F1C4C9057894EAEAF1C4FB355F261F3C2333378F'
+$AppleSize = 78424
 
 # ============================================================================
 # Helpers
@@ -163,21 +182,21 @@ Write-Host "Source of truth:  $InstallerRelativePath"
 Write-Host ''
 
 # ============================================================================
-# Extract the source-of-truth triple
+# Extract the legacy triple; combine it with the pinned Apple triple
 # ============================================================================
 
 $installerPath = Join-RelativePath -Root $RepoRoot -RelativePath $InstallerRelativePath
 $installerText = [System.IO.File]::ReadAllText($installerPath)
 
-$shaMatch = [regex]::Match($installerText, '(?m)^\s*\$ExpectedSha256\s*=\s*[''"]([0-9a-fA-F]{64})[''"]')
-$sizeMatch = [regex]::Match($installerText, '(?m)^\s*\$ExpectedSize\s*=\s*(\d+)')
+$shaMatch = [regex]::Match($installerText, '(?m)^\s*\$PatchedSha256\s*=\s*[''"]([0-9a-fA-F]{64})[''"]')
+$sizeMatch = [regex]::Match($installerText, '(?m)^\s*\$PatchedSize\s*=\s*(\d+)')
 $thumbMatch = [regex]::Match($installerText, '(?m)^\s*\$CertThumbprint\s*=\s*[''"]([0-9a-fA-F]{40})[''"]')
 
 if (-not $shaMatch.Success) {
-    Add-Finding -Message 'Could not extract $ExpectedSha256 (64 hex chars) from the installer. Provenance cannot be verified.' -RelativePath $InstallerRelativePath
+    Add-Finding -Message 'Could not extract $PatchedSha256 (64 hex chars) from the installer. Provenance cannot be verified.' -RelativePath $InstallerRelativePath
 }
 if (-not $sizeMatch.Success) {
-    Add-Finding -Message 'Could not extract $ExpectedSize (integer) from the installer. Provenance cannot be verified.' -RelativePath $InstallerRelativePath
+    Add-Finding -Message 'Could not extract $PatchedSize (integer) from the installer. Provenance cannot be verified.' -RelativePath $InstallerRelativePath
 }
 if (-not $thumbMatch.Success) {
     Add-Finding -Message 'Could not extract $CertThumbprint (40 hex chars) from the installer. Provenance cannot be verified.' -RelativePath $InstallerRelativePath
@@ -191,19 +210,34 @@ $expectedSha = $shaMatch.Groups[1].Value
 $expectedSize = [int]$sizeMatch.Groups[1].Value
 $expectedThumb = $thumbMatch.Groups[1].Value
 
-Write-Host "  SHA256     $expectedSha"
-Write-Host "  Size       $expectedSize"
-Write-Host "  Thumbprint $expectedThumb"
+# Every driver this repository is allowed to name. A hex64 or a byte count anywhere in
+# the tree has to be one of these; anything else is a stale copy or an unknown binary.
+$drivers = @(
+    [PSCustomObject]@{ Name = 'apple';  Sha256 = $AppleSha256;  Size = $AppleSize }
+    [PSCustomObject]@{ Name = 'legacy'; Sha256 = $expectedSha;  Size = $expectedSize }
+)
+$knownSha = @($drivers | ForEach-Object { $_.Sha256 })
+$knownSize = @($drivers | ForEach-Object { $_.Size })
+$knownShaText = ($drivers | ForEach-Object { "$($_.Name) $($_.Sha256)" }) -join ' | '
+$knownSizeText = ($drivers | ForEach-Object { "$($_.Name) $($_.Size)" }) -join ' | '
+
+Write-Host "  apple   SHA256 $AppleSha256 / $AppleSize bytes (pinned here)"
+Write-Host "  legacy  SHA256 $expectedSha / $expectedSize bytes (installer)"
+Write-Host "  cert    Thumbprint $expectedThumb"
 Write-Host ''
 
-Add-ResultRow -Name 'source:$ExpectedSha256' -Expected '64 hex chars' -Found $expectedSha -Result 'OK'
-Add-ResultRow -Name 'source:$ExpectedSize' -Expected 'integer' -Found "$expectedSize" -Result 'OK'
+Add-ResultRow -Name 'source:$PatchedSha256' -Expected '64 hex chars' -Found $expectedSha -Result 'OK'
+Add-ResultRow -Name 'source:$PatchedSize' -Expected 'integer' -Found "$expectedSize" -Result 'OK'
 Add-ResultRow -Name 'source:$CertThumbprint' -Expected '40 hex chars' -Found $expectedThumb -Result 'OK'
+Add-ResultRow -Name 'pinned:apple' -Expected '64 hex chars + integer' -Found "$AppleSha256 / $AppleSize" -Result 'OK'
 
 # ============================================================================
 # 1 + 2 + 5. Cross-file hex agreement and presence
 # ============================================================================
 
+# The release scripts are targets too: each pins the Apple SHA256 so it can recognise the
+# shipped binary, and a pin that drifts from this one is exactly the stale copy this
+# check exists to catch.
 $hexTargets = @(
     [PSCustomObject]@{ Path = 'README.md';                                             Sha = $true;  Thumb = $false; RequireSha = $true;  RequireThumb = $false }
     [PSCustomObject]@{ Path = 'SECURITY.md';                                           Sha = $true;  Thumb = $true;  RequireSha = $true;  RequireThumb = $true }
@@ -211,6 +245,9 @@ $hexTargets = @(
     [PSCustomObject]@{ Path = 'v1-binary-patch/README.md';                             Sha = $true;  Thumb = $true;  RequireSha = $true;  RequireThumb = $true }
     [PSCustomObject]@{ Path = 'v1-binary-patch/installer/Uninstall-MagicMousePatch.ps1'; Sha = $true; Thumb = $true;  RequireSha = $false; RequireThumb = $true }
     [PSCustomObject]@{ Path = 'v1-binary-patch/docs/architecture.md';                   Sha = $false; Thumb = $true;  RequireSha = $false; RequireThumb = $false }
+    [PSCustomObject]@{ Path = 'scripts/Test-ReleaseProvenance.ps1';                     Sha = $true;  Thumb = $false; RequireSha = $true;  RequireThumb = $false }
+    [PSCustomObject]@{ Path = 'scripts/package-release.ps1';                            Sha = $true;  Thumb = $false; RequireSha = $true;  RequireThumb = $false }
+    [PSCustomObject]@{ Path = 'scripts/verify-release.ps1';                             Sha = $true;  Thumb = $false; RequireSha = $true;  RequireThumb = $false }
 )
 
 foreach ($target in $hexTargets) {
@@ -223,25 +260,25 @@ foreach ($target in $hexTargets) {
 
     $checks = @()
     if ($target.Sha) {
-        $checks += [PSCustomObject]@{ Label = 'sha256'; Shape = $Sha256Shape; Expected = $expectedSha; Required = $target.RequireSha }
+        $checks += [PSCustomObject]@{ Label = 'sha256'; Shape = $Sha256Shape; Accepted = $knownSha; Expected = $knownShaText; Required = $target.RequireSha }
     }
     if ($target.Thumb) {
-        $checks += [PSCustomObject]@{ Label = 'thumbprint'; Shape = $ThumbprintShape; Expected = $expectedThumb; Required = $target.RequireThumb }
+        $checks += [PSCustomObject]@{ Label = 'thumbprint'; Shape = $ThumbprintShape; Accepted = @($expectedThumb); Expected = $expectedThumb; Required = $target.RequireThumb }
     }
 
     foreach ($check in $checks) {
         $occurrences = Get-PatternOccurrence -FullPath $fullPath -Pattern $check.Shape
         $bad = 0
         foreach ($occurrence in $occurrences) {
-            if ($occurrence.Value -ine $check.Expected) {
-                Add-Finding -Message "$($check.Label) mismatch: found '$($occurrence.Value)' but the installer declares '$($check.Expected)'" -RelativePath $target.Path -LineNumber $occurrence.LineNumber
+            if ($check.Accepted -notcontains $occurrence.Value) {
+                Add-Finding -Message "$($check.Label) names no known artifact: found '$($occurrence.Value)', expected one of $($check.Expected)" -RelativePath $target.Path -LineNumber $occurrence.LineNumber
                 $bad++
             }
         }
 
         $good = $occurrences.Count - $bad
         if ($check.Required -and $good -eq 0) {
-            Add-Finding -Message "$($check.Label) is absent: this file must document '$($check.Expected)' and no longer does" -RelativePath $target.Path
+            Add-Finding -Message "$($check.Label) is absent: this file must document one of $($check.Expected) and no longer does" -RelativePath $target.Path
             Add-ResultRow -Name "$($target.Path) [$($check.Label)]" -Expected 'at least 1 match' -Found '0 matches' -Result 'FAIL'
             continue
         }
@@ -270,21 +307,21 @@ else {
     $agree = 0
     foreach ($hit in $sizeHits) {
         $cited = [int]([regex]::Match($hit.Value, '\d+').Value)
-        if ($cited -ne $expectedSize) {
-            Add-Finding -Message "size mismatch: cites '$($hit.Value)' but the installer declares $expectedSize bytes" -RelativePath $sizeDocPath -LineNumber $hit.LineNumber
+        if ($knownSize -notcontains $cited) {
+            Add-Finding -Message "size names no known artifact: cites '$($hit.Value)', expected one of $knownSizeText" -RelativePath $sizeDocPath -LineNumber $hit.LineNumber
         }
         else {
             $agree++
         }
     }
     if ($agree -eq 0) {
-        Add-Finding -Message "size is absent: this file must cite '$expectedSize bytes' and no longer does" -RelativePath $sizeDocPath
-        Add-ResultRow -Name "$sizeDocPath [size]" -Expected "$expectedSize bytes" -Found 'no citation' -Result 'FAIL'
+        Add-Finding -Message "size is absent: this file must cite one of $knownSizeText bytes and no longer does" -RelativePath $sizeDocPath
+        Add-ResultRow -Name "$sizeDocPath [size]" -Expected $knownSizeText -Found 'no citation' -Result 'FAIL'
     }
     else {
         $result = 'OK'
         if ($agree -ne $sizeHits.Count) { $result = 'FAIL' }
-        Add-ResultRow -Name "$sizeDocPath [size]" -Expected "$expectedSize bytes" -Found "$agree ok / $($sizeHits.Count - $agree) bad" -Result $result
+        Add-ResultRow -Name "$sizeDocPath [size]" -Expected $knownSizeText -Found "$agree ok / $($sizeHits.Count - $agree) bad" -Result $result
     }
 }
 
@@ -294,11 +331,15 @@ else {
 
 # This manifest is the single justified exception to file-wide hash matching. It is a
 # multi-entry sha256sum file: MagicMouseFix.cer (and any future payload) legitimately
-# carries a different checksum, so comparing every hex64 here to the driver hash would
-# fail on a correct edit. The format is parsed structurally anyway, so the driver hash
-# is asserted against the entry named applewirelessmouse.sys instead. Every other
-# documenting file stays strict on purpose: a bare hex64 in prose or in the uninstaller
-# can only be the driver hash, so any other value there is a stale copy.
+# carries a different checksum, so comparing every hex64 here to a driver hash would
+# fail on a correct edit. The format is parsed structurally anyway, so the checksum is
+# asserted against the entry whose filename is applewirelessmouse.sys instead. Only the
+# shipped Apple driver gets a checksum line here - the legacy patched hash is recorded
+# as a comment so `sha256sum -c` still passes on a tree that does not carry it - so that
+# entry is bound to the Apple hash specifically, not to either-of-two.
+#
+# Entries are path-qualified relative to v1-binary-patch/ ("apple-driver/..."), so the
+# comparison is on the basename.
 
 $sumsPath = 'v1-binary-patch/installer/SHA256SUMS.txt'
 $sumsFull = Join-RelativePath -Root $RepoRoot -RelativePath $sumsPath
@@ -323,11 +364,11 @@ else {
             $sumsBad++
             continue
         }
-        if ($entry.Groups[2].Value -ine $driverEntryName) { continue }
+        if ((Split-Path -Leaf $entry.Groups[2].Value) -ine $driverEntryName) { continue }
         $driverEntryLine = $lineNumber
         $driverEntryHash = $entry.Groups[1].Value
-        if ($driverEntryHash -ine $expectedSha) {
-            Add-Finding -Message "checksum mismatch for '$driverEntryName': got '$driverEntryHash', installer declares '$expectedSha'" -RelativePath $sumsPath -LineNumber $lineNumber
+        if ($driverEntryHash -ine $AppleSha256) {
+            Add-Finding -Message "checksum mismatch for '$($entry.Groups[2].Value)': got '$driverEntryHash', the shipped Apple driver is '$AppleSha256'" -RelativePath $sumsPath -LineNumber $lineNumber
             $sumsBad++
         }
     }
@@ -340,13 +381,13 @@ else {
     Add-ResultRow -Name "$sumsPath [format]" -Expected 'sha256sum format' -Found "$sumsLineCount entries / $sumsBad bad" -Result $result
 
     if ($driverEntryLine -eq 0) {
-        Add-Finding -Message "no '$driverEntryName' entry: this manifest must publish the driver checksum '$expectedSha'" -RelativePath $sumsPath
-        Add-ResultRow -Name "$sumsPath [$driverEntryName]" -Expected $expectedSha -Found 'no entry' -Result 'FAIL'
+        Add-Finding -Message "no '$driverEntryName' entry: this manifest must publish the shipped Apple driver checksum '$AppleSha256'" -RelativePath $sumsPath
+        Add-ResultRow -Name "$sumsPath [$driverEntryName]" -Expected $AppleSha256 -Found 'no entry' -Result 'FAIL'
     }
     else {
         $driverResult = 'OK'
-        if ($driverEntryHash -ine $expectedSha) { $driverResult = 'FAIL' }
-        Add-ResultRow -Name "$sumsPath [$driverEntryName]" -Expected 'matches installer' -Found $driverEntryHash -Result $driverResult
+        if ($driverEntryHash -ine $AppleSha256) { $driverResult = 'FAIL' }
+        Add-ResultRow -Name "$sumsPath [$driverEntryName]" -Expected 'matches apple' -Found $driverEntryHash -Result $driverResult
     }
 }
 
@@ -354,39 +395,45 @@ else {
 # 6. Real binary, when it happens to be present
 # ============================================================================
 
+# Each location promises a specific artifact: apple-driver/ is the shipped, unmodified
+# Apple binary; the installer directory and the patch root are where a locally obtained
+# legacy patched copy lands. A binary is checked against the triple its own location
+# names, so a substituted file fails even though the tree knows two valid hashes.
 $binaryCandidates = @(
-    'v1-binary-patch/installer/applewirelessmouse.sys',
-    'v1-binary-patch/applewirelessmouse.sys'
+    [PSCustomObject]@{ Path = 'v1-binary-patch/apple-driver/applewirelessmouse.sys'; Driver = 'apple' }
+    [PSCustomObject]@{ Path = 'v1-binary-patch/installer/applewirelessmouse.sys';    Driver = 'legacy' }
+    [PSCustomObject]@{ Path = 'v1-binary-patch/applewirelessmouse.sys';              Driver = 'legacy' }
 )
 $binaryFound = $false
 foreach ($candidate in $binaryCandidates) {
-    $candidateFull = Join-RelativePath -Root $RepoRoot -RelativePath $candidate
+    $candidateFull = Join-RelativePath -Root $RepoRoot -RelativePath $candidate.Path
     if (-not (Test-Path -LiteralPath $candidateFull -PathType Leaf)) { continue }
     $binaryFound = $true
 
+    $driver = $drivers | Where-Object { $_.Name -eq $candidate.Driver }
     $actualHash = (Get-FileHash -LiteralPath $candidateFull -Algorithm SHA256).Hash
     $actualSize = (Get-Item -LiteralPath $candidateFull).Length
 
-    if ($actualHash -ine $expectedSha) {
-        Add-Finding -Message "on-disk SHA256 is '$actualHash' but the installer declares '$expectedSha'" -RelativePath $candidate
-        Add-ResultRow -Name "$candidate [sha256]" -Expected $expectedSha -Found $actualHash -Result 'FAIL'
+    if ($actualHash -ine $driver.Sha256) {
+        Add-Finding -Message "on-disk SHA256 is '$actualHash' but this path must hold the $($driver.Name) driver '$($driver.Sha256)'" -RelativePath $candidate.Path
+        Add-ResultRow -Name "$($candidate.Path) [sha256]" -Expected $driver.Sha256 -Found $actualHash -Result 'FAIL'
     }
     else {
-        Add-ResultRow -Name "$candidate [sha256]" -Expected 'matches installer' -Found $actualHash -Result 'OK'
+        Add-ResultRow -Name "$($candidate.Path) [sha256]" -Expected "matches $($driver.Name)" -Found $actualHash -Result 'OK'
     }
 
-    if ($actualSize -ne $expectedSize) {
-        Add-Finding -Message "on-disk size is $actualSize bytes but the installer declares $expectedSize" -RelativePath $candidate
-        Add-ResultRow -Name "$candidate [size]" -Expected "$expectedSize" -Found "$actualSize" -Result 'FAIL'
+    if ($actualSize -ne $driver.Size) {
+        Add-Finding -Message "on-disk size is $actualSize bytes but the $($driver.Name) driver is $($driver.Size)" -RelativePath $candidate.Path
+        Add-ResultRow -Name "$($candidate.Path) [size]" -Expected "$($driver.Size)" -Found "$actualSize" -Result 'FAIL'
     }
     else {
-        Add-ResultRow -Name "$candidate [size]" -Expected "$expectedSize" -Found "$actualSize" -Result 'OK'
+        Add-ResultRow -Name "$($candidate.Path) [size]" -Expected "$($driver.Size)" -Found "$actualSize" -Result 'OK'
     }
 }
 
 if (-not $binaryFound) {
-    Write-Host 'SKIP: binary not present in tree (expected; see DMCA-NOTICE.md)'
-    Write-Host '::notice::SKIP: applewirelessmouse.sys not present in tree (expected; see DMCA-NOTICE.md)'
+    Write-Host 'SKIP: no applewirelessmouse.sys in the tree at any known location'
+    Write-Host '::notice::SKIP: no applewirelessmouse.sys in the tree at any known location (see DMCA-NOTICE.md)'
     Add-ResultRow -Name 'applewirelessmouse.sys [on-disk]' -Expected 'hash + size verified' -Found 'not in tree' -Result 'SKIP'
 }
 
@@ -456,7 +503,7 @@ if (-not $Quiet) {
 Write-Host ''
 if ($script:FindingCount -gt 0) {
     Write-Host "FAIL: $($script:FindingCount) finding(s); see the annotations above."
-    Write-Host 'For provenance mismatches, Install-MagicMousePatch.ps1 is the source of truth: update the other files to match it.'
+    Write-Host 'For legacy-driver mismatches, Install-MagicMousePatch.ps1 is the source of truth; for the shipped Apple driver, the $AppleSha256 / $AppleSize pin at the top of this script is. Update the other files to match.'
     exit 1
 }
 

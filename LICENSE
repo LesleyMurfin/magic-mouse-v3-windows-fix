@@ -19,3 +19,15 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+EXCLUSION — v1-binary-patch/apple-driver/applewirelessmouse.sys
+
+The MIT licence above does not apply to the file
+v1-binary-patch/apple-driver/applewirelessmouse.sys. That file is Apple Inc.'s
+proprietary driver, redistributed here verbatim and unmodified, and Apple Inc.
+retains all copyright in it. This repository claims no licence over it; it is
+redistributed under Apple's own software licence terms, which the user accepts by
+using it. The MIT licence covers only this project's own work: the installer
+scripts, the KMDF driver source, the build and signing tooling, and the
+documentation. See DMCA-NOTICE.md.

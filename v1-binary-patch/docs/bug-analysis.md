@@ -183,8 +183,8 @@ After 35+ iterations, BTHPORT rewrites DynamicCachedServices and the dual-collec
 ```
 HKLM\SYSTEM\CurrentControlSet\Enum\BTHENUM
 ├── {00001124-0000-1000-8000-00805f9b34fb}_VID&0001004C_PID&0323\...\0
+│   ├── LowerFilters: REG_MULTI_SZ = "applewirelessmouse" (installed by patch)
 │   └── Device Parameters
-│       ├── LowerFilters: "applewirelessmouse" (installed by patch)
 │       └── DynamicCachedServices: (binary, 560 bytes, 35 × 16-byte entries)
 └── ... (other Bluetooth devices)
 ```
@@ -221,11 +221,12 @@ The filter driver:
 
 ### Registration Method
 
-The patch is registered via the LowerFilters registry key:
+The patch is registered via the `LowerFilters` value on the device-instance key (not in its
+`Device Parameters` subkey):
 
 ```
-HKLM\SYSTEM\CurrentControlSet\Enum\BTHENUM\{...}_VID&0001004C_PID&0323\...\Device Parameters
-  LowerFilters: "applewirelessmouse"
+HKLM\SYSTEM\CurrentControlSet\Enum\BTHENUM\{...}_VID&0001004C_PID&0323\...\0
+  LowerFilters  REG_MULTI_SZ  "applewirelessmouse"
 ```
 
 This tells Windows PnP to insert `applewirelessmouse.sys` as a lower filter in the device stack.
@@ -236,7 +237,7 @@ This tells Windows PnP to insert `applewirelessmouse.sys` as a lower filter in t
 - Does **not** modify system files (applewirelessmouse.sys is new, not replacing Windows files)
 - Does **not** require signing from Microsoft (uses certificate trust import)
 - Can be **uninstalled cleanly** (remove filter + restore original driver)
-- **Does not break other HID devices** (filter is specific to Magic Mouse PID 0x0323)
+- **Does not break other HID devices** (filter is specific to Magic Mouse PIDs 0x030D / 0x0310 / 0x0269 / 0x0323)
 
 ---
 
@@ -341,7 +342,7 @@ After installing the patch, verify:
 | Service running | `sc query applewirelessmouse` | STATE: 4 RUNNING |
 | Driver file present | `Test-Path C:\Windows\System32\drivers\applewirelessmouse.sys` | True |
 | Certificate installed | `Get-ChildItem Cert:\LocalMachine\TrustedPublisher` | CN=MagicMouseFix visible |
-| Registry entry set | `Get-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Enum\BTHENUM\...\Device Parameters -Name LowerFilters` | applewirelessmouse |
+| Registry entry set | `Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Enum\BTHENUM\{00001124-...}_VID&0001004C_PID&0323\8&...&0&<MAC>_C00000000" -Name LowerFilters` | REG_MULTI_SZ list containing `applewirelessmouse` |
 | Scroll functional | Manual test | Smooth scroll response |
 
 ---
