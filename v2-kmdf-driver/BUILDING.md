@@ -34,6 +34,43 @@ NuGet-installed WDK/SDK tool packages — whose default is the one baked into th
 The build script also needs the EWDK ISO itself, which has no default: set the `MM_EWDK_ISO`
 environment variable (or pass `-EwdkIso`) to the full path of your downloaded `EWDK_*.iso`.
 
+## Out-of-tree build: `scripts\kmdf-204-nuget-build.ps1`
+
+Same msbuild line as above, but source dir in / output dir out, nothing written to `C:\`, and no EWDK drive letter hardcoded anywhere:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\kmdf-204-nuget-build.ps1 `
+    -SourceDir <dir with the .c/.h/.rc/.vcxproj/.inf> -OutDir <build+output dir> [-Configuration Release] [-Clean]
+```
+
+Prints the produced `.sys` path, SHA256 and byte size, and exits non-zero on any compile/link failure (2 bad input, 3 no toolchain, 4 build failed, 5 no output, 6 refused output). A `-OutDir` on `C:\` is refused before anything is created. Intermediates land in `<OutDir>\build`, the binary in `<OutDir>\build\x64\<Configuration>` and copied to `<OutDir>`. It refuses a build whose SHA256 starts with any known-bad prefix - before the copy, so a refused build leaves no artifact in `<OutDir>` - then writes `<OutDir>\build\FROZEN-UNSIGNED.txt` in the format `kmdf-204-scroll-sign.ps1` parses, plus a `toolchain=` key that script uses to refuse a fallback build and a `configuration=` key it uses to find the artifacts. Unlike `kmdf-204-scroll-build.ps1` there is **no `FROZEN-UNSIGNED` one-shot guard** - re-running the same version overwrites the record, so the "one build per version number" rule is on you here.
+
+It does not sign, `pnputil`, or touch the DriverStore. Signing stays a separate elevated step, pointed at the out-of-tree build dir with `-BuildDir` (without it the signer looks in the queue root instead):
+
+```powershell
+powershell -NoProfile -File scripts\kmdf-204-scroll-sign.ps1 -Version 2.0.4.6 -BuildDir <OutDir>\build
+```
+
+See `SIGN-AND-INSTALL.md` for the install half.
+
+### Primary toolchain: the mounted EWDK
+
+Prerequisite: the EWDK ISO mounted anywhere. **The drive letter is discovered, never assumed** - the same image can come back under a different letter after a remount, which is the whole reason the compiler once looked "missing". The script enumerates every filesystem drive, tests `<letter>:\BuildEnv\SetupBuildEnv.cmd`, and confirms identity from `<letter>:\Version.txt` against `ge_release_svc_prod1.26100.6584`, printing the root and matched version. `-EwdkRoot <path>` overrides the scan; `-EwdkVersion ''` accepts a different image (codegen then no longer matches the frozen artifacts).
+
+It then runs `call <root>\BuildEnv\SetupBuildEnv.cmd amd64` and the frozen msbuild line in one `cmd.exe` process, because the env script only sets its environment inside its own session. `cmd.exe` cannot `cd` to a UNC path, so the generated `_ewdk-build.cmd` re-enters the build dir with `pushd`, which maps a temporary drive letter; a build under `\\wsl.localhost\...` therefore compiles as `Z:\...`.
+
+### Fallback toolchain: VS BuildTools + WDK NuGet payload
+
+For a host with no EWDK mounted, `-Toolchain NuGet` builds from VS 2022 Build Tools ("Desktop development with C++" workload) plus the unpacked NuGet payload in `<MM_QUEUE_ROOT>\wdk-packages` (`-NuGetPackageDir` to point elsewhere; with `MM_QUEUE_ROOT` unset that switch is required): `Microsoft.Windows.WDK.x64`, `Microsoft.Windows.SDK.CPP` (headers, `rc.exe`) and `Microsoft.Windows.SDK.CPP.x64` (um import libs), all three from nuget.org. `-Toolchain Ewdk` forces the primary path instead of falling back; the default `Auto` prefers the EWDK.
+
+The NuGet packages ship the WDK MSBuild toolset but not the VSIX glue that registers `WindowsKernelModeDriver10.0`, and they are three separate roots where an installed kit is one, so the script generates a small overlay `VCTargetsPath` in `<OutDir>\vctargets-overlay` (toolset stub + the package's `ImportAfter` glue + explicit kit paths) and passes it as `AdditionalVCTargetsPath`. Details are commented in the script.
+
+**Spectre mitigation is off on this path** and the script warns about it: BuildTools has no `VC\Tools\MSVC\<ver>\lib\spectre`, which the EWDK image does have. A fallback-built `.sys` is a real codegen deviation from every frozen artifact - measured on the 2.0.4.3 sources, `.text` is 64 bytes smaller and does not match the EWDK build byte-for-byte. This is enforced, not advisory: the build records `toolchain=nuget` in `FROZEN-UNSIGNED.txt` and `kmdf-204-scroll-sign.ps1` refuses to sign it. Use this path only to get a binary at all.
+
+### Toolchain proof (2.0.4.3, 2026-09-17)
+
+Rebuilding the frozen `kmdf-204-bld-2043` sources with the discovered EWDK reproduced `MagicMouseDriver-kmdf-2.0.4-scroll-25A3287A.sys` (26112 bytes) to within **58 bytes in 8 ranges**: `IMAGE_FILE_HEADER.TimeDateStamp`, `IMAGE_OPTIONAL_HEADER.CheckSum`, two `IMAGE_DEBUG_DIRECTORY` timestamps and the CodeView RSDS GUID/age/PDB-path string. Every section except `.rdata` (which holds those debug records) is byte-identical, including `.text`; imports, section table, `FILEVERSION` and the stamped INF hash all match. An out-of-tree build cannot do better - the `.sys` embeds its own PDB path.
+
 ## After the `.sys` exists
 
 1. Freeze-hash (above).

@@ -2,12 +2,14 @@
 # Sign the unique KMDF sys+cat with thumb 16940C0F. No MagicMouseDriver.sys.
 # No PATH-A.
 #
-# -Version selects the build dir and its own sign stage, so signing one
-# version cannot touch another version's artifacts. The expected pre-sign hash is read from
-# that build's FROZEN-UNSIGNED.txt instead of being pasted in here: the
-# freeze record written by kmdf-204-scroll-build.ps1 is the only thing that
-# knows what was actually built, and a hardcoded hash silently rots into
-# "REFUSE hash not frozen" on every new build.
+# -Version selects the sign stage and, by default, the build dir, so signing one
+# version cannot touch another version's artifacts. -BuildDir signs a build made
+# outside the queue (kmdf-204-nuget-build.ps1 -OutDir <dir> lays <dir>\build
+# out exactly like this); the sign stage stays keyed to -Version either way.
+# The expected pre-sign hash is read from that build's FROZEN-UNSIGNED.txt
+# instead of being pasted in here: the freeze record written by the build is
+# the only thing that knows what was actually built, and a hardcoded hash
+# silently rots into "REFUSE hash not frozen" on every new build.
 #
 # -QueueRoot is the scratch root that holds the per-version build dirs, the
 # sign stages and the NuGet-installed WDK/SDK tool packages. Set the
@@ -16,7 +18,11 @@
 [CmdletBinding()]
 param(
     [string]$Version = '2.0.4.6',
-    [string]$QueueRoot = $(if ($env:MM_QUEUE_ROOT) { $env:MM_QUEUE_ROOT } else { 'C:\mm-dev-queue' })
+    [string]$QueueRoot = $(if ($env:MM_QUEUE_ROOT) { $env:MM_QUEUE_ROOT } else { 'C:\mm-dev-queue' }),
+
+    # Build dir holding x64\<Configuration>\*.sys/.inf and FROZEN-UNSIGNED.txt.
+    # Default is the in-queue build kmdf-204-scroll-build.ps1 writes.
+    [string]$BuildDir
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,9 +30,9 @@ $Thumb = '16940C0F937D569363560D5FEC5CD8FA6D6D9BCE'
 $ForbidB902 = 'B902C2864315E2DE359450024768CE7D01715C38'
 $WdkTest = '609447610A54605BE39AB32CFADB661023FD3ED0'
 $VerTag  = ($Version -replace '\.', '')
-$Work    = $QueueRoot + '\kmdf-204-bld-' + $VerTag
-$SrcSys = Join-Path $Work 'x64\Release\MagicMouseDriver-kmdf-204-scroll.sys'
-$SrcInf = Join-Path $Work 'x64\Release\MagicMouseDriver-kmdf-204-scroll.inf'
+$Work    = if ($BuildDir) { $BuildDir.TrimEnd('\') } else { $QueueRoot + '\kmdf-204-bld-' + $VerTag }
+# $SrcSys / $SrcInf are resolved below, once the freeze record has said which
+# x64\<Configuration> subdir it describes.
 # Separate stage from the QueueRoot kmdf-204-sign\ folder - that path is the
 # known-good 2.0.4.1 restore copy (kmdf-204-pnputil-once.ps1 restore
 # source). Never overwrite it with an unverified build.
@@ -42,10 +48,23 @@ if (-not (Test-Path -LiteralPath $FrozenFile)) {
 }
 $Want = ''
 $WantInf = ''
+# No toolchain= means a kmdf-204-scroll-build.ps1 record, and that script is EWDK-only.
+$Toolchain = 'ewdk'
+# No configuration= means a record written before kmdf-204-nuget-build.ps1 learned to
+# write one, and every such build was Release.
+$Config = 'Release'
 foreach ($ln in (Get-Content -LiteralPath $FrozenFile)) {
     if ($ln -match '^unsigned_sha256=([0-9A-Fa-f]{64})$') { $Want = $Matches[1].ToUpperInvariant() }
     if ($ln -match '^unsigned_inf_sha256=([0-9A-Fa-f]{64})$') { $WantInf = $Matches[1].ToUpperInvariant() }
+    if ($ln -match '^toolchain=(\S+)\s*$') { $Toolchain = $Matches[1] }
+    if ($ln -match '^configuration=(\S+)\s*$') { $Config = $Matches[1] }
 }
+if ($Config -notmatch '^(Release|Debug)$') {
+    Write-Output ('unexpected configuration=' + $Config + ' in ' + $FrozenFile)
+    exit 2
+}
+$SrcSys = Join-Path $Work ('x64\' + $Config + '\MagicMouseDriver-kmdf-204-scroll.sys')
+$SrcInf = Join-Path $Work ('x64\' + $Config + '\MagicMouseDriver-kmdf-204-scroll.inf')
 if (-not $Want) {
     Write-Output ('no unsigned_sha256 in ' + $FrozenFile)
     exit 2
@@ -53,6 +72,12 @@ if (-not $Want) {
 if (-not $WantInf) {
     Write-Output ('no unsigned_inf_sha256 in ' + $FrozenFile)
     exit 2
+}
+# Only EWDK builds ship (BUILDING.md). The NuGet fallback forces SpectreMitigation
+# off, so its codegen deviates from every frozen artifact - never sign one.
+if ($Toolchain -ne 'ewdk') {
+    Write-Output ('REFUSE toolchain=' + $Toolchain + ' in ' + $FrozenFile + ' - only ewdk builds are signed')
+    exit 3
 }
 $Forbid = @(
     '845435CE','13BF983A','D3876B0A','A1289489','AD5D244B','559B136A',
@@ -65,6 +90,9 @@ $Inf2Cat = $QueueRoot + '\wdk-packages\Microsoft.Windows.WDK.x64.10.0.26100.6584
 function Fail([int]$c, [string]$m) { Write-Output $m; exit $c }
 
 Write-Output ("===== unique $Version SIGN start =====")
+Write-Output ('build_dir=' + $Work)
+Write-Output ('toolchain=' + $Toolchain)
+Write-Output ('configuration=' + $Config)
 Write-Output ('frozen_expects=' + $Want)
 Write-Output ('frozen_inf_expects=' + $WantInf)
 if (-not (Test-Path -LiteralPath $SrcSys)) { Fail 2 ('missing sys ' + $SrcSys) }
