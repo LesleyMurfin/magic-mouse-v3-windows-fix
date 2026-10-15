@@ -31,8 +31,8 @@ $ForbidB902 = 'B902C2864315E2DE359450024768CE7D01715C38'
 $WdkTest = '609447610A54605BE39AB32CFADB661023FD3ED0'
 $VerTag  = ($Version -replace '\.', '')
 $Work    = if ($BuildDir) { $BuildDir.TrimEnd('\') } else { $QueueRoot + '\kmdf-204-bld-' + $VerTag }
-$SrcSys = Join-Path $Work 'x64\Release\MagicMouseDriver-kmdf-204-scroll.sys'
-$SrcInf = Join-Path $Work 'x64\Release\MagicMouseDriver-kmdf-204-scroll.inf'
+# $SrcSys / $SrcInf are resolved below, once the freeze record has said which
+# x64\<Configuration> subdir it describes.
 # Separate stage from the QueueRoot kmdf-204-sign\ folder - that path is the
 # known-good 2.0.4.1 restore copy (kmdf-204-pnputil-once.ps1 restore
 # source). Never overwrite it with an unverified build.
@@ -50,11 +50,21 @@ $Want = ''
 $WantInf = ''
 # No toolchain= means a kmdf-204-scroll-build.ps1 record, and that script is EWDK-only.
 $Toolchain = 'ewdk'
+# No configuration= means a record written before kmdf-204-nuget-build.ps1 learned to
+# write one, and every such build was Release.
+$Config = 'Release'
 foreach ($ln in (Get-Content -LiteralPath $FrozenFile)) {
     if ($ln -match '^unsigned_sha256=([0-9A-Fa-f]{64})$') { $Want = $Matches[1].ToUpperInvariant() }
     if ($ln -match '^unsigned_inf_sha256=([0-9A-Fa-f]{64})$') { $WantInf = $Matches[1].ToUpperInvariant() }
     if ($ln -match '^toolchain=(\S+)\s*$') { $Toolchain = $Matches[1] }
+    if ($ln -match '^configuration=(\S+)\s*$') { $Config = $Matches[1] }
 }
+if ($Config -notmatch '^(Release|Debug)$') {
+    Write-Output ('unexpected configuration=' + $Config + ' in ' + $FrozenFile)
+    exit 2
+}
+$SrcSys = Join-Path $Work ('x64\' + $Config + '\MagicMouseDriver-kmdf-204-scroll.sys')
+$SrcInf = Join-Path $Work ('x64\' + $Config + '\MagicMouseDriver-kmdf-204-scroll.inf')
 if (-not $Want) {
     Write-Output ('no unsigned_sha256 in ' + $FrozenFile)
     exit 2
@@ -82,6 +92,7 @@ function Fail([int]$c, [string]$m) { Write-Output $m; exit $c }
 Write-Output ("===== unique $Version SIGN start =====")
 Write-Output ('build_dir=' + $Work)
 Write-Output ('toolchain=' + $Toolchain)
+Write-Output ('configuration=' + $Config)
 Write-Output ('frozen_expects=' + $Want)
 Write-Output ('frozen_inf_expects=' + $WantInf)
 if (-not (Test-Path -LiteralPath $SrcSys)) { Fail 2 ('missing sys ' + $SrcSys) }

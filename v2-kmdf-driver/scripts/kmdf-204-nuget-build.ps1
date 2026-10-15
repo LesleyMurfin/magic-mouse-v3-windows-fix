@@ -1,7 +1,7 @@
 # kmdf-204-nuget-build.ps1
 # Build the unique KMDF package out-of-tree. Dest: MagicMouseDriver-kmdf-204-scroll.sys
-# Unlike kmdf-204-scroll-build.ps1 (which mounts the ISO itself and builds in
-# C:\mm-dev-queue), this script is a plain compiler driver: -SourceDir in, -OutDir
+# Unlike kmdf-204-scroll-build.ps1 (which mounts the ISO itself and builds inside the
+# scratch queue root), this script is a plain compiler driver: -SourceDir in, -OutDir
 # out, no drive assumptions, nothing written outside -OutDir. It writes the same
 # FROZEN-UNSIGNED.txt hash record into <OutDir>\build, but without that script's
 # one-shot guard and without its INF/Driver.c source gates. Freezing/signing/
@@ -12,10 +12,10 @@
 #
 #   Ewdk   PRIMARY. An already-mounted Enterprise WDK. This is what built every
 #          frozen artifact: `call <root>\BuildEnv\SetupBuildEnv.cmd amd64` then the
-#          same msbuild line as _build-once.cmd. The EWDK root is DISCOVERED, never
-#          hardcoded: _build-once.cmd said F:\ and the same image came back as I:\
-#          after a remount, which is the only reason the compiler ever looked
-#          "missing". Identity is confirmed by <root>\Version.txt, not by letter.
+#          frozen msbuild line. The EWDK root is DISCOVERED, never hardcoded: the
+#          same image mounts under a different drive letter after a remount, which
+#          is the only reason the compiler ever looked "missing". Identity is
+#          confirmed by <root>\Version.txt, not by letter.
 #
 #   NuGet  FALLBACK for a host with no EWDK mounted: VS 2022 BuildTools plus the
 #          unpacked Microsoft.Windows.WDK.x64 payload. The WDK NuGet package ships
@@ -47,7 +47,10 @@ param(
     [string]$EwdkVersion = 'ge_release_svc_prod1.26100.6584',
 
     # Where the unpacked WDK / SDK NuGet payloads live (fallback toolchain only).
-    [string]$NuGetPackageDir = 'C:\mm-dev-queue\wdk-packages'
+    # No path is baked in: it defaults to <MM_QUEUE_ROOT>\wdk-packages, the same
+    # scratch root the sibling kmdf-204-scroll-*.ps1 scripts read, and is empty
+    # when that variable is unset - pass -NuGetPackageDir instead.
+    [string]$NuGetPackageDir = $(if ($env:MM_QUEUE_ROOT) { (Join-Path $env:MM_QUEUE_ROOT 'wdk-packages') } else { '' })
 )
 
 $ErrorActionPreference = 'Stop'
@@ -187,9 +190,13 @@ function Resolve-NuGetToolchain {
             ' - install VS 2022 Build Tools with the "Desktop development with C++" workload.')
     }
 
+    if (-not $PackageDir) {
+        Exit-Fail $ExitNoToolchain ('no WDK NuGet payload dir - set the MM_QUEUE_ROOT environment ' +
+            'variable (the payloads are read from <MM_QUEUE_ROOT>\wdk-packages) or pass -NuGetPackageDir.')
+    }
     if (-not (Test-Path -LiteralPath $PackageDir -PathType Container)) {
         Exit-Fail $ExitNoToolchain ('missing WDK NuGet payload dir ' + $PackageDir +
-            ' - unpack Microsoft.Windows.WDK.x64.<ver>.nupkg there or pass -NuGetPackageDir.')
+            ' - unpack Microsoft.Windows.WDK.x64.<ver>.nupkg there, set MM_QUEUE_ROOT, or pass -NuGetPackageDir.')
     }
     $wdk = Get-ChildItem -LiteralPath $PackageDir -Directory -Filter 'Microsoft.Windows.WDK.x64.*' -ErrorAction SilentlyContinue |
         Sort-Object -Property Name -Descending |
@@ -263,9 +270,9 @@ function Copy-DriverSource {
 
 # cmd.exe cannot hold a UNC working directory and SetupBuildEnv.cmd only sets its
 # environment inside the cmd session it runs in, so both have to happen in ONE cmd
-# process. The generated .cmd therefore mirrors _build-once.cmd exactly, except that
-# it re-enters its own directory with `pushd "%~dp0"` (which maps a UNC build dir to
-# a temporary drive letter) instead of `cd /d` (which cannot enter a UNC path).
+# process. The generated .cmd therefore re-enters its own directory with
+# `pushd "%~dp0"` (which maps a UNC build dir to a temporary drive letter)
+# instead of `cd /d` (which cannot enter a UNC path).
 # The generated .cmd stays in the build dir as the reproduction record.
 function Invoke-EwdkBuild {
     param(
@@ -512,12 +519,28 @@ $SourceDir = (Resolve-Path -LiteralPath $SourceDir).ProviderPath.TrimEnd('\')
 if (-not (Test-Path -LiteralPath (Join-Path $SourceDir $ProjectFile) -PathType Leaf)) {
     Exit-Fail $ExitBadInput ('-SourceDir ' + $SourceDir + ' has no ' + $ProjectFile)
 }
-if (-not (Test-Path -LiteralPath $OutDir)) {
-    New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
-}
-$OutDir = (Resolve-Path -LiteralPath $OutDir).ProviderPath.TrimEnd('\')
-if ($OutDir -match '^[Cc]:\\') {
+# Refuse a C:\ -OutDir BEFORE creating anything: the refusal says this script never
+# writes to C:\, so it must not have made the directory first. Test the supplied
+# string, and - when the path already exists - its resolved form too, since a
+# relative path or a drive-mapped alias can land on C:\ without looking like it.
+function Test-ForbiddenOutDir([string]$Path) { return $Path -match '^[Cc]:\\' }
+if (Test-ForbiddenOutDir $OutDir) {
     Exit-Fail $ExitForbidden ('-OutDir ' + $OutDir + ' is on C:\ - this script never writes to C:\.')
+}
+if (Test-Path -LiteralPath $OutDir) {
+    $resolvedOut = (Resolve-Path -LiteralPath $OutDir).ProviderPath.TrimEnd('\')
+    if (Test-ForbiddenOutDir $resolvedOut) {
+        Exit-Fail $ExitForbidden ('-OutDir ' + $OutDir + ' resolves to ' + $resolvedOut +
+            ' on C:\ - this script never writes to C:\.')
+    }
+    $OutDir = $resolvedOut
+}
+else {
+    New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+    $OutDir = (Resolve-Path -LiteralPath $OutDir).ProviderPath.TrimEnd('\')
+    if (Test-ForbiddenOutDir $OutDir) {
+        Exit-Fail $ExitForbidden ('-OutDir ' + $OutDir + ' is on C:\ - this script never writes to C:\.')
+    }
 }
 Write-Detail ('SourceDir     ' + $SourceDir)
 Write-Detail ('OutDir        ' + $OutDir)
@@ -602,6 +625,15 @@ if (Test-Path -LiteralPath $stray -PathType Leaf) {
     Exit-Fail $ExitForbidden ('REFUSE emitted MagicMouseDriver.sys ' + $stray)
 }
 
+# Refuse a known-bad binary where it was built, before it is copied anywhere:
+# a refused build must not leave an artifact in -OutDir.
+$hash = (Get-FileHash -LiteralPath $builtSys -Algorithm SHA256).Hash.ToUpperInvariant()
+$size = (Get-Item -LiteralPath $builtSys).Length
+$sha8 = $hash.Substring(0, 8)
+if ($ForbiddenSha8 -contains $sha8) {
+    Exit-Fail $ExitForbidden ('REFUSE forbidden hash ' + $hash)
+}
+
 $outSys = Join-Path $OutDir ($TargetName + '.sys')
 Copy-Item -LiteralPath $builtSys -Destination $outSys -Force
 $releaseDir = Join-Path $BuildDir ('x64\' + $Configuration)
@@ -618,12 +650,6 @@ if (-not (Test-Path -LiteralPath $stagedInf -PathType Leaf)) {
 Copy-Item -LiteralPath $stagedInf -Destination $releaseInf -Force
 Copy-Item -LiteralPath $releaseInf -Destination (Join-Path $OutDir ($TargetName + '.inf')) -Force
 
-$hash = (Get-FileHash -LiteralPath $outSys -Algorithm SHA256).Hash.ToUpperInvariant()
-$size = (Get-Item -LiteralPath $outSys).Length
-$sha8 = $hash.Substring(0, 8)
-if ($ForbiddenSha8 -contains $sha8) {
-    Exit-Fail $ExitForbidden ('REFUSE forbidden hash ' + $hash)
-}
 $infHash = (Get-FileHash -LiteralPath $releaseInf -Algorithm SHA256).Hash.ToUpperInvariant()
 $driverVer = ''
 foreach ($line in (Get-Content -LiteralPath $releaseInf)) {
@@ -631,9 +657,11 @@ foreach ($line in (Get-Content -LiteralPath $releaseInf)) {
 }
 
 # Same key/value shape kmdf-204-scroll-sign.ps1 parses, so that script signs this
-# build with -BuildDir <OutDir>\build (its default work dir is in C:\mm-dev-queue,
-# which -OutDir refuses by design). toolchain= is what lets the signer refuse a
+# build with -BuildDir <OutDir>\build. toolchain= is what lets the signer refuse a
 # NuGet-fallback binary; a record without it predates this script and is EWDK-built.
+# configuration= tells the signer which x64\<cfg> subdir holds the artifacts this
+# record describes, so a Debug build is signed (or refused) as a Debug build instead
+# of silently resolving to a stale x64\Release one.
 # Unlike kmdf-204-scroll-build.ps1 there is no one-shot guard: re-running overwrites this.
 $toolchainUsed = if ($ewdk) { 'ewdk' } else { 'nuget' }
 $frozenFile = Join-Path $BuildDir 'FROZEN-UNSIGNED.txt'
@@ -644,6 +672,7 @@ Set-Content -LiteralPath $frozenFile -Encoding ASCII -Value @(
     ('dest=' + $TargetName + '.sys'),
     ('artifact=MagicMouseDriver-kmdf-2.0.4-scroll-' + $sha8 + '.sys'),
     ('DriverVer=' + $driverVer),
+    ('configuration=' + $Configuration),
     ('toolchain=' + $toolchainUsed),
     ('source=' + $SourceDir)
 )
