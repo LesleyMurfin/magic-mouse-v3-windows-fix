@@ -31,6 +31,8 @@ powershell -NoProfile -File scripts\Freeze-KmdfArtifact.ps1 -SysPath x64\Release
 Both work out of a scratch queue root — synced source, per-version build dirs, sign stages, the
 NuGet-installed WDK/SDK tool packages — whose default is the one baked into those scripts; set the
 `MM_QUEUE_ROOT` environment variable (or pass `-QueueRoot`) to point them at your own layout.
+The build script also needs the EWDK ISO itself, which has no default: set the `MM_EWDK_ISO`
+environment variable (or pass `-EwdkIso`) to the full path of your downloaded `EWDK_*.iso`.
 
 ## After the `.sys` exists
 

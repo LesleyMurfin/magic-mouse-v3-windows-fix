@@ -13,17 +13,22 @@
 # -QueueRoot is the scratch root that holds the synced source, the per-version
 # build dirs and the build log. Set the MM_QUEUE_ROOT environment variable, or
 # pass -QueueRoot, to move it off the default below.
+#
+# -EwdkIso is the Enterprise WDK ISO this build mounts. There is no sane
+# default - the ISO is a multi-GB download that lives wherever the builder put
+# it - so set the MM_EWDK_ISO environment variable, or pass -EwdkIso.
 [CmdletBinding()]
 param(
     [string]$Version        = '2.0.4.6',
     [string]$DriverVerDate  = '09/20/2026',
-    [string]$QueueRoot      = $(if ($env:MM_QUEUE_ROOT) { $env:MM_QUEUE_ROOT } else { 'C:\mm-dev-queue' })
+    [string]$QueueRoot      = $(if ($env:MM_QUEUE_ROOT) { $env:MM_QUEUE_ROOT } else { 'C:\mm-dev-queue' }),
+    [string]$EwdkIso        = $env:MM_EWDK_ISO
 )
 
 $ErrorActionPreference = 'Stop'
 $Work = $QueueRoot + '\kmdf-204-bld-' + ($Version -replace '\.', '')
 $Src  = $QueueRoot + '\kmdf-204-src'
-$Iso  = 'D:\Users\Lesley\Downloads\EWDK_ge_release_svc_prod1_26100_250904-1728.iso'
+$Iso  = $EwdkIso
 $Log  = $QueueRoot + '\kmdf-204-scroll-build.log'
 $Forbid = @(
     '845435CE','13BF983A','D3876B0A','A1289489','AD5D244B','559B136A',
@@ -40,6 +45,7 @@ function Fail([int]$c, [string]$m) { Log "FAIL $c $m"; exit $c }
 
 Log ("===== unique $Version BUILD start (queue SYNC dest) =====")
 if (-not (Test-Path -LiteralPath $Src)) { Fail 2 "missing source $Src - run KMDF-204-SYNC first" }
+if (-not $Iso) { Fail 2 'no EWDK ISO - set MM_EWDK_ISO or pass -EwdkIso' }
 if (-not (Test-Path -LiteralPath $Iso)) { Fail 2 "missing EWDK ISO $Iso" }
 
 $frozen = Join-Path $Work 'FROZEN-UNSIGNED.txt'
@@ -167,13 +173,7 @@ foreach ($p in $Forbid) {
 
 $parkName = "MagicMouseDriver-kmdf-2.0.4-scroll-$sha8.sys"
 $park1 = Join-Path $Work $parkName
-$parkDir2 = 'D:\mm3-pr3'
-$park2 = Join-Path $parkDir2 $parkName
 Copy-Item -LiteralPath $outSys -Destination $park1 -Force
-if (-not (Test-Path -LiteralPath $parkDir2)) {
-    New-Item -ItemType Directory -Path $parkDir2 -Force | Out-Null
-}
-Copy-Item -LiteralPath $outSys -Destination $park2 -Force
 Copy-Item -LiteralPath (Join-Path $Work 'MagicMouseDriver-kmdf-204-scroll.inf') -Destination (Join-Path $Work 'x64\Release\MagicMouseDriver-kmdf-204-scroll.inf') -Force
 $infPath = Join-Path $Work 'x64\Release\MagicMouseDriver-kmdf-204-scroll.inf'
 $infHash = (Get-FileHash -LiteralPath $infPath -Algorithm SHA256).Hash.ToUpperInvariant()

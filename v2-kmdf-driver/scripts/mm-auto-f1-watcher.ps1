@@ -185,6 +185,27 @@ $heartbeatCounter = 0
 # identical lines a day; only a change in the message is worth a line.
 $lastDiagError = ''
 
+# Per-episode cap on the compact-mode recovery below, mirroring the kernel's
+# own contract: Driver.c MmSendMtEnable gives up at `tries >= 3` for one
+# connection and never retries beyond that.
+#
+# The 5s debounce cannot bound this path - the loop head is Wait-Event
+# -Timeout 5, so at least 5s has always elapsed by the time the poll runs and
+# $MmWatcherDebounceSeconds = 5 never suppresses a compact-mode fire. Without
+# a cap, a device that stays stuck in compact mode gets an unbounded SYSTEM
+# retry storm: every 5s another powershell.exe, another Add-Type C# compile,
+# another HidD_SetFeature([F1,02,01]) on the Bluetooth control channel. That
+# control-channel contention is exactly what Driver.c:11-21 blames for 2.0.4.2
+# taking "pointer AND scroll down with it", so three failed attempts is the
+# point to stop and leave the link alone.
+#
+# The counter is an episode counter, not a lifetime one: it resets as soon as
+# LastAclReceived leaves 9 (MT came back, by our F1 or anyone else's), so the
+# next time the mouse drops to compact mode it gets a fresh set of 3 tries.
+$compactFires    = 0
+$compactFireCap  = 3
+$compactCapLogged = $false
+
 while ($true) {
     $ev = Wait-Event -Timeout 5
     if ($ev) {
@@ -201,11 +222,23 @@ while ($true) {
         $diag = Get-ItemProperty $diagKey -ErrorAction SilentlyContinue
         if ($diag -and $diag.LastAclReceived -eq 9 -and $diag.Rid12Count -gt $lastRid) {
             if ($lastRid -gt 0) {
-                Write-MmWatcherLog ('mouse in compact 9-byte mode (Rid12=' + $diag.Rid12Count + ') - auto-recovering multitouch')
-                Invoke-MmF1 -Reason 'compact mode detected on active mouse' -UpdateDebounce
+                if ($compactFires -lt $compactFireCap) {
+                    $compactFires++
+                    Write-MmWatcherLog ('mouse in compact 9-byte mode (Rid12=' + $diag.Rid12Count + ') - auto-recovering multitouch, attempt ' + $compactFires + '/' + $compactFireCap)
+                    Invoke-MmF1 -Reason 'compact mode detected on active mouse' -UpdateDebounce
+                } elseif (-not $compactCapLogged) {
+                    $compactCapLogged = $true
+                    Write-MmWatcherLog ('still compact after ' + $compactFireCap + ' F1 attempts - giving up for this episode; the next fire waits for LastAclReceived to leave 9, or for a PnP arrival event')
+                }
             }
             $lastRid = $diag.Rid12Count
         } elseif ($diag) {
+            # Not compact (or no reports yet): the episode is over, so the next
+            # drop to 9-byte mode starts again from attempt 1.
+            if ($diag.LastAclReceived -ne 9) {
+                $compactFires = 0
+                $compactCapLogged = $false
+            }
             $lastRid = $diag.Rid12Count
         }
         $lastDiagError = ''
