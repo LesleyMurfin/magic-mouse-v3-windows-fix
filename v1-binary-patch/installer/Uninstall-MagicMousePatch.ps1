@@ -27,10 +27,16 @@ Workflow:
      run only when step 4 confirmed every instance is clean. If PnP enumeration
      fails there, the driver and the service are deliberately left in place
      rather than leaving a filter naming something that no longer exists.
-  7. Remove the MagicMouseFix certificate from LocalMachine\TrustedPublisher
-     by thumbprint - a no-op on an Apple-signed install, which imports none
+  7. Remove the MagicMouseFix certificate from LocalMachine\TrustedPublisher by
+     thumbprint, but only when C:\ProgramData\MagicMousePatch\cert-installed.json
+     records that this project's installer is what put it there AND no other
+     installed driver package is signed by it. The Apple-signed route imports no
+     certificate, and the same certificate signs this project's KMDF driver, so an
+     unconditional removal would revoke publisher trust the KMDF route still needs.
   8. Re-enable the device, but only when step 3 actually disabled it
-  9. Remove C:\ProgramData\MagicMousePatch\
+  9. Remove C:\ProgramData\MagicMousePatch\ - like steps 5 and 6, only when step 4
+     confirmed every instance is clean. That directory holds the only copy of the
+     pre-install driver, so it must outlive any run that skipped the restore.
  10. Reboot instruction
 
 Exits 0 when every step it attempted succeeded, 1 when any step failed; the
@@ -79,9 +85,13 @@ $BackupDir      = "C:\ProgramData\MagicMousePatch\backup"
 $DataDir        = "C:\ProgramData\MagicMousePatch"
 $ServiceName    = "applewirelessmouse"
 
-# CN=MagicMouseFix - only ever imported by the legacy patched-and-resigned
-# route. The Apple-signed route imports no certificate at all.
+# CN=MagicMouseFix - imported only by the legacy patched-and-resigned route. The
+# Apple-signed route imports no certificate at all, and this same certificate also
+# signs this project's KMDF driver package, so the certificate is shared state: it
+# is removed only when the marker below says this installer imported it and nothing
+# else installed is signed by it.
 $CertThumbprint = "16940C0F937D569363560D5FEC5CD8FA6D6D9BCE"
+$CertMarker     = Join-Path $DataDir "cert-installed.json"
 
 # Models the installer can bind, keyed by the Bluetooth PID in the InstanceId.
 $MagicMouseModels = @(
@@ -412,6 +422,93 @@ function Remove-MagicMouseService {
     }
 }
 
+# A service ImagePath is a native path: '\SystemRoot\System32\drivers\x.sys',
+# '\??\C:\...', 'System32\drivers\x.sys' or a plain Win32 path. Returns a Win32 path.
+function Resolve-ServiceImagePath {
+    param([string]$ImagePath)
+    $p = $ImagePath.Trim('"', ' ')
+    if ($p -match '^\\\?\?\\(.+)$') {
+        $p = $Matches[1]
+    } elseif ($p -match '^(?:\\SystemRoot\\|%SystemRoot%\\)(.+)$') {
+        $p = [System.IO.Path]::Combine($env:SystemRoot, $Matches[1])
+    } elseif ($p -notmatch '^[A-Za-z]:\\') {
+        $p = [System.IO.Path]::Combine($env:SystemRoot, $p)
+    }
+    return $p
+}
+
+# Everything installed on this machine, other than our own driver, that carries a
+# signature from $CertThumbprint. The same certificate signs this project's KMDF
+# package, so publisher trust may only be withdrawn when nothing else still needs it.
+# Both places a driver can carry that signature are checked: the catalog of an
+# installed driver-store package, and the image of a registered kernel service.
+function Get-OtherDriversSignedByCert {
+    $candidates = New-Object System.Collections.Generic.List[string]
+
+    $repo = [System.IO.Path]::Combine($env:SystemRoot, 'System32\DriverStore\FileRepository')
+    if (Test-Path $repo) {
+        foreach ($cat in @(Get-ChildItem -LiteralPath $repo -Filter '*.cat' -File -Recurse -Depth 1 -ErrorAction SilentlyContinue)) {
+            $candidates.Add($cat.FullName)
+        }
+    }
+
+    foreach ($svc in @(Get-ChildItem -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Services' -ErrorAction SilentlyContinue)) {
+        $image = (Get-ItemProperty -LiteralPath $svc.PSPath -Name 'ImagePath' -ErrorAction SilentlyContinue).ImagePath
+        if (-not $image) { continue }
+        $resolved = Resolve-ServiceImagePath $image
+        if ($resolved -like '*.sys') { $candidates.Add($resolved) }
+    }
+
+    $seen = @{}
+    $hits = @()
+    foreach ($path in $candidates) {
+        # Our own driver is being removed by this very run; it must not count as a
+        # reason to keep the certificate.
+        if ([System.IO.Path]::GetFileName($path) -eq "$ServiceName.sys") { continue }
+        $key = $path.ToLowerInvariant()
+        if ($seen.ContainsKey($key)) { continue }
+        $seen[$key] = $true
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        $sig = Get-AuthenticodeSignature -LiteralPath $path -ErrorAction SilentlyContinue
+        if ($sig -and $sig.SignerCertificate -and $sig.SignerCertificate.Thumbprint -eq $CertThumbprint) {
+            $hits += $path
+        }
+    }
+    return $hits
+}
+
+# $true only when this project's installer is on record as having put the certificate
+# into TrustedPublisher. The marker is written by Install-MagicMousePatch.ps1 on the
+# only route that imports it, and its PreExisting flag records that the certificate was
+# already trusted beforehand - in which case the import changed nothing and neither may
+# the uninstall. Anything else (no marker, unreadable marker, different thumbprint)
+# means some other software owns that trust, so it stays.
+function Test-MagicMouseCertOwned {
+    if (-not (Test-Path -LiteralPath $CertMarker)) {
+        Write-Status "Cert present but not imported by this installer -- left in place" "OK"
+        Write-Host "  No $CertMarker, so something else put CN=MagicMouseFix in" -ForegroundColor Gray
+        Write-Host "  TrustedPublisher (the Apple-signed route imports no certificate)." -ForegroundColor Gray
+        return $false
+    }
+    $record = $null
+    try {
+        $record = Get-Content -LiteralPath $CertMarker -Raw -ErrorAction Stop | ConvertFrom-Json
+    } catch {
+        Write-Status "Cert ownership record unreadable -- cert left in place" "WARN"
+        Write-Host "  ${CertMarker}: $($_.Exception.Message)" -ForegroundColor Gray
+        return $false
+    }
+    if ($record.Thumbprint -ne $CertThumbprint) {
+        Write-Status "Cert ownership record names a different thumbprint -- cert left in place" "WARN"
+        return $false
+    }
+    if ($record.PreExisting) {
+        Write-Status "Cert was already trusted before this fix was installed -- left in place" "OK"
+        return $false
+    }
+    return $true
+}
+
 function Remove-MagicMouseCert {
     Write-Section "Removing MagicMouseFix cert from TrustedPublisher..."
     $store = $null
@@ -420,9 +517,22 @@ function Remove-MagicMouseCert {
         $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
         $certMatches = @($store.Certificates | Where-Object { $_.Thumbprint -eq $CertThumbprint })
         if ($certMatches.Count -eq 0) {
-            # Expected on an Apple-signed install: that route imports no
-            # certificate, so there is nothing here to undo.
-            Write-Status "No MagicMouseFix cert imported -- nothing to remove" "OK"
+            # Expected on an Apple-signed install: that route imports no certificate,
+            # so there is nothing here to undo.
+            Write-Status "MagicMouseFix cert is not in TrustedPublisher -- nothing to remove" "OK"
+            return
+        }
+        if (-not (Test-MagicMouseCertOwned)) { return }
+
+        $others = @(Get-OtherDriversSignedByCert)
+        if ($others.Count -gt 0) {
+            Write-Status "Cert still in use by $($others.Count) other signed driver file(s) -- left in place" "WARN"
+            foreach ($path in ($others | Select-Object -First 5)) {
+                Write-Host "    $path" -ForegroundColor Gray
+            }
+            Write-Host "  Removing it would break those drivers (the KMDF route uses the same" -ForegroundColor Yellow
+            Write-Host "  certificate). Uninstall them first, then delete CN=MagicMouseFix" -ForegroundColor Yellow
+            Write-Host "  ($CertThumbprint) from certlm.msc > Trusted Publishers." -ForegroundColor Yellow
             return
         }
         foreach ($c in $certMatches) {
@@ -496,7 +606,8 @@ function Main {
     # key and the driver file go away, and a LowerFilters entry naming either of them
     # would be left for Windows to resolve at every boot. So the shared removals only
     # happen once every instance has been confirmed clean.
-    if (Remove-MagicMouseFilterBinding) {
+    $filterClean = Remove-MagicMouseFilterBinding
+    if ($filterClean) {
         Restore-DriverBackup
         Remove-MagicMouseService
     } else {
@@ -504,7 +615,16 @@ function Main {
     }
     Remove-MagicMouseCert
     Enable-MagicMouseDevice -InstanceId $iid
-    Remove-DataDirectory
+    # Same gate as the restore, for the same reason: this directory holds
+    # backup\applewirelessmouse_*.sys, the only copy of the driver that was in
+    # System32\drivers before the install. Deleting it on the run that skipped the
+    # restore would destroy the restore's only input, and the re-run the user is told
+    # to do would then delete the driver instead of putting the original back.
+    if ($filterClean) {
+        Remove-DataDirectory
+    } else {
+        Write-Status "Keeping $DataDir -- it holds the driver backup this run did not restore" "WARN"
+    }
 
     Write-Host ""
     if ($script:Failed) {

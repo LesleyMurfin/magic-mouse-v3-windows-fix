@@ -42,7 +42,10 @@ Workflow:
      bundled ..\apple-driver\applewirelessmouse.sys, then the local DriverStore
   3. Identify the variant from its signature and PE version resource, and verify it
   4. PatchedResigned only: test signing + HVCI checks, and import MagicMouseFix.cer
-     to LocalMachine\TrustedPublisher (never to Root)
+     to LocalMachine\TrustedPublisher (never to Root), recording in
+     C:\ProgramData\MagicMousePatch\cert-installed.json whether that import is the
+     one that put the certificate there - the uninstaller removes the certificate
+     only when this record says so
   5. Detect the mouse (BTHENUM HID profile 00001124, PID 030D / 0310 / 0269 / 0323),
      then back up any existing driver to C:\ProgramData\MagicMousePatch\backup\
   6. Clear BTHPORT cache, stop service, disable device, copy, register service, write
@@ -112,6 +115,10 @@ if ($PSVersionTable.PSVersion.Major -lt 5) {
 $ScriptRoot       = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $CertPath         = Join-Path $ScriptRoot "MagicMouseFix.cer"
 $BackupDir        = "C:\ProgramData\MagicMousePatch\backup"
+$DataDir          = "C:\ProgramData\MagicMousePatch"
+# Ownership record read by Uninstall-MagicMousePatch.ps1 before it touches the
+# certificate store. Written only by the one route that imports the certificate.
+$CertMarker       = Join-Path $DataDir "cert-installed.json"
 $TargetDriver     = "C:\Windows\System32\drivers\applewirelessmouse.sys"
 $ServiceName      = "applewirelessmouse"
 $ServiceImagePath = "\SystemRoot\System32\drivers\applewirelessmouse.sys"
@@ -392,6 +399,31 @@ function Test-DriverBinary {
     }
 }
 
+# Ownership record for the uninstaller. The MagicMouseFix certificate also signs this
+# project's KMDF package, so the uninstaller may only pull it back out of
+# TrustedPublisher when this installer is the one that put it there. PreExisting means
+# the certificate was already trusted before this run: the import changed nothing, so
+# the uninstall must change nothing either.
+function Write-MagicMouseCertMarker {
+    param([bool]$PreExisting)
+    try {
+        if (-not (Test-Path $DataDir)) {
+            New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
+        }
+        $record = [pscustomobject]@{
+            Thumbprint  = $CertThumbprint
+            ImportedBy  = 'Install-MagicMousePatch.ps1'
+            ImportedUtc = (Get-Date).ToUniversalTime().ToString('o')
+            PreExisting = $PreExisting
+        }
+        $record | ConvertTo-Json | Set-Content -LiteralPath $CertMarker -Encoding ASCII -Force
+        Write-Status "Recorded cert ownership in $CertMarker (PreExisting=$PreExisting)" "OK"
+    } catch {
+        Write-Status "Could not record cert ownership in ${CertMarker}: $_" "WARN"
+        Write-Host "  The uninstaller will leave the certificate in TrustedPublisher." -ForegroundColor Yellow
+    }
+}
+
 function Import-MagicMouseCert {
     Write-Section "Importing code-signing certificate..."
     if (-not (Test-Path $CertPath)) {
@@ -407,6 +439,12 @@ function Import-MagicMouseCert {
             Write-Status "Cert thumbprint mismatch. Got $($cert.Thumbprint), expected $CertThumbprint" "ERROR"
             return $false
         }
+        # An Add() over a certificate that is already trusted changes nothing, so the
+        # uninstaller must not undo it. Record which of the two happened here, while
+        # the store still shows the pre-import state.
+        $preExisting = [bool](Get-ChildItem "Cert:\LocalMachine\TrustedPublisher" -ErrorAction SilentlyContinue |
+                              Where-Object { $_.Thumbprint -eq $CertThumbprint })
+
         # TrustedPublisher ONLY -- Root import is a security hole (would let any cert
         # signed by MagicMouseFix bypass user-mode trust prompts system-wide).
         $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("TrustedPublisher", "LocalMachine")
@@ -420,7 +458,12 @@ function Import-MagicMouseCert {
             Write-Status "Post-import verification failed (thumbprint not present)" "ERROR"
             return $false
         }
-        Write-Status "Cert verified in LocalMachine\TrustedPublisher ($CertThumbprint)" "OK"
+        if ($preExisting) {
+            Write-Status "Cert was already trusted in LocalMachine\TrustedPublisher ($CertThumbprint)" "OK"
+        } else {
+            Write-Status "Cert verified in LocalMachine\TrustedPublisher ($CertThumbprint)" "OK"
+        }
+        Write-MagicMouseCertMarker -PreExisting $preExisting
         return $true
     } catch {
         Write-Status "Cert import failed: $_" "ERROR"
