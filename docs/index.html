@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Magic Mouse 2024 (v3) Windows Driver — Scroll Fix</title>
-  <meta name="description" content="Apple ships no Windows driver for the 2024 Magic Mouse (PID 0323). One free MIT scroll fix you can install today on Windows 10 and 11: it registers Apple's own signed driver, so no Test Mode. A second, KMDF driver is still unfinished.">
+  <meta name="description" content="Apple ships no Windows driver for the 2024 Magic Mouse (PID 0323). One free MIT scroll fix you can install today on Windows 10 and 11: it registers Apple's own signed driver, so that route needs no Test Mode. A second, KMDF driver ships as source you build and self-sign.">
   <link rel="canonical" href="https://drivers.magictray.app/">
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
   <link rel="describedby" href="https://drivers.magictray.app/llms.txt">
@@ -12,7 +12,7 @@
   <meta property="og:site_name" content="Magic Mouse v3 Windows Driver">
   <meta property="og:locale" content="en_US">
   <meta property="og:title" content="Magic Mouse 2024 (v3) Windows driver — scroll fix for PID 0323">
-  <meta property="og:description" content="Apple ships no Windows driver for the 2024 USB-C Magic Mouse. One free MIT fix you can install today: register Apple's own signed driver, no Test Mode. The second, KMDF driver is not finished yet.">
+  <meta property="og:description" content="Apple ships no Windows driver for the 2024 USB-C Magic Mouse. One free MIT fix you can install today: register Apple's own signed driver, no Test Mode for that route. The second, KMDF driver ships as source you build and self-sign, which does need Test Mode.">
   <meta property="og:url" content="https://drivers.magictray.app/">
   <meta property="og:image" content="https://drivers.magictray.app/og.png">
   <meta property="og:image:width" content="1200">
@@ -75,9 +75,9 @@
         "featureList": [
           "Battery percent for Apple Magic Mouse, Magic Keyboard and Magic Trackpad on Windows 10 and Windows 11",
           "Restores two-finger scroll on the Apple Magic Mouse over Bluetooth, including the 2024 model, PID 0323",
-          "Apple-driver route registers Apple's own unmodified signed driver, so no Windows Test Mode is required and Secure Boot and memory integrity can stay on",
+          "Apple-driver route registers Apple's own unmodified signed driver, so that route needs no Windows Test Mode and Secure Boot and memory integrity can stay on",
           "Apple-driver route supports Magic Mouse v1 (0x030D), v2 (0x0269), v2-alt (0x0310) and v3 (0x0323)",
-          "Apple-driver route is the one you can install today; the separate KMDF driver is unfinished, with no compiled driver, signed package or installer"
+          "Apple-driver route is the ready-made package; the separate KMDF route ships as 2.0.4.6 source you build with the WDK and self-sign, which requires Test Mode"
         ]
       },
       {
@@ -99,7 +99,7 @@
         "@id": "https://drivers.magictray.app/#webpage",
         "url": "https://drivers.magictray.app/",
         "name": "Magic Mouse 2024 (v3) Windows Driver — Scroll Fix",
-        "description": "Apple ships no Windows driver for the 2024 Magic Mouse (PID 0323). One free MIT scroll fix you can install today on Windows 10 and 11: it registers Apple's own signed driver, so no Test Mode. A second, KMDF driver is still unfinished.",
+        "description": "Apple ships no Windows driver for the 2024 Magic Mouse (PID 0323). One free MIT scroll fix you can install today on Windows 10 and 11: it registers Apple's own signed driver, so that route needs no Test Mode. A second, KMDF driver ships as source you build and self-sign.",
         "isPartOf": {
           "@id": "https://drivers.magictray.app/#website"
         },
@@ -160,7 +160,7 @@
       <section class="hero">
         <div>
           <h1>Magic Mouse 2024 (v3) Windows driver — scroll fix for PID 0323</h1>
-          <p class="lead">Apple ships no Windows driver for the 2024 USB-C Magic Mouse, Bluetooth <strong>PID 0323</strong>. This free, MIT-licensed driver brings two-finger scroll back on Windows 10 and <strong>Windows 11</strong>. It registers Apple&rsquo;s own signed driver, so no Test Mode, and it covers Magic Mouse v1, v2, v2-alt and v3.</p>
+          <p class="lead">Apple ships no Windows driver for the 2024 USB-C Magic Mouse, Bluetooth <strong>PID 0323</strong>. This free, MIT-licensed driver brings two-finger scroll back on Windows 10 and <strong>Windows 11</strong>. The Apple-driver route registers Apple&rsquo;s own signed driver, so that route needs no Test Mode, and it covers Magic Mouse v1, v2, v2-alt and v3.</p>
           <p class="cta">
             <a class="btn primary" href="install.html#apple-route"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#terminal"/></svg>Install the driver</a>
             <a class="btn primary" href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#github"/></svg>Source on GitHub</a>
@@ -191,7 +191,7 @@
           <div class="stat-card">
             <svg class="icon" aria-hidden="true"><use href="img/icons.svg#lock-open"/></svg>
             <div class="value">No</div>
-            <div class="label">Test Mode needed</div>
+            <div class="label">Test Mode, Apple route</div>
           </div>
           <div class="stat-card">
             <svg class="icon" aria-hidden="true"><use href="img/icons.svg#usb"/></svg>
@@ -213,10 +213,10 @@
               <tr><th scope="row">OS support</th><td>Windows 10 build 14393 or later, Windows 11 any build, x64</td></tr>
               <tr><th scope="row">What breaks</th><td>Two-finger scroll dies after a Bluetooth idle disconnect; the cursor keeps working</td></tr>
               <tr><th scope="row">What this fixes</th><td>Restores and keeps two-finger scroll working — no reinstall, no re-pairing</td></tr>
-              <tr><th scope="row">Two routes</th><td>The Apple-driver route (<code>v1-binary-patch/</code>, v1.0.0) is the one you install, and it covers <code>0x030D</code>, <code>0x0269</code>, <code>0x0310</code>, <code>0x0323</code>. The separate KMDF driver (<code>v2-kmdf-driver/</code>) is unfinished, so there is nothing to install from it. Never install both</td></tr>
+              <tr><th scope="row">Two routes</th><td>The Apple-driver route (<code>v1-binary-patch/</code>, v1.0.0) is the ready-made package, and it covers <code>0x030D</code>, <code>0x0269</code>, <code>0x0310</code>, <code>0x0323</code>. The separate KMDF route (<code>v2-kmdf-driver/</code>) ships as 2.0.4.6 source with its INF and build/sign scripts: you build it with the WDK and self-sign it, and it covers <code>0x0323</code> only. Never install both</td></tr>
               <tr><th scope="row">License</th><td>MIT</td></tr>
               <tr><th scope="row">Price</th><td>Free, no subscription <span class="badge badge-accent">MIT</span></td></tr>
-              <tr><th scope="row">Signing status</th><td>The Apple-driver route uses Apple&rsquo;s own signed binary unmodified, so no Windows Test Mode is required. The KMDF driver is unfinished, so nothing from it is signed or installable yet</td></tr>
+              <tr><th scope="row">Signing status</th><td>The Apple-driver route uses Apple&rsquo;s own signed binary unmodified, so no Windows Test Mode is required for it. The KMDF route is signed with a certificate you generate yourself, so it does require Test Mode with Secure Boot and memory integrity off; the project&rsquo;s own 2.0.4.6 source is not built or signed, and 2.0.4.3 was the last signed binary</td></tr>
             </tbody>
           </table>
           </div>
@@ -309,19 +309,19 @@
         </ol>
         <div class="callout callout-warning">
           <svg class="icon" aria-hidden="true"><use href="img/icons.svg#warning-triangle"/></svg>
-          <p>Those steps are the <strong>Apple-driver route</strong>, and it is the only one you can install today. The separate <strong>KMDF driver</strong> for the 2024 mouse is not finished: there is no compiled driver, no signed package and no installer for it yet. If you find KMDF instructions anywhere, do not follow them until a complete package is published here.</p>
+          <p>Those steps are the <strong>Apple-driver route</strong>, the ready-made package, and it needs no Test Mode. The separate <strong>KMDF route</strong> for the 2024 mouse ships as <strong>source at 2.0.4.6 that the project has not built or signed</strong>: you compile it with the WDK and sign it with your own certificate, so it requires Test Mode. Do not enable Test Mode or install a self-signed kernel driver casually, and never run both routes at once.</p>
         </div>
         <p>Full sequence and rollback: <a href="install.html#apple-route">install the Apple-driver route</a>.</p>
         <details class="tech">
           <summary>What the installer changes, and what it does not require</summary>
-          <p>The installer copies Apple&rsquo;s unmodified <code>applewirelessmouse.sys</code> to <code>System32\drivers</code>, creates an <code>applewirelessmouse</code> kernel service, adds that driver to the Bluetooth HID device&rsquo;s <code>LowerFilters</code>, then restarts the device so Windows re-enumerates it with the filter attached. It uses the bundled unmodified Apple driver, needs no PowerShell window or execution-policy change, and installs no catalog — so <strong>no Windows Test Mode is required</strong> and Secure Boot and memory integrity can stay on. Scroll feel is Apple&rsquo;s own Mac-style translation, sensitivity fixed.</p>
-          <p>The KMDF driver is a separate design for PID <code>0x0323</code> only, planned with Test Mode, tunable scroll and automatic recovery. It is unfinished: <code>v2-kmdf-driver/</code> holds development notes, and there is no compiled driver, no signed package and no installer. Signing is the one thing money would buy for it: an EV certificate plus Microsoft attestation signing would be needed before a production package could load normally.</p>
+          <p>The installer copies Apple&rsquo;s unmodified <code>applewirelessmouse.sys</code> to <code>System32\drivers</code>, creates an <code>applewirelessmouse</code> kernel service, adds that driver to the Bluetooth HID device&rsquo;s <code>LowerFilters</code>, then restarts the device so Windows re-enumerates it with the filter attached. It uses the bundled unmodified Apple driver, needs no PowerShell window or execution-policy change, and installs no catalog — so <strong>no Windows Test Mode is required for this route</strong> and Secure Boot and memory integrity can stay on. Scroll feel is Apple&rsquo;s own Mac-style translation, sensitivity fixed.</p>
+          <p>The KMDF driver is a separate design for PID <code>0x0323</code> only, with tunable scroll, automatic recovery and a direct battery read. It ships as source: <code>v2-kmdf-driver/</code> holds the complete C source, <code>MagicMouseDriver-kmdf-204-scroll.inf</code> and the build/sign scripts at 2.0.4.6, which the project has not built or signed — 2.0.4.3 was the last signed binary. You build it with the WDK or Enterprise WDK and <code>Setup-Community.cmd</code> signs it with a certificate it generates locally, so <strong>that route does require Test Mode</strong>. Signing is the one thing money would buy for it: an EV certificate plus Microsoft attestation signing would be needed before a package could load without Test Mode.</p>
         </details>
       </section>
 
       <section id="why-scroll-stops">
         <h2>Why scroll stops</h2>
-        <p>A Bluetooth idle disconnect makes Windows collapse the mouse&rsquo;s HID collections, and the touch-surface collection <code>COL02</code> disappears. Clicks and cursor movement keep working, so the mouse looks healthy. It does not recover on its own. Symptom walkthrough: <a href="scroll-fix.html">Magic Mouse scroll not working on Windows 11</a>.</p>
+        <p>A Bluetooth idle disconnect makes Windows collapse the mouse&rsquo;s two HID collections into one unified top-level collection, so the separate battery and diagnostic collection <code>COL02</code> disappears and the scroll consumer on <code>COL01</code> can no longer bind. Clicks and cursor movement keep working, so the mouse looks healthy. It does not recover on its own. Symptom walkthrough: <a href="scroll-fix.html">Magic Mouse scroll not working on Windows 11</a>.</p>
         <details class="tech">
           <summary>Mode A to Mode B, and why DSM does not self-recover</summary>
           <figure class="diagram">

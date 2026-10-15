@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Magic Mouse v3 Windows Driver FAQ</title>
-  <meta name="description" content="Answers about the Magic Mouse 2024 (v3) Windows driver: no Apple driver exists, Boot Camp lacks PID 0323, why scroll dies, the shipped Apple-driver route, KMDF development status, and battery.">
+  <meta name="description" content="Answers about the Magic Mouse 2024 (v3) Windows driver: no Apple driver exists, Boot Camp lacks PID 0323, why scroll dies, the ready-made Apple-driver route, the build-it-yourself KMDF route, and battery.">
   <link rel="canonical" href="https://drivers.magictray.app/faq.html">
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
   <link rel="describedby" href="https://drivers.magictray.app/llms.txt">
@@ -12,7 +12,7 @@
   <meta property="og:site_name" content="Magic Mouse v3 Windows Driver">
   <meta property="og:locale" content="en_US">
   <meta property="og:title" content="Magic Mouse v3 Windows driver FAQ">
-  <meta property="og:description" content="No Apple driver exists for the 2024 Magic Mouse. Boot Camp has no PID 0323 entry. The Apple-driver route installs today and needs no Test Mode; the separate KMDF driver is not finished yet.">
+  <meta property="og:description" content="No Apple driver exists for the 2024 Magic Mouse. Boot Camp has no PID 0323 entry. The Apple-driver route installs today and needs no Test Mode; the separate KMDF route is source you build and self-sign, which does need Test Mode.">
   <meta property="og:url" content="https://drivers.magictray.app/faq.html">
   <meta property="og:image" content="https://drivers.magictray.app/og.png">
   <meta property="og:image:width" content="1200">
@@ -141,7 +141,7 @@
             "name": "Which fix should I install?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Install the Apple-driver route (v1-binary-patch/). It registers Apple's own unmodified signed driver, needs no Windows Test Mode, and supports 0x030D, 0x0269, 0x0310 and 0x0323. The separate KMDF driver (v2-kmdf-driver/) is unfinished: that folder holds development notes only, with no compiled driver, signed package or installer. Never install the two together."
+              "text": "Install the Apple-driver route (v1-binary-patch/) unless you want to build a kernel driver yourself. It registers Apple's own unmodified signed driver, needs no Windows Test Mode, and supports 0x030D, 0x0269, 0x0310 and 0x0323. The separate KMDF route (v2-kmdf-driver/) ships as 2.0.4.6 C source with its INF and build/sign scripts, which the project has not built or signed: you compile it with the WDK and sign it with a certificate you generate, so it requires Test Mode. Never install the two together."
             }
           },
           {
@@ -149,7 +149,7 @@
             "name": "How do I know which Magic Mouse I have?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Check the Hardware Ids: Device Manager, Human Interface Devices, Apple Magic Mouse, Properties, Details, Hardware Ids. PID_0323 is the 2024 model, v3, and its charge port is USB-C. PID_030D is v1, PID_0269 is Magic Mouse 2 with a Lightning port, and PID_0310 is the v2-alt identifier. All four are supported by the Apple-driver route; the unfinished KMDF driver is planned for 0x0323 only."
+              "text": "Check the Hardware Ids: Device Manager, Human Interface Devices, Apple Magic Mouse, Properties, Details, Hardware Ids. PID_0323 is the 2024 model, v3, and its charge port is USB-C. PID_030D is v1, PID_0269 is Magic Mouse 2 with a Lightning port, and PID_0310 is the v2-alt identifier. All four are supported by the Apple-driver route; the KMDF route covers 0x0323 only."
             }
           },
           {
@@ -165,7 +165,7 @@
             "name": "Do I need Windows Test Mode?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "No. The Apple-driver route ships Apple's own signed binary unmodified and installs no catalog, so it needs no Test Mode - although confirmation on a machine with test signing switched off remains tracked as issue 20. The unfinished KMDF driver is planned to be self-signed, so it would need Test Mode, but there is no KMDF driver to install yet."
+              "text": "It depends on the route. The Apple-driver route ships Apple's own signed binary unmodified and installs no catalog, so it needs no Test Mode - although confirmation on a machine with test signing switched off remains tracked as issue 20. The KMDF route does need Test Mode, with Secure Boot and memory integrity off, because you sign that driver with a certificate you generate yourself."
             }
           },
           {
@@ -197,7 +197,7 @@
             "name": "Does the driver fix the battery percentage on Windows?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "The Apple-driver route does not read battery itself; the free Magic Tray Windows app does. It briefly removes applewirelessmouse from the mouse's LowerFilters to expose the COL02 collection, reads HID input report 0x90 there, then restores the filter, so two-finger scroll is unavailable for a few seconds. The unfinished KMDF driver does not read it either. Battery on Magic Mouse v1 0x030D, v2 0x0269 and v2-alt 0x0310 is not yet characterised."
+              "text": "The Apple-driver route does not read battery itself; the free Magic Tray Windows app does. It briefly removes applewirelessmouse from the mouse's LowerFilters to expose the COL02 collection, reads HID input report 0x90 there, then restores the filter, so two-finger scroll is unavailable for a few seconds. The KMDF driver reads report 0x90 on COL02 directly, with no filter change. Battery on Magic Mouse v1 0x030D, v2 0x0269 and v2-alt 0x0310 is not yet characterised."
             }
           },
           {
@@ -213,7 +213,7 @@
             "name": "How do I uninstall the driver?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "For the Apple-driver route, run installer\\Uninstall-MagicMousePatch.ps1 as administrator; it removes applewirelessmouse from LowerFilters, deletes the service key, restores the backup, and prompts for a reboot. The KMDF driver is unfinished, so there is nothing of it to uninstall."
+              "text": "For the Apple-driver route, run installer\\Uninstall-MagicMousePatch.ps1 as administrator; it removes applewirelessmouse from LowerFilters, deletes the service key, restores the backup, and prompts for a reboot. If you built and installed the KMDF route yourself, run v2-kmdf-driver\\Uninstall-KMDF.cmd, which removes the published MagicMouseDriver-kmdf-204-scroll.inf package."
             }
           },
           {
@@ -221,7 +221,7 @@
             "name": "Where is the source code?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "On GitHub at github.com/LesleyMurfin/magic-mouse-v3-windows-fix, MIT licensed. The Apple-driver route you install is in v1-binary-patch; the unfinished KMDF driver is in v2-kmdf-driver, which holds development notes only. Download the repository itself to get the installer - there are no separate release downloads."
+              "text": "On GitHub at github.com/LesleyMurfin/magic-mouse-v3-windows-fix, MIT licensed. The ready-made Apple-driver route is in v1-binary-patch; the KMDF route is in v2-kmdf-driver, which holds the complete C source, INF and build/sign scripts at 2.0.4.6, not built or signed. Download the repository itself to get either one - there are no separate release downloads."
             }
           }
         ]
@@ -248,7 +248,7 @@
     <div class="wrap">
       <p class="kicker">FAQ &middot; Magic Mouse 2024 (v3) &middot; PID 0323</p>
       <h1>Magic Mouse v3 Windows driver FAQ</h1>
-      <p class="lead">Short answers about the <strong>Magic Mouse 2024 (v3) Windows driver</strong>. You install the <strong>Apple-driver route</strong>; the separate <strong>KMDF driver</strong> is not finished yet.</p>
+      <p class="lead">Short answers about the <strong>Magic Mouse 2024 (v3) Windows driver</strong>. Most people install the ready-made <strong>Apple-driver route</strong>; the separate <strong>KMDF route</strong> is source you build and self-sign.</p>
       <p class="cta">
         <a class="btn primary" href="install.html#choose"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#download"/></svg> Install guide</a>
         <a class="btn ghost" href="scroll-fix.html"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#scroll"/></svg> Fix dead scroll</a>
@@ -266,13 +266,13 @@
           <details>
             <summary>Which fix should I install? <svg class="icon chev" aria-hidden="true"><use href="img/icons.svg#chevron-down"/></svg></summary>
             <div class="a-body">
-              <p>Install the <strong>Apple-driver route</strong> (<code>v1-binary-patch/</code>). It registers Apple&rsquo;s own unmodified signed driver, needs <strong>no Windows Test Mode</strong>, and supports <code>0x030D</code>, <code>0x0269</code>, <code>0x0310</code> and <code>0x0323</code>. The separate <strong>KMDF driver</strong> (<code>v2-kmdf-driver/</code>) is unfinished: that folder holds development notes only, with no compiled driver, signed package or installer. Never install the two together.</p>
+              <p>Install the <strong>Apple-driver route</strong> (<code>v1-binary-patch/</code>) unless you want to build a kernel driver yourself. It registers Apple&rsquo;s own unmodified signed driver, needs <strong>no Windows Test Mode</strong>, and supports <code>0x030D</code>, <code>0x0269</code>, <code>0x0310</code> and <code>0x0323</code>. The separate <strong>KMDF route</strong> (<code>v2-kmdf-driver/</code>) ships as 2.0.4.6 C source with its INF and build/sign scripts, which the project has not built or signed: you compile it with the WDK and sign it with a certificate you generate, so it <strong>does require Test Mode</strong>. Never install the two together.</p>
             </div>
           </details>
           <details>
             <summary>How do I know which Magic Mouse I have? <svg class="icon chev" aria-hidden="true"><use href="img/icons.svg#chevron-down"/></svg></summary>
             <div class="a-body">
-              <p>Check the Hardware Ids: Device Manager &rarr; Human Interface Devices &rarr; Apple Magic Mouse &rarr; Properties &rarr; Details &rarr; Hardware Ids. <code>PID_0323</code> is the 2024 model, v3, and its charge port is USB-C. <code>PID_030D</code> is v1, <code>PID_0269</code> is Magic Mouse 2 with a Lightning port, and <code>PID_0310</code> is the v2-alt identifier. All four are supported by the Apple-driver route; the unfinished KMDF driver is planned for <code>0x0323</code> only.</p>
+              <p>Check the Hardware Ids: Device Manager &rarr; Human Interface Devices &rarr; Apple Magic Mouse &rarr; Properties &rarr; Details &rarr; Hardware Ids. <code>PID_0323</code> is the 2024 model, v3, and its charge port is USB-C. <code>PID_030D</code> is v1, <code>PID_0269</code> is Magic Mouse 2 with a Lightning port, and <code>PID_0310</code> is the v2-alt identifier. All four are supported by the Apple-driver route; the KMDF route covers <code>0x0323</code> only.</p>
             </div>
           </details>
           <details>
@@ -284,7 +284,7 @@
           <details>
             <summary>Do I need Windows Test Mode? <svg class="icon chev" aria-hidden="true"><use href="img/icons.svg#chevron-down"/></svg></summary>
             <div class="a-body">
-              <p>No. The <strong>Apple-driver route</strong> ships Apple&rsquo;s own signed binary unmodified and installs no catalog, so it needs no Test Mode &mdash; although confirmation on a machine with test signing switched off remains <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/issues/20">tracked as issue 20</a>. The unfinished KMDF driver is planned to be self-signed, so it would need Test Mode, but there is no KMDF driver to install yet.</p>
+              <p>It depends on the route. The <strong>Apple-driver route</strong> ships Apple&rsquo;s own signed binary unmodified and installs no catalog, so it needs <strong>no Test Mode</strong> &mdash; although confirmation on a machine with test signing switched off remains <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix/issues/20">tracked as issue 20</a>. The <strong>KMDF route does need Test Mode</strong>, with Secure Boot and memory integrity off, because you sign that driver with a certificate you generate yourself. Do not enable Test Mode casually, and never on a machine you do not control.</p>
             </div>
           </details>
           <details>
@@ -314,7 +314,7 @@
           <details>
             <summary>Does the driver fix the battery percentage on Windows? <svg class="icon chev" aria-hidden="true"><use href="img/icons.svg#chevron-down"/></svg></summary>
             <div class="a-body">
-              <p>The Apple-driver route does not read battery itself &mdash; the free <a href="https://magictray.app/">Magic Tray (Windows app)</a> does. It briefly removes <code>applewirelessmouse</code> from the mouse&rsquo;s <code>LowerFilters</code> to expose the <code>COL02</code> collection, reads HID input report <code>0x90</code> there, then restores the filter, so two-finger scroll is unavailable for a few seconds. The unfinished KMDF driver does not read it either. Battery on Magic Mouse v1 <code>0x030D</code>, v2 <code>0x0269</code> and v2-alt <code>0x0310</code> is <strong>not yet characterised</strong>.</p>
+              <p>The Apple-driver route does not read battery itself &mdash; the free <a href="https://magictray.app/">Magic Tray (Windows app)</a> does. It briefly removes <code>applewirelessmouse</code> from the mouse&rsquo;s <code>LowerFilters</code> to expose the <code>COL02</code> collection, reads HID input report <code>0x90</code> there, then restores the filter, so two-finger scroll is unavailable for a few seconds. The KMDF driver reads report <code>0x90</code> on <code>COL02</code> directly, with no filter change. Battery on Magic Mouse v1 <code>0x030D</code>, v2 <code>0x0269</code> and v2-alt <code>0x0310</code> is <strong>not yet characterised</strong>.</p>
             </div>
           </details>
         </div>
@@ -332,13 +332,13 @@
           <details>
             <summary>How do I uninstall the driver? <svg class="icon chev" aria-hidden="true"><use href="img/icons.svg#chevron-down"/></svg></summary>
             <div class="a-body">
-              <p>For the <strong>Apple-driver route</strong>, run <code>installer\Uninstall-MagicMousePatch.ps1</code> as administrator: it removes <code>applewirelessmouse</code> from <code>LowerFilters</code>, deletes the service key, restores the backed-up driver, and prompts for a reboot. The KMDF driver is unfinished, so there is nothing of it to uninstall.</p>
+              <p>For the <strong>Apple-driver route</strong>, run <code>installer\Uninstall-MagicMousePatch.ps1</code> as administrator: it removes <code>applewirelessmouse</code> from <code>LowerFilters</code>, deletes the service key, restores the backed-up driver, and prompts for a reboot. If you built and installed the <strong>KMDF route</strong> yourself, run <code>v2-kmdf-driver\Uninstall-KMDF.cmd</code>, which removes the published <code>MagicMouseDriver-kmdf-204-scroll.inf</code> package.</p>
             </div>
           </details>
           <details>
             <summary>Where is the source code? <svg class="icon chev" aria-hidden="true"><use href="img/icons.svg#chevron-down"/></svg></summary>
             <div class="a-body">
-              <p>On GitHub at <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">github.com/LesleyMurfin/magic-mouse-v3-windows-fix</a>, MIT licensed. The Apple-driver route you install is in <code>v1-binary-patch</code>; the unfinished KMDF driver is in <code>v2-kmdf-driver</code>, which holds development notes only. Download the repository itself to get the installer &mdash; there are no separate release downloads.</p>
+              <p>On GitHub at <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">github.com/LesleyMurfin/magic-mouse-v3-windows-fix</a>, MIT licensed. The ready-made Apple-driver route is in <code>v1-binary-patch</code>; the KMDF route is in <code>v2-kmdf-driver</code>, which holds the complete C source, INF and build/sign scripts at 2.0.4.6, not built or signed. Download the repository itself to get either one &mdash; there are no separate release downloads.</p>
             </div>
           </details>
         </div>

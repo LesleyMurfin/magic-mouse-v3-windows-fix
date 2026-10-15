@@ -155,7 +155,7 @@
 
       <div class="callout callout-info">
         <svg class="icon" aria-hidden="true"><use href="img/icons.svg#battery"/></svg>
-        <p>Neither driver reports battery. The Apple-driver route you install restores scroll only, and the unfinished KMDF driver has no battery path yet. For the general story &mdash; which Apple devices report a percent, and what to do when none shows &mdash; see <a href="https://magictray.app/battery.html">battery on Windows</a>.</p>
+        <p>No driver you install reports battery to Windows itself. The Apple-driver route restores scroll only, and the KMDF route &mdash; which you build from source and self-sign &mdash; reads the percentage for Magic Tray rather than surfacing it in Windows. For the general story &mdash; which Apple devices report a percent, and what to do when none shows &mdash; see <a href="https://magictray.app/battery.html">battery on Windows</a>.</p>
       </div>
 
       <section>
@@ -251,7 +251,7 @@
           <details>
             <summary>Does the KMDF route show battery? <svg class="icon chev" aria-hidden="true"><use href="img/icons.svg#chevron-down"/></svg></summary>
             <div class="a-body">
-              <p>No. The KMDF driver is unfinished &mdash; development notes only, with no compiled <code>.sys</code>, signed package or installer &mdash; so there is no battery path to document for it. Nothing about it is installable yet.</p>
+              <p>Not in Windows itself, but it changes how Magic Tray reads it. The KMDF driver exposes Input report <code>0x90</code> on <code>COL02</code> directly, so Magic Tray reads the percentage without the brief <code>LowerFilters</code> change the Apple-driver route needs. That route ships as 2.0.4.6 source the project has not built or signed: you compile it with the WDK and sign it with a certificate you generate, which requires Windows Test Mode &mdash; not something to do casually.</p>
             </div>
           </details>
           <details>

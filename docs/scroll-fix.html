@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Magic Mouse Scroll Not Working on Windows 11</title>
-  <meta name="description" content="Magic Mouse 2024 (v3) scroll stops on Windows 11 because a Bluetooth idle disconnect collapses the HID collections. The Apple-driver route fixes it by registering Apple's own driver; the separate KMDF driver is unfinished.">
+  <meta name="description" content="Magic Mouse 2024 (v3) scroll stops on Windows 11 because a Bluetooth idle disconnect collapses the HID collections. The Apple-driver route fixes it by registering Apple's own driver, with no Test Mode; the separate KMDF route is source you build and self-sign.">
   <link rel="canonical" href="https://drivers.magictray.app/scroll-fix.html">
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
   <link rel="describedby" href="https://drivers.magictray.app/llms.txt">
@@ -12,7 +12,7 @@
   <meta property="og:site_name" content="Magic Mouse v3 Windows Driver">
   <meta property="og:locale" content="en_US">
   <meta property="og:title" content="Magic Mouse 2024 (v3) scroll not working on Windows 11">
-  <meta property="og:description" content="Cursor moves, scroll is dead after an idle Bluetooth disconnect. Cause: HID collections collapse, Mode A to Mode B. The Apple-driver route is the fix you can install today; the separate KMDF driver is not finished yet.">
+  <meta property="og:description" content="Cursor moves, scroll is dead after an idle Bluetooth disconnect. Cause: HID collections collapse, Mode A to Mode B. The Apple-driver route is the ready-made fix; the separate KMDF route ships as source you build and self-sign, which needs Test Mode.">
   <meta property="og:url" content="https://drivers.magictray.app/scroll-fix.html">
   <meta property="og:image" content="https://drivers.magictray.app/og.png">
   <meta property="og:image:width" content="1200">
@@ -74,7 +74,7 @@
         "@id": "https://drivers.magictray.app/scroll-fix.html#webpage",
         "url": "https://drivers.magictray.app/scroll-fix.html",
         "name": "Magic Mouse Scroll Not Working on Windows 11",
-        "description": "Magic Mouse 2024 (v3) scroll stops on Windows 11 because a Bluetooth idle disconnect collapses the HID collections. The Apple-driver route fixes it by registering Apple's own driver; the separate KMDF driver is unfinished.",
+        "description": "Magic Mouse 2024 (v3) scroll stops on Windows 11 because a Bluetooth idle disconnect collapses the HID collections. The Apple-driver route fixes it by registering Apple's own driver, with no Test Mode; the separate KMDF route is source you build and self-sign.",
         "isPartOf": {
           "@id": "https://drivers.magictray.app/#website"
         },
@@ -138,7 +138,7 @@
     <div class="wrap">
       <p class="kicker">Scroll fix &middot; Mode A &rarr; Mode B &middot; PID 0323</p>
       <h1>Magic Mouse 2024 (v3) scroll not working on Windows 11</h1>
-      <p class="lead">Cursor still moves, two-finger scroll is dead: a Bluetooth idle disconnect made Windows collapse the mouse&rsquo;s HID collections. The shipped Apple-driver route puts scroll back, no Test Mode.</p>
+      <p class="lead">Cursor still moves, two-finger scroll is dead: a Bluetooth idle disconnect made Windows collapse the mouse&rsquo;s HID collections. The Apple-driver route puts scroll back, and that route needs no Test Mode.</p>
       <p class="cta">
         <a class="btn primary" href="install.html#apple-route"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#download"/></svg> Install the fix</a>
         <a class="btn ghost" href="#which-mouse"><svg class="icon" aria-hidden="true"><use href="img/icons.svg#mouse"/></svg> Which mouse do I have?</a>
@@ -239,7 +239,7 @@
       <section>
         <h2>What the fix does, and what it does not</h2>
         <ul>
-          <li><strong>Restores scroll</strong> by registering Apple&rsquo;s own unmodified signed driver as a lower filter on <code>PID_030D</code>, <code>PID_0269</code>, <code>PID_0310</code>, <code>PID_0323</code>. No Test Mode.</li>
+          <li><strong>Restores scroll</strong> by registering Apple&rsquo;s own unmodified signed driver as a lower filter on <code>PID_030D</code>, <code>PID_0269</code>, <code>PID_0310</code>, <code>PID_0323</code>. No Test Mode for this route.</li>
           <li><strong>Sensitivity is fixed</strong> &mdash; Apple&rsquo;s Mac-style translation, not tunable.</li>
           <li><strong>Re-pairing breaks it</strong> &mdash; the filter is bound to the device InstanceId, so re-run <code>Install.cmd</code>.</li>
           <li><strong>No battery read</strong> &mdash; see <a href="battery.html">battery on this driver</a>.</li>
