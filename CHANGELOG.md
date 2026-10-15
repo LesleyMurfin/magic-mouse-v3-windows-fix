@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `-DryRun`, which reports every action and changes nothing, and
   `-TargetPid <030D|0310|0269|0323>`, which restricts the install to one mouse when several are
   paired
+- Installer switches `-DriverPath`, to install a driver binary from an explicit path, and
+  `-FromDriverStore`, to reuse a copy already staged in the Windows driver store
 
 ### Changed
 
@@ -44,6 +46,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build 14393 and up, so on 1607-1909 they could not work at all. Disabling is now treated as
   the optimisation it is: when it cannot be done the copy is still attempted and nothing is
   re-enabled afterwards, and a device that *was* disabled is re-enabled even if the copy fails
+- Release provenance is verified against the tracked bytes: `scripts/verify-release.ps1` hashes
+  `v1-binary-patch/apple-driver/applewirelessmouse.sys` itself instead of scraping an expected
+  constant out of the installer, and `scripts/package-release.ps1` publishes that hash as
+  `driver_sha256`. The legacy `PatchedResigned` triple is still asserted where it is documented
+- `DMCA-NOTICE.md` rewritten: the repository now redistributes Apple's driver verbatim rather
+  than a patched derivative, which is a materially different posture and is stated as such
+- `README.md` and `SECURITY.md` corrected. `README.md` had claimed the Driver 1 installer imports
+  a certificate into `LocalMachine\TrustedPublisher` **and the Root store**; it imports to
+  `TrustedPublisher` only, and only for the legacy variant
 
 ### Removed
 
@@ -68,6 +79,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not report success
 - Driver 1 was documented as v3-only in the root README and in the Driver 1 Quick Start, which
   told v1 and v2 owners the fix would not help them. It supports all four PIDs
+
+### Deprecated
+
+- The byte-patched, re-signed Driver 1 variant (SHA256 `370A5555…`, 66,288 bytes, signed
+  `CN=MagicMouseFix`) is no longer shipped. Patching breaks Apple's countersignature, which is
+  why it needed Test Mode. Its constants are retained so an existing installation can still be
+  identified and cleanly uninstalled
 
 ## [2.0.4.6] - 2026-09-20
 

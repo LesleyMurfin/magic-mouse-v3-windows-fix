@@ -250,6 +250,7 @@ Common to both drivers:
 - Windows 10 build 14393 or later, or Windows 11 any version
 - Apple Magic Mouse paired over Bluetooth — Driver 1: v1 (`030D`), v2 (`0269`, `0310`) or v3 (`0323`); Driver 2: `0323` only
 - Administrator account for installation
+- Fast Startup off (`powercfg /h off`, then reboot) — the installer refuses to run otherwise
 - Reboot access
 
 **Driver 1 only:** the installer writes `LowerFilters` under
@@ -270,7 +271,10 @@ Microsoft-countersigned — but that has not yet been verified with `testsigning
 > [`v2-kmdf-driver/README.md`](v2-kmdf-driver/README.md) instead — it is a `pnputil` driver-package
 > install, not this installer, and it needs test signing enabled. Do not run both.
 
-### Step 1: Download & Verify
+### Step 1: Download & verify
+
+Download the repository or a release ZIP and extract it, then verify the driver you are about
+to install from the extracted `v1-binary-patch/` folder:
 
 ```powershell
 # Download the v1.0.0 release and extract it anywhere — Desktop is fine.
@@ -281,18 +285,34 @@ $sys = ".\v1-binary-patch\apple-driver\applewirelessmouse.sys"
 (Get-FileHash $sys -Algorithm SHA256).Hash
 # Expected: 08F33D7E3ECE2C73950A9706F1C4C9057894EAEAF1C4FB355F261F3C2333378F
 # Apple's own driver, 78,424 bytes. If the hash differs, stop.
+
+# This is Apple's own driver, unmodified. Confirm Windows agrees:
+(Get-AuthenticodeSignature $sys).Status
+# Valid
+(Get-AuthenticodeSignature $sys).SignerCertificate.Subject
+# CN=Microsoft Windows Hardware Compatibility Publisher, ...
 ```
 
-### Step 2: Run Installer
+`installer\SHA256SUMS.txt` carries the same checksum in `sha256sum -c` format.
 
-Double-click [`v1-binary-patch\Install.cmd`](v1-binary-patch/Install.cmd) — it requests
-Administrator itself and installs the bundled Apple driver, so there is nothing to type. The
-equivalent from an already-elevated PowerShell prompt:
+### Step 2: Run the installer
+
+Double-click `v1-binary-patch\Install.cmd`. It requests Administrator itself, so there is
+nothing to type and no execution-policy change.
+
+The same thing explicitly, if you prefer a shell:
 
 ```powershell
+# Elevated PowerShell
 cd .\v1-binary-patch
 .\installer\Install-MagicMousePatch.ps1 -DriverPath .\apple-driver\applewirelessmouse.sys
+
+# Other options: -FromDriverStore, -TargetPid <030D|0310|0269|0323>, -DryRun
 ```
+
+No certificate prompt: the shipped binary is Apple's own, countersigned by Microsoft, so
+nothing has to be added to a trust store. The legacy byte-patched variant did require a
+certificate and Test Mode; it is no longer shipped.
 
 ### Step 3: Reboot
 

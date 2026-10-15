@@ -16,7 +16,9 @@
       legacy  The byte-patched, re-signed v1.0.0 artifact. No longer shipped, still
               documented so an existing copy can be identified.
               Install-MagicMousePatch.ps1 remains its source of truth and is scraped
-              below for its SHA256, byte size and signing certificate thumbprint.
+              below for its SHA256, byte size and signing certificate thumbprint. Its
+              byte size is additionally pinned here and cross-checked, so an edit to
+              $PatchedSize cannot silently relabel every document at once.
 
     Those constants are hand-copied into the installer, the uninstaller, SHA256SUMS.txt,
     the release scripts and six markdown documents. A single stale copy makes the
@@ -66,6 +68,11 @@ $ThumbprintShape = '\b[0-9a-fA-F]{40}\b'
 # below: a stale copy in any of them is a finding like any other.
 $AppleSha256 = '08F33D7E3ECE2C73950A9706F1C4C9057894EAEAF1C4FB355F261F3C2333378F'
 $AppleSize = 78424
+
+# The legacy artifact's byte size, pinned a second time. The installer is the source of
+# truth for the legacy triple, but a source of truth that nothing cross-checks lets a
+# silent edit of $PatchedSize relabel every document at once without a single finding.
+$LegacyPinnedSize = 66288
 
 # ============================================================================
 # Helpers
@@ -210,6 +217,13 @@ $expectedSha = $shaMatch.Groups[1].Value
 $expectedSize = [int]$sizeMatch.Groups[1].Value
 $expectedThumb = $thumbMatch.Groups[1].Value
 
+if ($expectedSize -ne $LegacyPinnedSize) {
+    Add-Finding -Message "Installer declares `$PatchedSize = $expectedSize but the legacy artifact is $LegacyPinnedSize bytes. Either the constant was edited or the pin is stale; resolve deliberately." -RelativePath $InstallerRelativePath
+    Add-ResultRow -Name 'pinned:legacy size' -Expected "$LegacyPinnedSize" -Found "$expectedSize" -Result 'FAIL'
+    Write-Host 'FAIL: the legacy byte size in the source of truth disagrees with the pin.'
+    exit 1
+}
+
 # Every driver this repository is allowed to name. A hex64 or a byte count anywhere in
 # the tree has to be one of these; anything else is a stale copy or an unknown binary.
 $drivers = @(
@@ -230,14 +244,19 @@ Add-ResultRow -Name 'source:$PatchedSha256' -Expected '64 hex chars' -Found $exp
 Add-ResultRow -Name 'source:$PatchedSize' -Expected 'integer' -Found "$expectedSize" -Result 'OK'
 Add-ResultRow -Name 'source:$CertThumbprint' -Expected '40 hex chars' -Found $expectedThumb -Result 'OK'
 Add-ResultRow -Name 'pinned:apple' -Expected '64 hex chars + integer' -Found "$AppleSha256 / $AppleSize" -Result 'OK'
+Add-ResultRow -Name 'pinned:legacy size' -Expected "$LegacyPinnedSize" -Found "$expectedSize" -Result 'OK'
 
 # ============================================================================
 # 1 + 2 + 5. Cross-file hex agreement and presence
 # ============================================================================
 
-# The release scripts are targets too: each pins the Apple SHA256 so it can recognise the
-# shipped binary, and a pin that drifts from this one is exactly the stale copy this
-# check exists to catch.
+# The release scripts are targets too: each that pins the Apple SHA256 so it can recognise
+# the shipped binary must agree with this one, and a pin that drifts is exactly the stale
+# copy this check exists to catch. package-release.ps1 is checked but not required to
+# carry one: it verifies the driver against the checksum SHA256SUMS.txt publishes - which
+# this script has already matched to the Apple pin below - and then emits the hash it
+# computed as driver_sha256. Demanding a hand-copied constant there would add the fourth
+# copy of a value that already has exactly one source.
 $hexTargets = @(
     [PSCustomObject]@{ Path = 'README.md';                                             Sha = $true;  Thumb = $false; RequireSha = $true;  RequireThumb = $false }
     [PSCustomObject]@{ Path = 'SECURITY.md';                                           Sha = $true;  Thumb = $true;  RequireSha = $true;  RequireThumb = $true }
@@ -246,7 +265,7 @@ $hexTargets = @(
     [PSCustomObject]@{ Path = 'v1-binary-patch/installer/Uninstall-MagicMousePatch.ps1'; Sha = $true; Thumb = $true;  RequireSha = $false; RequireThumb = $true }
     [PSCustomObject]@{ Path = 'v1-binary-patch/docs/architecture.md';                   Sha = $false; Thumb = $true;  RequireSha = $false; RequireThumb = $false }
     [PSCustomObject]@{ Path = 'scripts/Test-ReleaseProvenance.ps1';                     Sha = $true;  Thumb = $false; RequireSha = $true;  RequireThumb = $false }
-    [PSCustomObject]@{ Path = 'scripts/package-release.ps1';                            Sha = $true;  Thumb = $false; RequireSha = $true;  RequireThumb = $false }
+    [PSCustomObject]@{ Path = 'scripts/package-release.ps1';                            Sha = $true;  Thumb = $false; RequireSha = $false; RequireThumb = $false }
     [PSCustomObject]@{ Path = 'scripts/verify-release.ps1';                             Sha = $true;  Thumb = $false; RequireSha = $true;  RequireThumb = $false }
 )
 
