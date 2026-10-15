@@ -6,42 +6,77 @@
   <title>Page not found &mdash; Magic Mouse v3 Windows driver</title>
   <meta name="description" content="That page does not exist on the Magic Mouse 2024 (v3) Windows driver site. Use the links below for the install guide, scroll fix, battery percentage, or FAQ.">
   <meta name="robots" content="noindex,follow">
-  <link rel="stylesheet" href="site.css">
+  <!-- Root-relative throughout: GitHub Pages serves this document at the
+       requested missing URL, so at /a/b/c a document-relative "site.css"
+       resolves to /a/b/site.css and 404s along with every nav and footer
+       link. Safe because docs/CNAME puts this site at a domain root. -->
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="theme-color" content="#0f0f14">
+  <link rel="stylesheet" href="/site.css">
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <header>
-    <p class="kicker">404 &middot; Magic Mouse v3 Windows driver</p>
-  <nav aria-label="Site">
-    <a href="./">Windows driver</a>
-    <a href="install.html">Install</a>
-    <a href="scroll-fix.html">Scroll fix</a>
-    <a href="battery.html">Battery %</a>
-    <a href="faq.html">FAQ</a>
-    <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
-    <a href="https://magictray.app/">Magic Tray app</a>
-  </nav>
-    <h1>Page not found</h1>
-    <p class="lead">That page does not exist on this site. The <strong>Magic Mouse 2024 (v3) Windows driver</strong> pages are all listed below.</p>
+  <header class="site-header">
+    <div class="bar">
+      <a class="brand" href="https://magictray.app/">Magic Tray <small>Drivers</small></a>
+      <nav aria-label="Site">
+        <a href="/">Windows driver</a>
+        <a href="/install.html">Install</a>
+        <a href="/scroll-fix.html">Scroll fix</a>
+        <a href="/battery.html">Battery %</a>
+        <a href="/faq.html">FAQ</a>
+      </nav>
+    </div>
   </header>
-  <main id="content">
-    <ul class="pick">
-      <li><a href="./">Magic Mouse 2024 (v3) Windows driver &mdash; overview<small>What it is, which mouse it targets, PID 0323.</small></a></li>
-      <li><a href="install.html#choose">How to install the shipped Magic Mouse v3 Windows driver<small>Apple-driver route, no Test Mode, and rollback.</small></a></li>
-      <li><a href="scroll-fix.html">Magic Mouse scroll not working on Windows 11<small>Symptoms, cause, and the PID lookup table.</small></a></li>
-      <li><a href="battery.html">Magic Mouse battery percentage on Windows 11<small>What reads HID report 0x90, and what does not.</small></a></li>
-      <li><a href="faq.html">Magic Mouse v3 Windows driver FAQ<small>Boot Camp, signing, Windows 10, uninstall.</small></a></li>
-      <li><a href="https://magictray.app/">Magic Tray (Windows app)<small>Windows system-tray utility for Apple mice. Not a desk tray.</small></a></li>
-    </ul>
+
+  <main id="content" tabindex="-1">
+    <div class="wrap">
+      <p class="kicker">404 &middot; Magic Mouse v3 Windows driver</p>
+      <h1>Page not found</h1>
+      <p class="lead">That page does not exist on this site. The <strong>Magic Mouse 2024 (v3) Windows driver</strong> pages are all listed below.</p>
+      <ul class="pick">
+        <li><a href="/">Magic Mouse 2024 (v3) Windows driver &mdash; overview<small>What it is, which mouse it targets, PID 0323.</small></a></li>
+        <li><a href="/install.html#choose">How to install the shipped Magic Mouse v3 Windows driver<small>Apple-driver route, no Test Mode, and rollback.</small></a></li>
+        <li><a href="/scroll-fix.html">Magic Mouse scroll not working on Windows 11<small>Symptoms, cause, and the PID lookup table.</small></a></li>
+        <li><a href="/battery.html">Magic Mouse battery percentage on Windows 11<small>What reads HID report 0x90, and what does not.</small></a></li>
+        <li><a href="/faq.html">Magic Mouse v3 Windows driver FAQ<small>Boot Camp, signing, Windows 10, uninstall.</small></a></li>
+        <li><a href="https://magictray.app/">Magic Tray (Windows app)<small>Windows system-tray utility for Apple mice. Not a desk tray.</small></a></li>
+      </ul>
+    </div>
   </main>
-  <footer>
-    <p><strong>Magic Mouse 2024 (v3) Windows driver</strong> — MIT licensed, free, no subscription.
-      Maintained by Revive Business Solutions / Lesley Murfin.</p>
-    <p><a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver repo</a> ·
-      <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a> ·
-      <a href="https://magictray.app/drivers.html">Which driver do I need</a> ·
-      <a href="llms.txt">llms.txt</a></p>
-    <p>Not affiliated with Apple Inc. Apple, Magic Mouse, and Boot Camp are trademarks of Apple Inc.</p>
+
+  <footer class="site-footer">
+    <div class="bar">
+      <nav aria-label="All pages">
+        <p>
+          <a href="/">Windows driver</a>
+          ·
+          <a href="/install.html">Install</a>
+          ·
+          <a href="/scroll-fix.html">Scroll fix</a>
+          ·
+          <a href="/battery.html">Battery %</a>
+          ·
+          <a href="/faq.html">FAQ</a>
+          ·
+          <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">GitHub repo</a>
+          ·
+          <a href="https://magictray.app/">Magic Tray app</a>
+        </p>
+      </nav>
+      <p><strong>Magic Mouse 2024 (v3) Windows driver</strong> — MIT licensed, free, no subscription. Maintained by Revive Business Solutions / Lesley Murfin.</p>
+      <p>
+        <a href="https://github.com/LesleyMurfin/magic-mouse-v3-windows-fix">Driver repo</a>
+        ·
+        <a href="https://github.com/LesleyMurfin/magic-tray">Magic Tray (Windows app) repo</a>
+        ·
+        <a href="https://magictray.app/drivers.html">Which driver do I need</a>
+        ·
+        <a href="/llms.txt">llms.txt</a>
+      </p>
+      <p>Not affiliated with Apple Inc. Apple, Magic Mouse, and Boot Camp are trademarks of Apple Inc.</p>
+    </div>
   </footer>
 </body>
 </html>

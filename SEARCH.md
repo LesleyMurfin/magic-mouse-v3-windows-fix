@@ -25,6 +25,9 @@ Searches for the sibling project ("Magic Tray windows app") returned Etsy desk-t
   and deliberately absent.
 - `docs/llms.txt` — quick answers, PID matrix, canonical facts, and the "not this" list
   (not v1/v2, not Magic Utilities, not the Magic Tray desk accessory sold on Etsy).
+- `docs/CNAME` — `drivers.magictray.app`, the site's own custom domain. Every `canonical`,
+  `og:url`, JSON-LD `@id`/`url`, sitemap `<loc>` and `robots.txt` comment uses that host; no
+  `github.io` URL remains in the site.
 - `docs/26dfa1cbdec3bc78636043b6bc6466fa.txt` — IndexNow key. Keep this file; deleting it
   breaks URL submission. The five page URLs plus the sitemap were submitted and accepted
   (HTTP 202) on 2026-09-04.
@@ -35,9 +38,10 @@ Searches for the sibling project ("Magic Tray windows app") returned Etsy desk-t
 
 ## What only the repo owner can do
 
-1. **Google Search Console** — add `https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/`
-   as a URL-prefix property. GitHub Pages cannot serve a DNS TXT record, so use the HTML file
-   method: drop the `google*.html` file Google issues into `docs/`, commit, then click Verify.
+1. **Google Search Console** — add `https://drivers.magictray.app/` as a domain or URL-prefix
+   property. The domain is ours, so either the DNS TXT record or the HTML file method works:
+   for the file method, drop the `google*.html` file Google issues into `docs/`, commit, then
+   click Verify.
 2. **Submit the sitemap** — Search Console → Sitemaps → `sitemap.xml`.
 3. **Request indexing** — URL Inspection, one request per page. Editing the repo does not force
    a recrawl; this is what replaces a stale cached title.
@@ -45,20 +49,20 @@ Searches for the sibling project ("Magic Tray windows app") returned Etsy desk-t
    already pings Bing and Yandex; a verified property still helps.
 5. **Social preview image** — GitHub only accepts it through the web UI:
    Settings → General → Social preview → upload `docs/og.png`. Do the same on `magic-tray`.
-6. **Consider a custom domain.** `lesleymurfin.github.io/…` is a path on a shared subdomain,
-   which is why `github.com` outranks it. A domain with a `docs/CNAME` file would own its own
-   authority. Changing it means updating every `canonical`, `og:url`, JSON-LD `@id`, sitemap
-   `<loc>`, and the IndexNow `keyLocation`.
+6. **Keep the custom domain pointed here.** `docs/CNAME` holds `drivers.magictray.app`, so the
+   DNS record for that subdomain must keep pointing at GitHub Pages, and "Enforce HTTPS" must
+   stay on in Settings → Pages. If the host ever changes again, update every `canonical`,
+   `og:url`, JSON-LD `@id`, sitemap `<loc>`, and the IndexNow `host`/`keyLocation` below.
 
 ## Re-submitting URLs after a content change
 
 ```bash
 curl -s -X POST https://api.indexnow.org/indexnow \
   -H 'Content-Type: application/json; charset=utf-8' \
-  -d '{"host":"lesleymurfin.github.io",
+  -d '{"host":"drivers.magictray.app",
        "key":"26dfa1cbdec3bc78636043b6bc6466fa",
-       "keyLocation":"https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/26dfa1cbdec3bc78636043b6bc6466fa.txt",
-       "urlList":["https://lesleymurfin.github.io/magic-mouse-v3-windows-fix/"]}'
+       "keyLocation":"https://drivers.magictray.app/26dfa1cbdec3bc78636043b6bc6466fa.txt",
+       "urlList":["https://drivers.magictray.app/"]}'
 ```
 
 HTTP 202 means accepted. It is not a ranking signal — it only shortens discovery time.

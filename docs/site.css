@@ -1,166 +1,1023 @@
+/* Magic Tray drivers hub. Same design system as magictray.app: the font block,
+   the token block and the shared chrome below are the apex site's verbatim, so
+   the two hosts render as one project rather than two. Apex is the source of
+   truth; where a shared component is adapted to this site's layout or
+   deliberately diverges from apex, the rule itself says so. The rest is the
+   handful of components only the drivers pages need, built on apex's tokens. */
+
+/* Fonts are self-hosted from docs/fonts/. The files are the exact woff2
+   subsets Google serves (Source Sans 3 v19, Source Code Pro v31); each one is
+   a variable font, so every weight below shares a single file and a single
+   download. Both families are (c) Adobe under the SIL Open Font License 1.1,
+   whose clause 2 requires the notice to travel with the binaries: it ships
+   beside them in docs/fonts/OFL.txt. The weights are declared discretely, as
+   the old @import asked for them, which keeps font-weight: 650 snapping to 700
+   the way it always has. unicode-range values are copied verbatim from
+   Google's CSS: they are what lets the browser skip the latin-ext file on a
+   page that has no latin-ext glyph. Only latin and latin-ext ship; the site is
+   lang="en". */
+
+/* latin-ext */
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/source-sans-3-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/source-sans-3-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/source-sans-3-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/source-sans-3-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/source-sans-3-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/source-sans-3-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/source-sans-3-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/source-sans-3-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: "Source Code Pro";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/source-code-pro-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: "Source Code Pro";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/source-code-pro-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: "Source Code Pro";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/source-code-pro-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: "Source Code Pro";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/source-code-pro-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
   --bg: #0f0f14;
+  --bg-2: #16161d;
+  --bg-3: #1c1c26;
   --fg: #f4f4f5;
-  --muted: #a1a1aa;
-  --line: #27272a;
+  --muted: #c4c4cc;
+  --faint: #8b8b96;
+  --line: #2a2a35;
+  --line-strong: #3f3f4d;
   --accent: #a78bfa;
+  --accent-2: #c4b5fd;
   --btn: #7c3aed;
   --btn-fg: #fff;
+  --ok: #4ade80;
+  --radius: 0.55rem;
+  --serif: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --sans: "Source Sans 3", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --mono: "Source Code Pro", ui-monospace, "Cascadia Code", Consolas, monospace;
+  --shell: 76rem;
+  /* The sticky header's real height, and the only place it is written down, so
+     a fragment target cannot drift out from under the header. Three tiers,
+     because the nav wraps: two rows of links under the brand on a small phone,
+     one row under it up to 1100px, inline with it above.
+     Measured 152px, 107px and 53px across all six pages, each rounded up a few
+     px. The five links stop needing a second row at 410px, so the tier
+     switches at 450px -- re-measure if a link is added or renamed. */
+  --header-h: 9.75rem;
+  /* The colour of whatever box the content is sitting on, so a sticky table
+     cell or a scroll fade can mask what slides behind it without hardcoding
+     which surface it happens to be on. Declared exactly once, here, and that
+     is currently enough: both .table-scroll boxes on the site sit directly
+     inside a details.tech, whose background is transparent, so var(--bg) is
+     genuinely what shows through behind a sticky cell. A .table-scroll dropped
+     into a .card, a .callout or a plain <details> -- all of which paint
+     var(--bg-2) -- would need --surface re-declared on that box. */
+  --surface: var(--bg);
+  --ease: cubic-bezier(0.25, 1, 0.5, 1);
+
+  /* Drivers-only. Every route, device and report on this host is in one of
+     three states -- works, works but undocumented, not shipped -- and each
+     state is painted as a tinted pill, card edge or callout. Apex has no such
+     axis, so it has no amber and no tint tokens. The three tints are the same
+     14% wash so no state reads as louder than another; the diagram SVGs in the
+     page markup paint from the same names. */
+  --accent-soft: rgba(167, 139, 250, 0.14);
+  --ok-soft: rgba(74, 222, 128, 0.14);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.14);
 }
+
 * { box-sizing: border-box; }
-html { color-scheme: dark; }
+
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+  /* Offsets every fragment destination, not just headings: a section, a list
+     or a <details> is landed on as often as an <h2> is. Keyed to the real
+     header height, so it covers focus scrolling too. */
+  scroll-padding-top: var(--header-h);
+}
+
+@media (min-width: 450px) {
+  :root { --header-h: 7rem; }
+}
+@media (min-width: 1100px) {
+  :root { --header-h: 3.5rem; }
+}
+
 body {
   margin: 0;
-  font: 18px/1.55 ui-sans-serif, system-ui, sans-serif;
+  font: 18px/1.5 var(--sans);
   background: var(--bg);
   color: var(--fg);
 }
-a { color: var(--accent); }
-header, main, footer { max-width: 46rem; margin: 0 auto; padding: 0 1.25rem; }
-header { padding-top: 1.5rem; }
-nav {
+
+a {
+  color: var(--accent-2);
+  text-underline-offset: 0.15em;
+}
+
+a:hover { color: var(--fg); }
+
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+img { max-width: 100%; display: block; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  font-weight: 500;
+  color: var(--accent-2);
+  background: var(--bg-3);
+  padding: 0.05em 0.22em;
+  border-radius: 0.28rem;
+  /* File paths, PIDs and command lines are single unbreakable words. On a
+     phone one of them is wider than the column, so allow a break rather than
+     let it run off the edge. This does not change a table's minimum width, so
+     short codes like 0x0323 still stay on one line. */
+  overflow-wrap: break-word;
+}
+
+.skip {
+  position: absolute;
+  left: 0.75rem;
+  top: -3rem;
+  background: var(--btn);
+  color: var(--btn-fg);
+  padding: 0.62rem 0.85rem;
+  z-index: 40;
+  font-weight: 600;
+  text-decoration: none;
+}
+.skip:focus { top: 0.75rem; }
+
+/* ---------- Shared chrome: identical to magictray.app ---------- */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.bar {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 0.7rem 1.5rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.85rem 1.1rem;
-  margin: 0.75rem 0 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem 1.5rem;
+}
+
+.brand {
+  font-family: var(--serif);
+  font-size: 1.22rem;
+  font-weight: 600;
+  color: var(--fg);
+  text-decoration: none;
+  letter-spacing: -0.02em;
+  /* A 44px tap target that costs the header nothing: the padding grows the hit
+     area, the negative margin hands the space back to the row. */
+  padding: 0.5rem 0;
+  margin: -0.5rem 0;
+}
+.brand:hover { color: var(--fg); }
+.brand small {
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-left: 0.45rem;
+  vertical-align: middle;
+}
+
+/* Below the shell breakpoint the nav is its own full-width row under the brand.
+   It used to scroll sideways with fade cues, which left up to four of the five
+   links off-screen behind a 1px scrollbar. Wrapping shows every link at every
+   width; --header-h below is tiered for the rows wrapping can produce. */
+.site-header nav {
+  display: flex;
+  flex-wrap: wrap;
+  width: 100%;
+  gap: 0 1.05rem;
   font-size: 0.92rem;
 }
-nav a { color: var(--muted); text-decoration: none; }
-nav a:hover { color: var(--fg); }
-nav a[aria-current="page"] { color: var(--fg); font-weight: 650; }
-.kicker { color: var(--muted); font-size: 0.85rem; letter-spacing: 0.04em; text-transform: uppercase; }
-h1 { font-size: 2rem; line-height: 1.2; margin: 0.4rem 0 1rem; }
-h2 { margin-top: 2.4rem; font-size: 1.25rem; }
-h3 { margin-top: 1.6rem; font-size: 1.05rem; }
-.lead { font-size: 1.12rem; color: var(--muted); }
-.cta { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1.5rem 0 2rem; }
-.cta a {
-  display: inline-block;
-  padding: 0.65rem 1.1rem;
-  border-radius: 0.5rem;
+.site-header nav a {
+  color: var(--muted);
   text-decoration: none;
+  font-weight: 500;
+  /* 22px of text is not a target. The padding is vertical only, so it costs no
+     horizontal room in a row that is already scrolling. */
+  padding: 0.7rem 0;
+  white-space: nowrap;
+}
+.site-header nav a:hover { color: var(--fg); }
+/* Underlined rather than box-shadowed, so the mark stays on the word instead
+   of drifting to the bottom of the link's new padding. */
+.site-header nav a[aria-current="page"] {
+  color: var(--fg);
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 0.4em;
+}
+
+@media (min-width: 1100px) {
+  /* Wide enough for the links to sit on the brand's row, so the nav stops
+     being a full-width block and the negative margin gives the links' padding
+     back to the header. */
+  .site-header nav {
+    width: auto;
+    flex-wrap: nowrap;
+    margin: -0.7rem 0;
+  }
+}
+
+.site-footer {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+.site-footer .bar {
+  padding-top: 1.2rem;
+  padding-bottom: 1.6rem;
+  align-items: flex-start;
+}
+.site-footer p { margin: 0.2rem 0; }
+/* A footer link is 20px of text on a 24px line, so padding alone would make
+   the hit areas of two stacked rows overlap. The rows that carry links get the
+   room for a 45px target; the sentence above them has no link in it and keeps
+   the footer's normal rhythm. */
+.site-footer a {
+  color: var(--muted);
+  padding: 0.78rem 0;
+}
+.site-footer a:hover { color: var(--fg); }
+.site-footer p:has(a) { line-height: 2.9; }
+/* The map is a flex item in a space-between bar; left to size itself it drags
+   the sentence below it up alongside. A whole row for the map keeps that
+   sentence at the shell's left edge and costs no height. */
+.site-footer nav { flex: 1 0 100%; }
+/* The header's current-page mark leans on an underline, and every footer link
+   is underlined already, so the mark here is weight and colour instead: the
+   word itself changes rather than a second line being drawn under it. */
+.site-footer nav a[aria-current="page"] {
+  color: var(--fg);
+  font-weight: 650;
+}
+
+/* ---------- Page shell ---------- */
+
+.wrap {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3.5rem;
+}
+
+section + section { margin-top: 2.5rem; }
+section > :first-child { margin-top: 0; }
+
+/* Reading measure. The column is 1072px wide at 1440, which runs body copy to
+   over 100 characters a line. The cap is 38rem, about 72 characters, and it is
+   apex's. It applies to flow text only -- direct children of a section -- so
+   text inside a card, a callout, a step or a table keeps the width of the box
+   it was put in. The exemptions are the elements that are layout boxes rather
+   than lines of prose: the button row, the link list, the stepper. */
+main section > :is(p, ul, ol, dl):not(.cta, .pick, .stepper) {
+  max-width: 38rem;
+}
+
+/* ---------- Typography ---------- */
+
+.kicker {
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 0.7rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+h1 {
+  font-size: clamp(1.7rem, 3vw, 2.35rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.75rem;
+}
+
+h2 {
+  font-size: 1.28rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 2rem 0 0.55rem;
+}
+
+h3 {
+  font-size: 1.02rem;
+  font-weight: 650;
+  margin: 1.25rem 0 0.4rem;
+}
+
+.lead {
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0 0 0.2rem;
+  max-width: 38rem;
+}
+.lead strong { color: var(--fg); font-weight: 650; }
+
+.note {
+  border-left: 3px solid var(--accent);
+  padding: 0.2rem 0 0.2rem 1rem;
+  color: var(--muted);
+  margin: 1rem 0 1.4rem;
+}
+
+/* The line that separates this project from wooden desk trays in search
+   results. It is a clarification rather than part of the argument, so it is
+   set as small print at the end of the section. */
+.disambig {
+  color: var(--faint);
+  font-size: 0.85rem;
+  margin: 1.2rem 0 0;
+}
+
+ul.plain {
+  padding-left: 1.15rem;
+  color: var(--muted);
+  margin: 0.4rem 0 1rem;
+}
+ul.plain li { margin: 0.35rem 0; }
+
+/* ---------- Icon sprite ---------- */
+
+/* Every icon on the site is a <use> of img/icons.svg drawn as a stroke, so it
+   takes its colour from whatever it sits in and needs no per-icon rule. */
+.icon {
+  width: 1.1em;
+  height: 1.1em;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  vertical-align: -0.15em;
+}
+.icon-lg { width: 2rem; height: 2rem; }
+
+/* ---------- Hero ---------- */
+
+.hero { display: grid; gap: 1.75rem; align-items: center; }
+@media (min-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1.08fr) minmax(17rem, 0.92fr); gap: 2.75rem; }
+}
+.hero-media {
+  position: relative;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-2);
+}
+/* A fixed ratio so the photo reserves its space before it loads and the hero
+   text does not jump. */
+.hero-media img { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; }
+/* A screenshot is not a product photo. It has a fixed pixel grid and its own
+   1.75:1 ratio, so the 4/3 crop above would cut 24% of its height away and
+   width: 100% would upscale it 1.56x with no 2x source to fall back on. Own
+   ratio, centred, never wider than intrinsic. */
+.hero-media.shot img {
+  aspect-ratio: auto;
+  object-fit: contain;
+  max-width: 330px;
+  margin-inline: auto;
+}
+/* Opaque, not the badge's translucent wash: this pill sits on a photograph,
+   and every product shot on the site is a white mouse on white. */
+.hero-media .tag {
+  position: absolute;
+  top: 0.7rem;
+  left: 0.7rem;
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  color: var(--accent-2);
+}
+
+/* ---------- Buttons ---------- */
+
+.cta {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 1.4rem 0 0;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.62rem 1.05rem;
+  border-radius: 0.45rem;
+  text-decoration: none;
+  font-weight: 650;
+  font-size: 0.95rem;
+  border: 1px solid transparent;
+  transition: background 0.15s var(--ease), border-color 0.15s var(--ease), color 0.15s var(--ease);
+}
+/* `.btn primary` / `.btn ghost`, not `.btn-primary` / `.btn-ghost`: apex names
+   them this way, and markup has to survive being moved between the two hosts. */
+.btn.primary {
+  background: var(--btn);
+  border-color: var(--btn);
+  color: var(--btn-fg);
+}
+.btn.primary:hover {
+  /* Deliberate deviation from apex, which hovers to #8b5cf6. Button text is
+     0.95rem at weight 650 on an 18px root -- 17.1px, under both large-text
+     thresholds -- so WCAG 2.2 AA wants 4.5:1. #7c3aed resting measures 5.70:1
+     against white and #8b5cf6 measures 4.23:1, so lightening the fill drops
+     hover below the floor in the one state the pointer is on it. #6d28d9
+     darkens instead and measures 7.10:1. Apex needs the same change. */
+  background: #6d28d9;
+  border-color: #6d28d9;
+  color: #fff;
+}
+/* Not --line-strong: at #3f3f4d this edge measures under 2:1 on the page, so
+   the only outline distinguishing the second button from loose text is
+   invisible. WCAG 1.4.11 wants 3:1 for a control's boundary; #66667d measures
+   3.43:1. */
+.btn.ghost {
+  border-color: #66667d;
+  color: var(--fg);
+  background: transparent;
+}
+.btn.ghost:hover { border-color: var(--accent); color: var(--accent-2); }
+
+/* ---------- Badges ---------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.18rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+.badge-success { background: var(--ok-soft); color: var(--ok); }
+.badge-warning { background: var(--warning-soft); color: var(--warning); }
+.badge-accent { background: var(--accent-soft); color: var(--accent-2); }
+
+/* ---------- Stat grid ---------- */
+
+.stat-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, 1fr);
+  margin: 1rem 0 1.6rem;
+}
+@media (min-width: 640px) { .stat-grid { grid-template-columns: repeat(4, 1fr); } }
+.stat-card {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+}
+.stat-card .icon { display: block; color: var(--accent); margin-bottom: 0.4rem; }
+.stat-card .value { font-weight: 700; font-size: 1rem; }
+.stat-card .label { font-size: 0.78rem; color: var(--faint); margin-top: 0.1rem; }
+
+/* ---------- Card grid ---------- */
+
+.grid { display: grid; gap: 1rem; margin: 1rem 0 1.5rem; }
+@media (min-width: 640px) {
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+}
+/* One panel, two names. The card and the route card are the same box -- same
+   fill, edge, radius, padding, and both a stacked column -- and differ only in
+   how far apart their rows sit, so the box is written once here and each keeps
+   its own gap. */
+.card,
+.route-card {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.05rem 1.1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+}
+.card { gap: 0.4rem; }
+.card .icon-lg { display: block; color: var(--accent); margin-bottom: 0.2rem; }
+.card h3 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 1.02rem;
   font-weight: 600;
 }
-.cta .primary { background: var(--btn); color: var(--btn-fg); }
-.cta .ghost { border: 1px solid var(--line); color: var(--fg); }
-img.shot {
-  width: 100%;
-  height: auto;
-  border-radius: 0.75rem;
-  border: 1px solid var(--line);
-}
-ul.plain { padding-left: 1.2rem; color: var(--muted); }
-ul.plain strong { color: var(--fg); }
-.grid { display: grid; gap: 1rem; margin: 1rem 0 2rem; }
-@media (min-width: 640px) { .grid-3 { grid-template-columns: 1fr 1fr 1fr; } }
-.card {
-  border: 1px solid var(--line);
-  border-radius: 0.75rem;
-  padding: 1rem;
-}
-.card h3 { margin: 0 0 0.4rem; font-size: 1rem; }
 .card p { margin: 0; color: var(--muted); font-size: 0.95rem; }
-.card a { font-weight: 600; text-decoration: none; }
-dl.faq dt { font-weight: 650; margin-top: 1.1rem; }
-dl.faq dd { margin: 0.35rem 0 0; color: var(--muted); }
+.card a { font-weight: 650; text-decoration: none; }
+.card h3 a { color: var(--fg); font-weight: inherit; }
+.card a:hover { color: var(--fg); }
+
+/* ---------- Route cards: shipped vs development-only ---------- */
+
+.route-card { gap: 0.6rem; }
+/* The card edge carries the route's state, so the badge in the head is not the
+   only thing saying which of the two is installable. */
+.route-card.is-shipped { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.route-card.is-dev { border-color: color-mix(in srgb, var(--warning) 45%, var(--line)); }
+.route-card .head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.route-card .head h3 { margin: 0; font-family: var(--serif); font-weight: 600; }
+.route-card p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+
+/* ---------- Stepper: numbered-circle sequential instructions ---------- */
+
+.stepper { list-style: none; margin: 1rem 0 1.6rem; padding: 0; display: grid; gap: 0; }
+.step {
+  display: grid;
+  grid-template-columns: 2.4rem 1fr;
+  gap: 0.85rem;
+  padding-bottom: 1.35rem;
+  position: relative;
+}
+.step:last-child { padding-bottom: 0; }
+/* The rail joining one step to the next, stopped after the last number. */
+.step::before {
+  content: "";
+  position: absolute;
+  left: 1.2rem;
+  top: 2.4rem;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+.step:last-child::before { display: none; }
+.step .num {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 999px;
+  background: var(--bg-3);
+  border: 1px solid var(--line-strong);
+  color: var(--accent-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  /* Only the 500 and 600 Source Code Pro faces are loaded, so 700 was already
+     resolving to the 600 face. Declared as what it actually renders. */
+  font-weight: 600;
+  z-index: 1;
+}
+.step .body { color: var(--muted); padding-top: 0.25rem; min-width: 0; }
+.step .body h3 { margin: 0 0 0.3rem; display: flex; align-items: center; gap: 0.45rem; }
+.step .body p { margin: 0.2rem 0 0; font-size: 0.95rem; }
+.step .body strong { color: var(--fg); }
+
+/* ---------- Device cards: PID lookup ---------- */
+
+.device-grid { display: grid; gap: 0.85rem; margin: 1rem 0 1.6rem; }
+@media (min-width: 640px) { .device-grid { grid-template-columns: repeat(2, 1fr); } }
+.device-card {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+}
+.device-card .thumb {
+  width: 3.4rem;
+  height: 3.4rem;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.device-card .thumb img { width: 100%; height: 100%; object-fit: cover; }
+/* A model with no photograph of its own gets the mouse glyph instead, sized to
+   fill the same 3.4rem box so the row of cards keeps one rhythm. */
+.device-card .thumb-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--faint);
+}
+.device-card .thumb-icon .icon { width: 1.75rem; height: 1.75rem; }
+.device-card .meta { min-width: 0; }
+.device-card .name { font-weight: 650; font-size: 0.95rem; }
+/* The inherited weight here is 400 and no 400 mono face is loaded, so this was
+   already resolving up to the 500 face. Declared, so the rule says what it
+   renders. */
+.device-card .pid {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--accent-2);
+}
+.device-card .status { font-size: 0.82rem; color: var(--muted); margin-top: 0.15rem; }
+
+/* ---------- Diagrams ---------- */
+
+/* The figures are inline SVG that paints from the tokens above, so a diagram
+   recolours with the rest of the site. Both are far wider than a phone, and the
+   rule below lets them keep their width rather than shrink to fit, so this box
+   is the scroll port that carries them. */
+.diagram {
+  margin: 1.2rem 0 1.8rem;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.2rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+/* Fitting the SVG to the container is what made these illegible: on a 360px
+   viewport the 920-unit figure rendered at about 0.39x, its font-size="12"
+   labels landed under 5px, and there was nothing left to scroll because the
+   artwork had already been squeezed inside the port. The floor is taken from
+   the worst case on the site -- a 12-unit label in a 920-unit viewBox -- so
+   920 x 10/12 = 767px is the narrowest rendering that still puts every label at
+   10px or more; 48rem is 768px. The 720-unit figure's smallest label, 11 units,
+   comes out at 11.7px on the same floor. max-width is cleared so that neither
+   a UA default nor a later blanket max-width: 100% can pull the floor back
+   down and undo this. */
+.diagram svg {
+  width: 100%;
+  min-width: 48rem;
+  max-width: none;
+  height: auto;
+  display: block;
+}
+.diagram figcaption {
+  margin-top: 0.8rem;
+  color: var(--faint);
+  font-size: 0.82rem;
+}
+
+/* ---------- Callouts ---------- */
+
+.callout {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.95rem 1.1rem;
+  margin: 1rem 0 1.5rem;
+}
+.callout .icon { margin-top: 0.2rem; }
+.callout p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+.callout p + p { margin-top: 0.5rem; }
+.callout strong { color: var(--fg); }
+.callout-warning {
+  border-color: color-mix(in srgb, var(--warning) 40%, var(--line));
+  background: var(--warning-soft);
+}
+.callout-warning .icon { color: var(--warning); }
+.callout-info {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  background: var(--accent-soft);
+}
+.callout-info .icon { color: var(--accent); }
+
+/* ---------- Disclosures ---------- */
+
+/* Styled on the bare elements, so a <details> inside .accordion and a
+   details.tech share one panel and only differ where they must. Each page
+   supplies its own chevron as an .icon, so there is no generated marker. */
+details {
+  margin: 1.1rem 0;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+details[open] { border-color: var(--line-strong); }
+summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.85rem 1.05rem;
+  font-weight: 650;
+  color: var(--fg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+summary::-webkit-details-marker { display: none; }
+summary:hover { color: var(--accent-2); }
+.chev { color: var(--faint); transition: transform 0.15s var(--ease); }
+/* Most pages put their own chevron in the summary; the ones that do not get
+   this one, so a disclosure never sits there looking like plain bold text.
+   It goes on ::after rather than ::before because the row is space-between
+   and the mark belongs at the far edge, where the svg chevron sits. */
+summary:not(:has(.chev))::after {
+  content: "";
+  /* A flex item shrinks by default, and a summary that wraps to two lines on a
+     phone squeezed this to a smudge. Hold its size. */
+  flex: none;
+  width: 0.4rem;
+  height: 0.4rem;
+  color: var(--faint);
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.18s var(--ease);
+}
+details[open] > summary:not(:has(.chev))::after { transform: rotate(-135deg); }
+details[open] summary .chev { transform: rotate(180deg); }
+/* No `details:target` reveal. Revealing a targeted disclosure with
+   ::details-content cannot be undone in CSS: the reader clicks the summary,
+   `open` flips true then false, and at false the element is still :target, so
+   the author declaration re-reveals it and the disclosure can never be closed.
+   Measured in Chromium 149 -- two clicks, content visible after both. Guarding
+   with :not([open]) does not help; that is exactly the state that re-fires.
+   The honest behaviour is the browser's: land on the summary and open it with
+   one click. Nothing on this site links to a <details> fragment in any case. */
+details > *:not(summary) {
+  margin: 0 1.05rem 0.95rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.accordion { display: grid; gap: 0.6rem; margin: 1rem 0 1.6rem; }
+@media (min-width: 900px) {
+  .accordion.two-col { grid-template-columns: 1fr 1fr; align-items: start; }
+}
+/* The grid owns the spacing between panels. */
+.accordion details { margin: 0; }
+.a-body p { margin: 0.5rem 0 0; }
+.a-body p:first-child { margin-top: 0; }
+
+/* Engineer-level asides sit off the reading path, so the panel is quieter than
+   a question in the FAQ: dashed edge, no fill, label in muted. */
+details.tech {
+  border-style: dashed;
+  background: transparent;
+}
+details.tech summary { color: var(--muted); font-weight: 600; font-size: 0.9rem; }
+details.tech[open] summary { color: var(--fg); }
+
+/* ---------- Tables ---------- */
+
 table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.92rem;
-  margin: 1rem 0 1.5rem;
+  margin: 0.7rem 0 1.4rem;
 }
 th, td {
   text-align: left;
   vertical-align: top;
-  padding: 0.55rem 0.45rem;
+  padding: 0.6rem 0.55rem;
   border-bottom: 1px solid var(--line);
 }
-th { color: var(--muted); font-weight: 650; }
-.note {
-  border-left: 3px solid var(--accent);
-  padding: 0.15rem 0 0.15rem 1rem;
-  color: var(--muted);
-  margin: 1rem 0 1.5rem;
-}
-.pick { list-style: none; padding: 0; margin: 1rem 0 2rem; }
-.pick li { margin: 0 0 0.65rem; }
-.pick a {
-  display: block;
-  border: 1px solid var(--line);
-  border-radius: 0.65rem;
-  padding: 0.85rem 1rem;
-  text-decoration: none;
-  color: var(--fg);
-}
-.pick a:hover { border-color: var(--accent); }
-.pick small { display: block; color: var(--muted); font-weight: 400; margin-top: 0.2rem; }
-ol.steps { color: var(--muted); }
-ol.steps strong { color: var(--fg); }
-footer {
-  margin: 3rem auto 2rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.88em;
-  background: #1b1b22;
-  border: 1px solid var(--line);
-  border-radius: 0.3rem;
-  padding: 0.05em 0.32em;
-  overflow-wrap: anywhere;
-}
-pre {
-  overflow-x: auto;
-  background: #1b1b22;
-  border: 1px solid var(--line);
-  border-radius: 0.5rem;
-  padding: 0.85rem 1rem;
-  font-size: 0.85rem;
-}
-pre code { background: none; border: 0; padding: 0; }
-caption {
-  text-align: left;
-  color: var(--muted);
-  font-size: 0.85rem;
-  padding: 0 0.45rem 0.5rem;
-}
-.at-a-glance th[scope="row"] { width: 34%; color: var(--muted); }
-.badge {
-  display: inline-block;
-  margin-left: 0.35rem;
-  padding: 0.05rem 0.4rem;
-  border: 1px solid var(--accent);
-  border-radius: 0.3rem;
-  color: var(--accent);
-  font-size: 0.72rem;
+th {
+  color: var(--faint);
+  font-weight: 650;
+  font-size: 0.78rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  vertical-align: 0.08em;
 }
-.disambig {
+td { color: var(--fg); }
+td code { background: transparent; padding: 0; }
+
+/* The UA default is centred, which on a full-width table starts the sentence
+   somewhere over the second column. Set as the same small-caps label the rest
+   of the site uses for a section heading. */
+caption {
+  caption-side: top;
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 0 0 0.5rem;
+}
+
+/* A row-header table is read left to right, not top to bottom, so its first
+   column is a label for the row rather than a heading for a column: full size
+   and full contrast, and never wrapped mid-label. */
+table.at-a-glance th[scope="row"] {
+  color: var(--fg);
+  font-size: 0.92rem;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: nowrap;
+}
+
+/* A comparison table can need more width than a phone screen has: its columns
+   cannot shrink below their longest word, so width: 100% is a floor, not a
+   ceiling. Left alone the table pushes the whole page sideways. .table-scroll
+   keeps that overflow inside its own box -- no column is dropped or narrowed,
+   the off-screen ones are reached by scrolling the box. The wrapper takes the
+   table's vertical margin so the rhythm of the page does not change. */
+.table-scroll {
+  margin: 0.7rem 0 1.4rem;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  /* So the caption can be held to the width of the box rather than the width
+     of the table it belongs to; see below. */
+  container-type: inline-size;
+  /* Same cue as the nav: the two local gradients ride with the columns and
+     cover the fade at whichever end is already in view. */
+  background:
+    linear-gradient(to right, var(--surface), transparent) 0 0 / 1.4rem 100% no-repeat local,
+    linear-gradient(to left, var(--surface), transparent) 100% 0 / 1.4rem 100% no-repeat local,
+    linear-gradient(to right, var(--bg-3), transparent) 0 0 / 1.6rem 100% no-repeat scroll,
+    linear-gradient(to left, var(--bg-3), transparent) 100% 0 / 1.6rem 100% no-repeat scroll;
+}
+.table-scroll > table { margin: 0; }
+
+/* A caption is part of the table, so inside a scrolling box it is as wide as
+   the table and its right-hand words are cut off with the far columns. Held to
+   the box's own width and pinned there. */
+.table-scroll > table > caption {
+  position: sticky;
+  left: 0;
+  max-width: 100cqi;
+}
+
+/* Scrolled right, the first column is what tells you which row you are
+   reading. It needs an opaque backdrop or the columns sliding under it show
+   through. */
+.table-scroll th:first-child,
+.table-scroll td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+}
+
+/* tabindex on the wrapper is what makes the box scrollable from the keyboard:
+   focus it, then use the arrow keys. Without it the far columns are
+   mouse-only. */
+.table-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* ---------- Related-page list ---------- */
+
+.pick { list-style: none; padding: 0; margin: 1rem 0 1.6rem; }
+.pick li { margin: 0 0 0.55rem; }
+.pick a {
+  display: block;
+  background: var(--bg-2);
   border: 1px solid var(--line);
-  border-radius: 0.65rem;
-  padding: 0.85rem 1rem;
-  color: var(--muted);
-}
-.skip {
-  position: absolute;
-  left: -9999px;
-  top: 0;
-  padding: 0.6rem 1rem;
-  background: var(--btn);
-  color: var(--btn-fg);
-  border-radius: 0 0 0.5rem 0;
+  border-radius: var(--radius);
+  padding: 0.8rem 1rem;
   text-decoration: none;
-  z-index: 10;
+  color: var(--fg);
+  font-weight: 650;
 }
-.skip:focus { left: 0; }
+.pick a:hover { border-color: var(--accent); }
+.pick small {
+  display: block;
+  color: var(--muted);
+  font-weight: 400;
+  margin-top: 0.2rem;
+}
+
 @media (max-width: 520px) {
-  table { font-size: 0.85rem; }
-  th, td { padding: 0.45rem 0.3rem; }
-  .at-a-glance th[scope="row"] { width: 42%; }
-  h1 { font-size: 1.6rem; }
+  /* Side by side these buttons are narrower than their labels. */
+  .cta { flex-direction: column; align-items: stretch; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  /* Apex's wildcard, extended to the two pseudo-element branches because that
+     is the only form that actually reaches everything on this host. The named
+     list this replaced missed the summary chevron outright: its transition is
+     declared on summary:not(:has(.chev))::after, and a bare summary::after in
+     the list could not out-specify it. A wildcard cannot be out-specified and
+     !important settles the rest -- but `*` matches elements only, and
+     transition is not an inherited property, so a plain `*` still leaves the
+     generated chevron animating at 0.18s. Measured in Chromium under
+     emulated reduce: `*` alone gives 0.18s on that pseudo-element, and adding
+     *::before, *::after gives 0s. This is the one deliberate departure from
+     apex's copy of this block -- apex has no pseudo-element transition, so the
+     one-liner is sufficient there and the gap never shows. Do not "restore
+     parity" by trimming the two extra branches; that silently puts the
+     chevron back in motion for anyone who asked for less of it. */
+  *,
+  *::before,
+  *::after { transition: none !important; }
 }
