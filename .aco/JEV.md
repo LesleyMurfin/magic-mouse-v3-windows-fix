@@ -20,14 +20,23 @@ AICostOptimizer `packages/jev` is **not** portable into arbitrary target repos.
 
 ## AICostOptimizer TypeSafe Jev commands (when JEV_URL is set)
 
+Build `--state` from real `riley_kg` output:
+
+```text
+State schema: { file: "<path>", symbol_count: N, symbols: [...], caller_count: M, affected_callers: [...] }
+```
+
 ```bash
 # Risk classification
-python3 -m aicostoptimizer jev choice --state '{"repo":"..."}' --question "..." --option A --option B
+python3 -m aicostoptimizer jev choice --transport mock --state "$STATE" --question "Select risk level" --option P0 --option P1 --option P2
 # Safety invariants (require p >= 0.95 before relying on the claim)
-python3 -m aicostoptimizer jev noul --state '{"repo":"..."}' --statement "..."
+python3 -m aicostoptimizer jev noul --transport mock --state "$STATE" --statement "No breaking changes to public APIs"
 # ADR compliance scoring
-python3 -m aicostoptimizer jev score --state '{"repo":"..."}' --question "..." --rubric-name name --rubric-desc desc
+python3 -m aicostoptimizer jev score --transport mock --state "$STATE" --question "Adherence to ADRs" --rubric-name quality --rubric-desc "clean code"
 ```
+
+Use `--transport openrouter` when a live endpoint is configured. On any failure, unset URL, or
+`JEV_DISABLED=1`, continue offline (`jev_used=false`) with local graph / `git` / `rg`.
 
 ## Env sample
 
