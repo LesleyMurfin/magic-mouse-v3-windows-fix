@@ -41,7 +41,7 @@ agents: [RunLayerA, RunLayerB, RunLayerC, RunLayerD]
 
 ---
 
-## Layer A — Kit (Orca fork)
+## Layer A — Kit
 
 | ID | Baseline | Actual | Δ | Verdict |
 |----|----------|--------|---|---------|

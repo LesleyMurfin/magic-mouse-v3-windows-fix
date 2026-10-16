@@ -98,22 +98,19 @@ When EWDK / hardware is unavailable:
 - Frozen versions are one-shot; bump version for new builds.
 - HID / scroll contracts: `v2-kmdf-driver/HID-CONTRACT.md`.
 
-## ACO Triage & Code Graph
+## AICostOptimizer & Code Graph Triage (binding)
 
-Portable ACO maintainer kit under `.aco/` and `.ai/skills/aco-triage/`.
+KMDF/driver context: structural triage prefers C callers under `v2-kmdf-driver/` and
+registry/INF paths under `v1-binary-patch/`. Fail-open to `git`/`rg` when the graph is empty.
 
-### Opening prompt (mandatory)
-
-Every structural triage / PR-review session **MUST** start from:
-
-```text
-.aco/ACO-TRIAGE-PROMPT.txt
-```
-
-### Jev routing (optional, fail-open)
-
-- **When `JEV_URL` is set:** use Jev semantic routing for triage enrichment.
-- **When `JEV_URL` is unset or unreachable:** fail open immediately to local `.aco/graph.db` (if present) and **`git`/`rg` for C** callers / INF references. Never block review on Jev.
+1. **Prompt:** Reference `.aco/ACO-TRIAGE-PROMPT.txt` for structural and semantic analysis.
+2. **Semantic Routing (Jev/Kev):** Active when `JEV_URL` is set:
+   - Risk classification: `python3 -m aicostoptimizer jev choice`
+   - Safety invariants ($p \ge 0.95$): `python3 -m aicostoptimizer jev noul`
+   - ADR compliance scoring: `python3 -m aicostoptimizer jev score`
+3. **Structural Graph:** Uses local `.aco/graph.db` when present; fails open to `git`/`rg` for C/INF if Jev is unset/unreachable or the graph is empty.
+4. **Output Contract:** Every PR review ends with ```json aco-triage-run```.
+5. **Clean repo:** Never commit `.aco/graph.db`.
 
 ### Pre-flight
 
@@ -121,7 +118,7 @@ Every structural triage / PR-review session **MUST** start from:
 python3 .ai/skills/aco-triage/scripts/verify_graceful_degrade.py
 ```
 
-Expect 25/25 PASS on the offline path. Non-zero → fix the verifier/script first; still do not block review on a missing graph.
+Expect PASS on the offline path. Non-zero → fix the verifier/script first; still do not block review on a missing graph.
 
 ### Blast-radius query (conditional, fail-open)
 
@@ -147,8 +144,8 @@ git grep -n "PID_0323\|0x0323"
 
 ### Zero daemons
 
-- No localhost graph/search daemons (including ports commonly used for optional search backends).
-- **Never commit** `.aco/graph.db` (blocked by the ACO gitignore fragment). Indexes are local-only.
+- No localhost graph/search daemons.
+- **Never commit** `.aco/graph.db` (blocked by the ACO gitignore fragment).
 
 ### Output contract (every PR review)
 
@@ -172,7 +169,7 @@ Every ACO triage / PR review **MUST** end with exactly one full machine footer:
   "verification": [{ "command": "InfVerif.exe /v MagicMouseDriver-kmdf-204-scroll.inf", "exit_code": null, "passed": false }],
   "diff_stats": null,
   "residual_risks": ["EWDK/hardware not on agent host → document-only driver validation"],
-  "prompt_version": "1.2.1-quick",
+  "prompt_version": "1.4.0-quick",
   "pr_comment_status": "skipped|posted",
   "pr_comment_urls": []
 }

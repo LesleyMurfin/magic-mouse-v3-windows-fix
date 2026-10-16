@@ -26,13 +26,21 @@ async function selfTest(): Promise<void> {
   check('PROBE_TIMEOUT_MS is 100', PROBE_TIMEOUT_MS === 100)
 
   const disabled = await probeJev({
-    env: { ORCA_JEV_DISABLED: '1', JEV_URL: 'http://127.0.0.1:9' },
+    env: { JEV_DISABLED: '1', JEV_URL: 'http://127.0.0.1:9' },
     fetchImpl: async () => {
       throw new Error('fetch must not run when disabled')
     }
   })
   check('disabled forces reachable=false', disabled.reachable === false)
   check('disabled reason', disabled.reason === 'disabled')
+
+  const legacyDisabled = await probeJev({
+    env: { ORCA_JEV_DISABLED: '1', JEV_URL: 'http://127.0.0.1:9' },
+    fetchImpl: async () => {
+      throw new Error('fetch must not run when legacy-disabled')
+    }
+  })
+  check('legacy ORCA_JEV_DISABLED still honored', legacyDisabled.reason === 'disabled')
 
   const notOpted = await probeJev({
     env: {},

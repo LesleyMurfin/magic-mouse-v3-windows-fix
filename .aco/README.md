@@ -7,9 +7,7 @@ daemon to triage PRs.
 | File | Tracked? | Purpose |
 |------|----------|---------|
 | `README.md` | yes | This file |
-| `ACO-TRIAGE-PROMPT.txt` | yes | Opening prompt for structural triage |
-| `JEV.md` | yes (optional) | Jev fail-open contract |
-| `jev.env.sample` | yes (optional) | Sample `JEV_URL` env |
+| `ACO-TRIAGE-PROMPT.txt` | yes | Binding triage prompt + AICostOptimizer routing |
 | `graph.db` | **no** | SQLite AST / symbol graph (`riley_kg`) |
 | `graph.db-wal` / `graph.db-shm` | **no** | SQLite runtime sidecars during sync |
 | `graph.json` | **no** | Optional export / debug dump |
@@ -19,9 +17,10 @@ daemon to triage PRs.
 
 1. **Structural triage** (blast radius, callers, symbols) always reads
    `.aco/graph.db` via `riley_kg`. No network hop.
-2. **Jev / XERJ** enrichment is **optional** and **fail-open**.
-   **Jev is enabled whenever `JEV_URL` is set.** Unset / empty / unreachable
-   `JEV_URL` → local-only success (`.aco/graph.db`, then git/rg).
+2. **Jev / XERJ** enrichment is **optional** and **fail-open**. When `JEV_URL`
+   is set, route via AICostOptimizer (`python3 -m aicostoptimizer jev {choice,score,noul}`).
+   Unset or unreachable URLs → local-only success. Optional force-offline:
+   `JEV_DISABLED=1`.
 3. **Do not commit** `graph.db` (≈200MB+) to `main`. GitHub’s blob limit is
    100MB; the CI workflow publishes Release assets instead.
 
@@ -51,7 +50,8 @@ push-to-main trigger stays commented so a fork merge cannot surprise-bill CI).
 Requires `riley_kg` on `PYTHONPATH` (or installed):
 
 ```bash
-export PYTHONPATH="${RILEY_KG_PYTHONPATH:-${RILEY_KG_ROOT:-}}${PYTHONPATH:+:$PYTHONPATH}"
+# hardpath-ok — example lab path only; use your own checkout
+export PYTHONPATH="${RILEY_KG_PYTHONPATH:-/data/projects/agents}${PYTHONPATH:+:$PYTHONPATH}"  # hardpath-ok
 
 python3 -m riley_kg.cli init --path . --repo owner/name --out-dir .aco
 python3 -m riley_kg.cli sync --path . --db .aco/graph.db
@@ -63,13 +63,19 @@ Prefer the CI artifact for day-to-day contributor work.
 ## Smoke commands
 
 ```bash
-# Offline graceful-degrade gate (M2) — no JEV_URL required
-python3 .ai/skills/aco-triage/scripts/verify_graceful_degrade.py
+# Offline graceful-degrade gate (M2)
+JEV_DISABLED=1 python3 .ai/skills/aco-triage/scripts/verify_graceful_degrade.py
 python3 .ai/skills/aco-triage/tests/test_graceful_degrade_smoke.py
 
-# Structural query once graph.db exists
-python3 -m riley_kg.cli blast-radius --db .aco/graph.db <path-or-symbol>
+# Structural query once graph.db exists (M1 acceptance target: well under a few seconds)
+python3 -m riley_kg.cli blast-radius --db .aco/graph.db src/main/ipc/app.ts
+
+# Semantic routing when JEV_URL is set
+python3 -m aicostoptimizer jev choice --state '{"repo":"..."}' --question "..." --option A --option B
+python3 -m aicostoptimizer jev noul --state '{"repo":"..."}' --statement "..."
+python3 -m aicostoptimizer jev score --state '{"repo":"..."}' --question "..." --rubric-name n --rubric-desc d
 ```
 
 Related skill: `.ai/skills/aco-triage/`. Optional probe hook:
-`.ai/hooks/pre/jev-probe.ts` (≤100ms, fail-open).
+`.ai/hooks/pre/jev-probe.ts` (≤100ms, fail-open). Binding prompt:
+`.aco/ACO-TRIAGE-PROMPT.txt`.

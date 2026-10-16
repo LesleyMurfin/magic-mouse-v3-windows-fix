@@ -3,7 +3,8 @@
 Asserts:
   1. Offline / local-only path works with no network dependency.
   2. Optional Jev/XERJ path is NOT required (unset URLs ⇒ success).
-  3. ORCA_JEV_DISABLED=1 forces local-only without failing triage setup.
+  3. JEV_DISABLED=1 forces local-only without failing triage setup
+     (legacy ORCA_JEV_DISABLED still honored).
   4. Baseline DB path resolves relative to repo (zero-daemon .aco/graph.db).
 
 No daemon is started. No live Jev connection is required.
@@ -11,7 +12,7 @@ No daemon is started. No live Jev connection is required.
 Usage:
   python3 .ai/skills/aco-triage/scripts/verify_graceful_degrade.py
   python3 .ai/skills/aco-triage/scripts/verify_graceful_degrade.py --offline-only
-  ORCA_JEV_DISABLED=1 python3 .ai/skills/aco-triage/scripts/verify_graceful_degrade.py
+  JEV_DISABLED=1 python3 .ai/skills/aco-triage/scripts/verify_graceful_degrade.py
 """
 
 from __future__ import annotations
@@ -34,6 +35,9 @@ SKILL = REPO_ROOT / ".ai" / "skills" / "aco-triage" / "SKILL.md"
 PASS = 0
 FAIL = 0
 
+DISABLE_KEYS = ("JEV_DISABLED", "ORCA_JEV_DISABLED")
+TRUTHY = frozenset({"1", "true", "yes", "on"})
+
 
 def check(label: str, ok: bool, detail: str = "") -> None:
     global PASS, FAIL
@@ -55,6 +59,18 @@ def assert_no_listener(host: str, port: int) -> bool:
         return True
 
 
+def _disabled_value(env: dict[str, str] | os._Environ) -> str:
+    for key in DISABLE_KEYS:
+        raw = str(env.get(key, "")).strip().lower()
+        if raw:
+            return raw
+    return ""
+
+
+def is_disabled(env: dict[str, str] | os._Environ) -> bool:
+    return _disabled_value(env) in TRUTHY
+
+
 def check_skill_contract() -> None:
     text = SKILL.read_text(encoding="utf-8")
     check("skill file exists", SKILL.is_file())
@@ -63,12 +79,19 @@ def check_skill_contract() -> None:
         "skill says optional Jev", "optional" in text.lower() and "jev" in text.lower()
     )
     check("skill requires local graph.db", ".aco/graph.db" in text)
-    check("skill documents ORCA_JEV_DISABLED", "ORCA_JEV_DISABLED" in text)
+    check(
+        "skill documents JEV_DISABLED",
+        "JEV_DISABLED" in text,
+    )
     check("skill documents blast-radius", "blast-radius" in text)
     check("skill documents callers", "callers" in text)
     check(
         "skill says no daemon required",
         "no daemon" in text.lower() or "zero-daemon" in text.lower(),
+    )
+    check(
+        "skill documents AICostOptimizer jev routing",
+        "aicostoptimizer" in text.lower() and "jev choice" in text.lower(),
     )
 
 
@@ -80,7 +103,11 @@ def check_hook_contract() -> None:
         "hook fail-open language",
         "fail-open" in text.lower() or "fail open" in text.lower(),
     )
-    check("hook honors ORCA_JEV_DISABLED", "ORCA_JEV_DISABLED" in text)
+    check("hook honors JEV_DISABLED", "JEV_DISABLED" in text)
+    check(
+        "hook keeps legacy ORCA_JEV_DISABLED fallback",
+        "ORCA_JEV_DISABLED" in text,
+    )
     check("hook reads JEV_URL or XERJ_URL", "JEV_URL" in text and "XERJ_URL" in text)
     check(
         "hook never blocks session",
@@ -93,12 +120,11 @@ def check_offline_env_isolation() -> None:
     env = {
         k: v
         for k, v in os.environ.items()
-        if k not in {"JEV_URL", "XERJ_URL", "ORCA_JEV_DISABLED"}
+        if k not in {"JEV_URL", "XERJ_URL", *DISABLE_KEYS}
     }
-    disabled = env.get("ORCA_JEV_DISABLED", "")
     jev = env.get("JEV_URL", "")
     xerj = env.get("XERJ_URL", "")
-    local_only = disabled in {"1", "true", "yes", "on"} or (not jev and not xerj)
+    local_only = is_disabled(env) or (not jev and not xerj)
     check("contributor env without Jev URLs ⇒ local-only", local_only is True)
     check(
         "optional path not required (no JEV_URL/XERJ_URL)",
@@ -107,15 +133,21 @@ def check_offline_env_isolation() -> None:
 
 
 def check_disabled_flag() -> None:
+    current = _disabled_value(os.environ)
     check(
-        "ORCA_JEV_DISABLED posture is valid",
-        os.environ.get("ORCA_JEV_DISABLED", "")
-        in {"", "0", "false", "1", "true", "yes", "on"},
+        "JEV_DISABLED posture is valid",
+        current in {"", "0", "false", *TRUTHY},
     )
-    forced = {**os.environ, "ORCA_JEV_DISABLED": "1"}
+    forced = {**os.environ, "JEV_DISABLED": "1"}
     check(
         "forced disable does not require network",
-        forced.get("ORCA_JEV_DISABLED") == "1",
+        is_disabled(forced),
+    )
+    legacy = {**os.environ, "ORCA_JEV_DISABLED": "1"}
+    legacy.pop("JEV_DISABLED", None)
+    check(
+        "legacy ORCA_JEV_DISABLED still forces offline",
+        is_disabled(legacy),
     )
 
 
@@ -181,8 +213,15 @@ def check_hook_self_test(offline_only: bool) -> None:
         "--no-warnings",
         str(HOOK_SELF_TEST),
     ]
-    env = {k: v for k, v in os.environ.items() if k not in {"JEV_URL", "XERJ_URL"}}
-    env["ORCA_JEV_DISABLED"] = os.environ.get("ORCA_JEV_DISABLED", "")
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in {"JEV_URL", "XERJ_URL", *DISABLE_KEYS}
+    }
+    # Preserve explicit disable flags if the caller set them.
+    for key in DISABLE_KEYS:
+        if key in os.environ:
+            env[key] = os.environ[key]
     started = time.monotonic()
     try:
         proc = subprocess.run(
@@ -221,6 +260,7 @@ def main() -> int:
 
     print("aco-triage graceful-degrade verification")
     print(f"  repo: {REPO_ROOT}")
+    print(f"  JEV_DISABLED={os.environ.get('JEV_DISABLED', '')!r}")
     print(f"  ORCA_JEV_DISABLED={os.environ.get('ORCA_JEV_DISABLED', '')!r}")
     print(
         f"  JEV_URL set={bool(os.environ.get('JEV_URL'))} "
@@ -239,11 +279,9 @@ def main() -> int:
     print()
     print(f"passed={PASS} failed={FAIL}")
     if FAIL:
-        print("RESULT: FAIL — graceful degrade contract broken")
+        print("RESULT: FAIL")
         return 1
-    print(
-        "RESULT: PASS — offline path works; optional Jev not required; no daemon required"
-    )
+    print("RESULT: PASS — optional Jev not required; fail-open local path OK")
     return 0
 
 

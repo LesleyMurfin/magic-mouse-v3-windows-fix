@@ -5,8 +5,8 @@ description: >-
   `.aco/graph.db` via riley_kg for blast-radius and callers. Optional Jev/XERJ
   semantic enrichment is fail-open and NEVER required for contributors. Use when
   triaging PRs, checking blast radius, finding callers, or routing structural vs
-  semantic queries against the Orca graph.
-version: 0.1.0
+  semantic queries via AICostOptimizer.
+version: 0.2.0
 ---
 
 # /aco-triage — ACO Maintainer Kit (Zero-Daemon Baseline)
@@ -17,17 +17,17 @@ version: 0.1.0
 |------|---------|
 | **Baseline** | Local SQLite `.aco/graph.db` via `riley_kg`. **No daemon required.** |
 | **Jev/XERJ** | **OPTIONAL** and **fail-open**. Contributors MUST complete triage without it. |
-| **Opt-in** | Enrichment only when explicitly opted-in AND the pre-probe reports reachable. |
-| **Disable** | `ORCA_JEV_DISABLED=1` (or unset URLs) forces pure local path. |
+| **Opt-in** | Enrichment only when `JEV_URL` is set AND the pre-probe reports reachable. |
+| **Disable** | `JEV_DISABLED=1` (or legacy `ORCA_JEV_DISABLED=1`, or unset URLs) forces pure local path. |
 | **No hardpaths** | Resolve DB relative to repo root (`.aco/graph.db`). No `/home/...` without `# hardpath-ok`. |
-| **Upstream** | Do NOT push active Jev endpoints or maintainer secrets to `stablyai/orca`. |
+| **Secrets** | Do NOT push active Jev endpoints or maintainer secrets to public remotes. |
 
 ## Purpose
 
 Give maintainers and agents a single triage path that:
 
 1. Always answers **structural** questions (blast radius, callers, symbols) from the local graph.
-2. **May** enrich with **semantic** memory (`/_memory`) when Jev/XERJ is opted-in and up.
+2. **May** enrich with **semantic** memory via AICostOptimizer Jev when `JEV_URL` is set and up.
 3. **Never** blocks, times out, or fails a session because Jev is down, firewalled, or absent.
 
 ## Routing
@@ -43,26 +43,36 @@ Give maintainers and agents a single triage path that:
    (always local)                            (optional only)
               │                                       │
               ▼                                       ▼
-   riley_kg → .aco/graph.db              JEV_URL/XERJ_URL /_memory
-                                         only if opted-in + reachable
+   riley_kg → .aco/graph.db              AICostOptimizer jev
+                                         choice / noul / score
+                                         only if JEV_URL set + reachable
                                          else → local-only + note
 ```
 
 - **Structural** (blast-radius, callers, symbol extract): **always** `riley_kg` + `.aco/graph.db`.
-- **Semantic** (historical ADR text, free-form memory): try Jev **only** when:
-  - `ORCA_JEV_DISABLED` is unset/false, **and**
+- **Semantic** (risk class, safety invariants, ADR score): try Jev **only** when:
+  - `JEV_DISABLED` / `ORCA_JEV_DISABLED` is unset/false, **and**
   - `JEV_URL` or `XERJ_URL` is set (opt-in), **and**
   - `.ai/hooks/pre/jev-probe.ts` last probe reported `reachable: true`.
 - If any of those fail → continue on local graph and emit a one-line note:
   `ACO: Jev enrichment skipped (fail-open); using .aco/graph.db only`.
 
+## AICostOptimizer Jev commands (when JEV_URL is set)
+
+```bash
+python3 -m aicostoptimizer jev choice   # risk classification
+python3 -m aicostoptimizer jev noul     # safety invariants (p ≥ 0.95)
+python3 -m aicostoptimizer jev score    # ADR compliance scoring
+```
+
 ## Environment
 
 | Variable | Role | Default |
 |----------|------|---------|
-| `ORCA_JEV_DISABLED` | Force offline / local-only | unset (but still fail-open) |
-| `JEV_URL` | Optional Jev base URL (opt-in) | unset → no enrichment |
+| `JEV_URL` | Optional Jev base URL — when set, routing is active | unset → no enrichment |
 | `XERJ_URL` | Optional XERJ base URL (opt-in) | unset → no enrichment |
+| `JEV_DISABLED` | Force offline / local-only | unset (fail-open) |
+| `ORCA_JEV_DISABLED` | Legacy alias for `JEV_DISABLED` | unset |
 | `ACO_GRAPH_DB` | Override path to graph DB | `.aco/graph.db` |
 | `RILEY_KG_PYTHONPATH` | Parent of the `riley_kg` package | unset → rely on env/`PYTHONPATH` |
 
@@ -99,9 +109,9 @@ Missing graph is a **setup** error (fetch artifact or run init/sync). It is **no
 ### Step 2 — Honor disable / probe (fail-open)
 
 ```bash
-# Forced local-only
-if [ "${ORCA_JEV_DISABLED:-}" = "1" ]; then
-  echo "ACO: ORCA_JEV_DISABLED=1 — local .aco/graph.db only"
+# Forced local-only (JEV_DISABLED preferred; ORCA_JEV_DISABLED legacy)
+if [ "${JEV_DISABLED:-${ORCA_JEV_DISABLED:-}}" = "1" ]; then
+  echo "ACO: JEV_DISABLED=1 — local .aco/graph.db only"
 fi
 
 # Optional pre-flight (never blocks). Prefer the TS hook in-session;
@@ -129,10 +139,12 @@ Acceptance target (M1): blast-radius for a hot path should return in well under 
 
 ### Step 4 — Optional semantic enrichment (never required)
 
-Only when Step 2 reported reachable **and** the user/agent explicitly wants semantic memory:
+Only when Step 2 reported reachable **and** the user/agent explicitly wants semantic routing:
 
-```text
-GET ${JEV_URL}/_memory?q=<url-encoded question>   # example shape; maintainer-local
+```bash
+python3 -m aicostoptimizer jev choice
+python3 -m aicostoptimizer jev noul
+python3 -m aicostoptimizer jev score
 ```
 
 Rules:
@@ -148,7 +160,7 @@ Always include:
 
 1. Structural answer from `.aco/graph.db` (or explicit missing-DB error).
 2. Enrichment status: `local-only` | `jev-enriched` | `jev-skipped-fail-open`.
-3. DB path used and whether `ORCA_JEV_DISABLED` was set.
+3. DB path used and whether `JEV_DISABLED` was set.
 
 ## Commands (cheat sheet)
 
@@ -157,8 +169,8 @@ Always include:
 python3 -m riley_kg.cli blast-radius --db .aco/graph.db src/main/ipc/app.ts
 python3 -m riley_kg.cli callers --db .aco/graph.db MySymbol
 
-# Forced offline (acceptance: ORCA_JEV_DISABLED=1 must still succeed)
-ORCA_JEV_DISABLED=1 python3 .ai/skills/aco-triage/scripts/verify_graceful_degrade.py
+# Forced offline (acceptance: JEV_DISABLED=1 must still succeed)
+JEV_DISABLED=1 python3 .ai/skills/aco-triage/scripts/verify_graceful_degrade.py
 
 # Optional probe only (does not fail the process on unreachable)
 node --experimental-strip-types --no-warnings .ai/hooks/pre/jev-probe.self-test.ts
@@ -172,14 +184,14 @@ python3 .ai/skills/aco-triage/scripts/verify_graceful_degrade.py
 
 The verifier asserts:
 
-- Offline path works with no network and with `ORCA_JEV_DISABLED=1`.
+- Offline path works with no network and with `JEV_DISABLED=1`.
 - Optional Jev path is not required (unset URLs ⇒ local-only success).
 - Probe helper is fail-open under absurd URLs / tiny timeouts.
 
 ## Non-goals
 
 - Replacing `eve_smoke` or other memory indices.
-- Shipping production XERJ endpoints in public Orca.
+- Shipping production XERJ endpoints in public remotes.
 - Requiring full-repo AST rebuild on every contributor clone (CI artifact is preferred).
 
 ## Feedback
