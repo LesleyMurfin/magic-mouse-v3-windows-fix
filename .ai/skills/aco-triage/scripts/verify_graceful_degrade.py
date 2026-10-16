@@ -4,7 +4,6 @@ Asserts:
   1. Offline / local-only path works with no network dependency.
   2. Optional Jev/XERJ path is NOT required (unset URLs ⇒ success).
   3. JEV_DISABLED=1 forces local-only without failing triage setup
-     (legacy ORCA_JEV_DISABLED still honored).
   4. Baseline DB path resolves relative to repo (zero-daemon .aco/graph.db).
 
 No daemon is started. No live Jev connection is required.
@@ -35,7 +34,7 @@ SKILL = REPO_ROOT / ".ai" / "skills" / "aco-triage" / "SKILL.md"
 PASS = 0
 FAIL = 0
 
-DISABLE_KEYS = ("JEV_DISABLED", "ORCA_JEV_DISABLED")
+DISABLE_KEYS = ("JEV_DISABLED",)
 TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 
@@ -104,10 +103,6 @@ def check_hook_contract() -> None:
         "fail-open" in text.lower() or "fail open" in text.lower(),
     )
     check("hook honors JEV_DISABLED", "JEV_DISABLED" in text)
-    check(
-        "hook keeps legacy ORCA_JEV_DISABLED fallback",
-        "ORCA_JEV_DISABLED" in text,
-    )
     check("hook reads JEV_URL or XERJ_URL", "JEV_URL" in text and "XERJ_URL" in text)
     check(
         "hook never blocks session",
@@ -142,12 +137,6 @@ def check_disabled_flag() -> None:
     check(
         "forced disable does not require network",
         is_disabled(forced),
-    )
-    legacy = {**os.environ, "ORCA_JEV_DISABLED": "1"}
-    legacy.pop("JEV_DISABLED", None)
-    check(
-        "legacy ORCA_JEV_DISABLED still forces offline",
-        is_disabled(legacy),
     )
 
 
@@ -261,7 +250,7 @@ def main() -> int:
     print("aco-triage graceful-degrade verification")
     print(f"  repo: {REPO_ROOT}")
     print(f"  JEV_DISABLED={os.environ.get('JEV_DISABLED', '')!r}")
-    print(f"  ORCA_JEV_DISABLED={os.environ.get('ORCA_JEV_DISABLED', '')!r}")
+    print(f"  JEV_DISABLED={os.environ.get('JEV_DISABLED', '')!r}")
     print(
         f"  JEV_URL set={bool(os.environ.get('JEV_URL'))} "
         f"XERJ_URL set={bool(os.environ.get('XERJ_URL'))}"

@@ -105,9 +105,10 @@ registry/INF paths under `v1-binary-patch/`. Fail-open to `git`/`rg` when the gr
 
 1. **Prompt:** Reference `.aco/ACO-TRIAGE-PROMPT.txt` for structural and semantic analysis.
 2. **Semantic Routing (Jev/Kev):** Active when `JEV_URL` is set:
-   - Risk classification: `python3 -m aicostoptimizer jev choice`
-   - Safety invariants ($p \ge 0.95$): `python3 -m aicostoptimizer jev noul`
-   - ADR compliance scoring: `python3 -m aicostoptimizer jev score`
+   - Risk classification: `python3 -m aicostoptimizer jev choice --state ... --question ...`
+   - Safety invariants ($p \ge 0.95$): `python3 -m aicostoptimizer jev noul --state ... --statement ...`
+   - ADR compliance scoring: `python3 -m aicostoptimizer jev score --state ... --question ...`
+   - Fail-open if `JEV_URL` unset/unreachable → local `.aco/graph.db` + `git`/`rg` for C/INF. Optional: `JEV_DISABLED=1`.
 3. **Structural Graph:** Uses local `.aco/graph.db` when present; fails open to `git`/`rg` for C/INF if Jev is unset/unreachable or the graph is empty.
 4. **Output Contract:** Every PR review ends with ```json aco-triage-run```.
 5. **Clean repo:** Never commit `.aco/graph.db`.
