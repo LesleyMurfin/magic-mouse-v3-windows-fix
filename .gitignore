@@ -61,5 +61,19 @@ env/
 *~
 
 # Local research and agent working notes — private, never pushed
+# `.ai/` blanket would block the ACO maintainer kit; keep research private but
+# track skills + jev-probe hooks (same pattern as magic-tray validators).
 docs/research/
-.ai/
+.ai/*
+!.ai/skills/
+!.ai/hooks/
+
+# ACO-KIT-BEGIN
+# Track .aco/README.md; never commit the SQLite index or sync logs.
+.aco/graph.db
+.aco/graph.db-*
+.aco/graph.db-wal
+.aco/graph.db-shm
+.aco/graph.json
+.aco/manifest.json
+# ACO-KIT-END
