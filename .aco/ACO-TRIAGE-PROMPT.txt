@@ -1,16 +1,23 @@
-ACO structural triage — THIS workspace only. Offline-first. prompt_version=1.2.1-quick.
+ACO structural triage — THIS workspace only. Offline-first. prompt_version=1.4.0-quick.
 
-FULL SPEC (private lab; do not paste bare raw.githubusercontent.com URLs):
-blob: LesleyMurfin/revive_labs @ ai/prd-aco-maintainer-kit → orca/prd/106/ (lab path may vary)
+FULL SPEC (private repo — no bare raw.githubusercontent.com):
+blob: LesleyMurfin/revive_labs @ ai/prd-aco-maintainer-kit → prd/106 kit
+lab worktree: /data/projects/.worktrees/revive_labs-prd-aco-maintainer-kit
 Schema/CLI: triage-runs/ · scripts/aco_triage_run.py · scripts/aco_triage_pr_comment.py
-Merge home: LesleyMurfin/revive_labs. Not third-party upstream forks.
+Merge home: LesleyMurfin/revive_labs (PR #1166).
 
 RULES
-1) Stay in workspace root. No upstream merge. No daemons (:9200/:8009). Jev is optional.
-2) Jev is enabled whenever JEV_URL is set. If JEV_URL is unset or unreachable → fail-open to local .aco/graph.db (when present), then git/rg.
-3) Do not commit .aco/graph.db. Smallest safe diff. Evidence for every caller/blast claim (CLI/rg).
-4) If a PR is in scope: MUST gh pr comment summary + P0/P1 requested-change checklist (or line comments). Chat-only is insufficient.
-5) ALWAYS end with a full ```json aco-triage-run``` object (every required field filled). No partial footers. Chat narrative alone is not enough for ingest.
+1) Stay in workspace root. No daemons (:9200/:8009). Jev never required for structural triage.
+2) Do not commit .aco/graph.db. Smallest safe diff. Evidence for every caller/blast claim (CLI/rg).
+3) If a PR is in scope: MUST gh pr comment summary + P0/P1 requested-change checklist (or line comments). Chat-only is insufficient.
+4) ALWAYS end with a full ```json aco-triage-run``` object (every required field filled). No partial footers. Chat narrative alone is not enough for ingest.
+
+AICostOptimizer TypeSafe Jev Routing:
+- Risk classification: `python3 -m aicostoptimizer jev choice --state ... --question ...`
+- Safety invariants: `python3 -m aicostoptimizer jev noul --state ... --statement ...` (p >= 0.95)
+- ADR compliance: `python3 -m aicostoptimizer jev score --state ... --question ...`
+- Fail-open: if JEV_URL is unset or unreachable, fall back to local .aco/graph.db and git/rg.
+- Optional override to force offline: JEV_DISABLED=1.
 
 TOOLING / GRAPH FAIL-OPEN
 - PYTHONPATH=${RILEY_KG_ROOT:-$ACO_RILEY_KG_ROOT}; python3 -m riley_kg.cli --help
@@ -20,10 +27,9 @@ TOOLING / GRAPH FAIL-OPEN
   → In JSON: graph.present=false (or true+node_count=0), metrics.graph_used=false, blast_radius[].method="rg", residual_risks note the timeout/empty.
   → Do NOT omit the JSON footer because the graph failed.
 - Missing graph tooling ⇒ same fail-open; tooling.riley_kg_ok=false.
-- Jev unset/unreachable ⇒ tooling.jev_used=false; continue local triage.
 
 WORKFLOW
-0) Fingerprint: root, branch, short SHA, git status -sb, graph present?, JEV_URL set?
+0) Fingerprint: root, branch, short SHA, git status -sb, graph present?
 1) Targets: user paths/PR else diff vs main, ≤15 files.
 2) Top risks: blast-radius if graph usable; else rg. Cap graph wait; fail-open on stall.
 3) Rank P0/P1/P2. Patch only if asked or clear safe P0; run tight tests.
@@ -37,8 +43,8 @@ OUTPUT (chat)
 
 FINAL BLOCK (mandatory, exactly one, last in reply — full object, not a stub):
 ```json aco-triage-run
-{"schema_version":"aco-triage-run/v1","run_id":"<slug-date>","timestamp":"<ISO-Z>","workspace_root":"<pwd>","branch":"<branch>","head_sha":"<sha>","pr_ref":"<owner/repo#N|null>","graph":{"present":false,"db_path":null,"node_count":0,"edge_count":0,"scoped":true,"build_seconds":null},"tooling":{"riley_kg_ok":false,"jev_used":false,"pythonpath":null},"targets":[{"path":"...","reason":"..."}],"blast_radius":[{"path":"...","symbols":null,"callers":null,"latency_ms":null,"method":"rg"}],"findings":[{"id":"F1","severity":"P0|P1|P2|OK","title":"...","path":"...","evidence":"...","patch_summary":null}],"verification":[{"command":"...","exit_code":0,"passed":true}],"diff_stats":null,"residual_risks":["graph timeout empty → rg only"],"prompt_version":"1.2.1-quick","pr_comment_status":"skipped|posted","pr_comment_urls":[]}
+{"schema_version":"aco-triage-run/v1","run_id":"<slug-date>","timestamp":"<ISO-Z>","workspace_root":"<pwd>","branch":"<branch>","head_sha":"<sha>","pr_ref":"<owner/repo#N|null>","graph":{"present":false,"db_path":null,"node_count":0,"edge_count":0,"scoped":true,"build_seconds":null},"tooling":{"riley_kg_ok":false,"jev_used":false,"pythonpath":null},"targets":[{"path":"...","reason":"..."}],"blast_radius":[{"path":"...","symbols":null,"callers":null,"latency_ms":null,"method":"rg"}],"findings":[{"id":"F1","severity":"P0|P1|P2|OK","title":"...","path":"...","evidence":"...","patch_summary":null}],"verification":[{"command":"...","exit_code":0,"passed":true}],"diff_stats":null,"residual_risks":["graph timeout empty → rg only"],"prompt_version":"1.4.0-quick","pr_comment_status":"skipped|posted","pr_comment_urls":[]}
 ```
 Populate from the real run (counts must match Findings). Maintainer: from-markdown → ingest → summary; aco_triage_pr_comment.py --post if needed.
 
-Doctrine: graph + tests dispose when present; empty graph never blocks triage or the JSON log. Jev enriches when JEV_URL is reachable; never required.
+Doctrine: graph + tests dispose when present; empty graph never blocks triage or the JSON log.

@@ -1,7 +1,7 @@
 // jev-probe — PRD-0106 M2 graceful-degradation pre-hook (OMP hooks/pre).
 // Fail-open optional Jev/XERJ probe (<100ms). Structural triage always uses
-// local `.aco/graph.db`. Opt-in via JEV_URL/XERJ_URL; ORCA_JEV_DISABLED=1 forces
-// local-only. OMP loads default export from hooks/pre/*.ts.
+// local `.aco/graph.db`. Active when JEV_URL/XERJ_URL set; JEV_DISABLED=1
+// forces local-only (legacy ORCA_JEV_DISABLED honored). OMP loads default export from hooks/pre/*.ts.
 // SELF-TEST: node --experimental-strip-types --no-warnings .ai/hooks/pre/jev-probe.self-test.ts
 
 export const PROBE_TIMEOUT_MS = 100
@@ -51,7 +51,8 @@ export function resolveJevBaseUrl(env: NodeJS.ProcessEnv = process.env): string 
 }
 
 export function isJevDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return TRUTHY.has((env.ORCA_JEV_DISABLED ?? '').trim().toLowerCase())
+  const raw = (env.JEV_DISABLED ?? env.ORCA_JEV_DISABLED ?? '').trim().toLowerCase()
+  return TRUTHY.has(raw)
 }
 
 export function makeResult(

@@ -29,8 +29,12 @@ class GracefulDegradeSmoke(unittest.TestCase):
 
     def test_offline_path_without_network_env(self) -> None:
         """Unset Jev URLs + explicit disable must still pass verification."""
-        env = {k: v for k, v in os.environ.items() if k not in {"JEV_URL", "XERJ_URL"}}
-        env["ORCA_JEV_DISABLED"] = "1"
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in {"JEV_URL", "XERJ_URL", "ORCA_JEV_DISABLED", "JEV_DISABLED"}
+        }
+        env["JEV_DISABLED"] = "1"
         # Drop proxy vars so nothing accidental reaches the network.
         for k in list(env):
             if k.lower().endswith("_proxy"):
@@ -55,7 +59,7 @@ class GracefulDegradeSmoke(unittest.TestCase):
         env = {
             k: v
             for k, v in os.environ.items()
-            if k not in {"JEV_URL", "XERJ_URL", "ORCA_JEV_DISABLED"}
+            if k not in {"JEV_URL", "XERJ_URL", "ORCA_JEV_DISABLED", "JEV_DISABLED"}
         }
         proc = subprocess.run(
             [sys.executable, str(VERIFY), "--offline-only"],
@@ -74,6 +78,8 @@ class GracefulDegradeSmoke(unittest.TestCase):
         self.assertIn("fail-open", text)
         self.assertIn("optional", text)
         self.assertIn("no daemon", text.replace("zero-daemon", "no daemon"))
+        self.assertIn("aicostoptimizer", text)
+        self.assertIn("jev_disabled", text)
 
 
 if __name__ == "__main__":
