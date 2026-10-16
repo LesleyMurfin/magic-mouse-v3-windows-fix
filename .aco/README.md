@@ -70,10 +70,12 @@ python3 .ai/skills/aco-triage/tests/test_graceful_degrade_smoke.py
 # Structural query once graph.db exists (M1 acceptance target: well under a few seconds)
 python3 -m riley_kg.cli blast-radius --db .aco/graph.db src/main/ipc/app.ts
 
-# Semantic routing when JEV_URL is set
-python3 -m aicostoptimizer jev choice --state '{"repo":"..."}' --question "..." --option A --option B
-python3 -m aicostoptimizer jev noul --state '{"repo":"..."}' --statement "..."
-python3 -m aicostoptimizer jev score --state '{"repo":"..."}' --question "..." --rubric-name n --rubric-desc d
+# Semantic routing — STATE from riley_kg:
+# { file, symbol_count, symbols[], caller_count, affected_callers[] }
+STATE='{"file":"BatteryAlertPolicy.cs","symbol_count":20,"symbols":[],"caller_count":8,"affected_callers":[]}'
+python3 -m aicostoptimizer jev choice --transport mock --state "$STATE" --question "Select risk level" --option P0 --option P1 --option P2
+python3 -m aicostoptimizer jev noul --transport mock --state "$STATE" --statement "No breaking changes to public APIs"
+python3 -m aicostoptimizer jev score --transport mock --state "$STATE" --question "Adherence to ADRs" --rubric-name quality --rubric-desc "clean code"
 ```
 
 Related skill: `.ai/skills/aco-triage/`. Optional probe hook:

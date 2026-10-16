@@ -12,11 +12,15 @@ RULES
 3) If a PR is in scope: MUST gh pr comment summary + P0/P1 requested-change checklist (or line comments). Chat-only is insufficient.
 4) ALWAYS end with a full ```json aco-triage-run``` object (every required field filled). No partial footers. Chat narrative alone is not enough for ingest.
 
-AICostOptimizer TypeSafe Jev Routing:
-- Risk classification: `python3 -m aicostoptimizer jev choice --state ... --question ...`
-- Safety invariants: `python3 -m aicostoptimizer jev noul --state ... --statement ...` (p >= 0.95)
-- ADR compliance: `python3 -m aicostoptimizer jev score --state ... --question ...`
-- Fail-open: if JEV_URL is unset or unreachable, fall back to local .aco/graph.db and git/rg.
+AICostOptimizer TypeSafe Jev Routing (fail-open):
+- Build STATE from real riley_kg blast-radius / callers output (JSON object):
+  State schema: { file: "<path>", symbol_count: N, symbols: [...], caller_count: M, affected_callers: [...] }
+- Export: STATE="$(python3 -c 'import json,sys; print(json.dumps(...))')"  # fill from graph or rg
+- Risk choice: `python3 -m aicostoptimizer jev choice --transport mock --state "$STATE" --question "Select risk level" --option P0 --option P1 --option P2`
+- Safety noul: `python3 -m aicostoptimizer jev noul --transport mock --state "$STATE" --statement "No breaking changes to public APIs"`
+- ADR score: `python3 -m aicostoptimizer jev score --transport mock --state "$STATE" --question "Adherence to ADRs" --rubric-name quality --rubric-desc "clean code"`
+- Live transport: replace `--transport mock` with `--transport openrouter` when JEV_URL is set.
+- Fail-open: if Jev is unset/unreachable or command errors, continue with local .aco/graph.db + git/rg; set tooling.jev_used=false and exit 0 for triage.
 - Optional override to force offline: JEV_DISABLED=1.
 
 TOOLING / GRAPH FAIL-OPEN
