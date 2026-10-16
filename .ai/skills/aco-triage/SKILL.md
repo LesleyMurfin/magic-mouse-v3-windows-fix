@@ -18,7 +18,7 @@ version: 0.2.0
 | **Baseline** | Local SQLite `.aco/graph.db` via `riley_kg`. **No daemon required.** |
 | **Jev/XERJ** | **OPTIONAL** and **fail-open**. Contributors MUST complete triage without it. |
 | **Opt-in** | Enrichment only when `JEV_URL` is set AND the pre-probe reports reachable. |
-| **Disable** | `JEV_DISABLED=1` (or legacy `ORCA_JEV_DISABLED=1`, or unset URLs) forces pure local path. |
+| **Disable** | `JEV_DISABLED=1` (or unset URLs) forces pure local path. |
 | **No hardpaths** | Resolve DB relative to repo root (`.aco/graph.db`). No `/home/...` without `# hardpath-ok`. |
 | **Secrets** | Do NOT push active Jev endpoints or maintainer secrets to public remotes. |
 
@@ -51,7 +51,7 @@ Give maintainers and agents a single triage path that:
 
 - **Structural** (blast-radius, callers, symbol extract): **always** `riley_kg` + `.aco/graph.db`.
 - **Semantic** (risk class, safety invariants, ADR score): try Jev **only** when:
-  - `JEV_DISABLED` / `ORCA_JEV_DISABLED` is unset/false, **and**
+  - `JEV_DISABLED` is unset/false, **and**
   - `JEV_URL` or `XERJ_URL` is set (opt-in), **and**
   - `.ai/hooks/pre/jev-probe.ts` last probe reported `reachable: true`.
 - If any of those fail → continue on local graph and emit a one-line note:
@@ -72,7 +72,6 @@ python3 -m aicostoptimizer jev score    # ADR compliance scoring
 | `JEV_URL` | Optional Jev base URL — when set, routing is active | unset → no enrichment |
 | `XERJ_URL` | Optional XERJ base URL (opt-in) | unset → no enrichment |
 | `JEV_DISABLED` | Force offline / local-only | unset (fail-open) |
-| `ORCA_JEV_DISABLED` | Legacy alias for `JEV_DISABLED` | unset |
 | `ACO_GRAPH_DB` | Override path to graph DB | `.aco/graph.db` |
 | `RILEY_KG_PYTHONPATH` | Parent of the `riley_kg` package | unset → rely on env/`PYTHONPATH` |
 
@@ -85,7 +84,7 @@ Probe timeout is hard-capped at **100ms** (see hook). Unreachable = skip, never 
 
 ```bash
 # hardpath-ok — maintainer lab path only; contributors use their own checkout/PYTHONPATH
-export PYTHONPATH="${RILEY_KG_PYTHONPATH:-/data/home/svc_orca/orca/projects/agents}${PYTHONPATH:+:$PYTHONPATH}"  # hardpath-ok
+export PYTHONPATH="${RILEY_KG_PYTHONPATH:-/data/projects/agents}${PYTHONPATH:+:$PYTHONPATH}"  # hardpath-ok
 python3 -m riley_kg.cli --help
 ```
 
@@ -109,8 +108,8 @@ Missing graph is a **setup** error (fetch artifact or run init/sync). It is **no
 ### Step 2 — Honor disable / probe (fail-open)
 
 ```bash
-# Forced local-only (JEV_DISABLED preferred; ORCA_JEV_DISABLED legacy)
-if [ "${JEV_DISABLED:-${ORCA_JEV_DISABLED:-}}" = "1" ]; then
+# Forced local-only
+if [ "${JEV_DISABLED:-}" = "1" ]; then
   echo "ACO: JEV_DISABLED=1 — local .aco/graph.db only"
 fi
 

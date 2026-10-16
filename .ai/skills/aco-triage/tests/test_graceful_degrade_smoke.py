@@ -32,7 +32,7 @@ class GracefulDegradeSmoke(unittest.TestCase):
         env = {
             k: v
             for k, v in os.environ.items()
-            if k not in {"JEV_URL", "XERJ_URL", "ORCA_JEV_DISABLED", "JEV_DISABLED"}
+            if k not in {"JEV_URL", "XERJ_URL", "JEV_DISABLED"}
         }
         env["JEV_DISABLED"] = "1"
         # Drop proxy vars so nothing accidental reaches the network.
@@ -59,7 +59,7 @@ class GracefulDegradeSmoke(unittest.TestCase):
         env = {
             k: v
             for k, v in os.environ.items()
-            if k not in {"JEV_URL", "XERJ_URL", "ORCA_JEV_DISABLED", "JEV_DISABLED"}
+            if k not in {"JEV_URL", "XERJ_URL", "JEV_DISABLED"}
         }
         proc = subprocess.run(
             [sys.executable, str(VERIFY), "--offline-only"],
