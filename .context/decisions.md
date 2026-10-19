@@ -1,0 +1,44 @@
+<!-- ≤80 lines. One bullet per record (≤~3 lines), tagged DEC-/FAIL-/HANDOFF-. Merge duplicates; collapse superseded handoffs. Look up: rg -n "DEC-|FAIL-|HANDOFF-" decisions.md (+ keyword), read only matches. No transcripts or secrets. -->
+
+- DEC-001 Install one driver, not both. They attach to the same Bluetooth HID stack. README.md "Which driver".
+- DEC-002 Driver 1 is registration, not a binary patch. Ship Apple's unmodified `applewirelessmouse.sys` (78,424 bytes, version 6.1.7700.0). No `.inf` and no `.cat`. DMCA-NOTICE.md; CHANGELOG.md Unreleased.
+- DEC-003 Driver 1 has one install route: copy the `.sys`, create the kernel service, write `LowerFilters` (`REG_MULTI_SZ`) on the device instance. The `pnputil` package route is gone. CHANGELOG.md Unreleased Removed.
+- DEC-004 A project certificate is imported only for the legacy patched variant, and only into `LocalMachine\TrustedPublisher`, never `Root`. The v1.0.0 changelog line that said Root stays as published; Unreleased corrects it. CHANGELOG.md; SECURITY.md.
+- DEC-005 Uninstaller drops the MagicMouseFix cert only if `cert-installed.json` records this install's import and nothing else is signed by that thumbprint. It must not delete the backup unless `LowerFilters` cleanup was confirmed. Commit `f0a8b84`.
+- DEC-006 Driver 1 covers PIDs `030D`, `0269`, `0310`, and `0323`. Driver 2 claims `0323` only. README.md Supported Hardware.
+- DEC-007 Driver 1 should load with Test Mode off (Microsoft-countersigned `.sys`); not yet verified, because the dev PC has `testsigning` on. Driver 2 needs Test Mode, Secure Boot off, memory integrity off. README.md; `v1-binary-patch/README.md`.
+- DEC-008 The byte-patched re-signed variant (`370A5555…`, 66,288 bytes, `CN=MagicMouseFix`) is no longer shipped. Its constants stay so an existing install can be identified and removed. CHANGELOG.md Deprecated.
+- DEC-009 The installer refuses to run unless Fast Startup is off. README.md System Requirements.
+- DEC-010 If the Enum device-instance key denies the `LowerFilters` write, name that ACL and do not report success. CHANGELOG.md Fixed.
+- DEC-011 Disable and enable the device with `Disable-PnpDevice` / `Enable-PnpDevice`. The `pnputil` verbs only exist from build 19041; the support floor is build 14393. CHANGELOG.md Changed.
+- DEC-012 A failed PnP enumeration or a per-instance unbind failure must not authorise deleting shared service, file, or certificate state. Commits `82cb21d`, `6056b5c`.
+- DEC-013 The KMDF package never overwrites Apple's `applewirelessmouse.sys` or oem16 (`AD5D244B`). It uses its own INF, catalog, and dest filename. `v2-kmdf-driver/README.md`; `SHIPPING.md`.
+- DEC-014 Do not install PATH-A (BSOD `0xD1`), the May 20 pointer-dead build (`559B136A`), or the failed 2.0.4 package (`845435CE`) that overwrote DriverStore oem26. `v2-kmdf-driver/README.md`.
+- DEC-015 Scroll sensitivity is the detent `ScrollStep` (default 16, clamp `[1,224]`), never a single reference finger. Tune it in the registry. `v2-kmdf-driver/STATUS.md` Settled.
+- DEC-016 The in-kernel auto-F1 path is deleted. 2.0.4.2 self-issued `IOCTL_HID_SET_FEATURE` on the sibling COL01 PDO, got `STATUS_IO_TIMEOUT`, and stalled pointer and wheel. The build script refuses those symbols. `STATUS.md`.
+- DEC-017 Multitouch does not survive a reboot by itself. The watcher's startup reconcile covers boot; arrival events cover reconnect. `STATUS.md`.
+- DEC-018 Battery stays HID Input `0x90` on COL02. Do not use feature `0x47`. Pointer X/Y stay on report `0x12`. `v2-kmdf-driver/HID-CONTRACT.md`.
+- DEC-019 Source in this tree is 2.0.4.6 and has not been built or signed here. The last build signed and run on hardware is 2.0.4.3. `v2-kmdf-driver/STATUS.md`.
+- DEC-020 Community `pnputil` of the self-signed package has never been run on a real mouse. `New-FileCatalog` is not a catalog `pnputil` accepts; Inf2Cat is required. `SHIPPING.md`.
+- DEC-021 Apple's binary is redistributed verbatim under Apple's licence. MIT covers this project's scripts, docs, and KMDF source. A takedown removes the `.sys` within 48 hours; the installer falls back to `-FromDriverStore` or `-DriverPath`. DMCA-NOTICE.md.
+- DEC-022 Public issue attachments must be redacted text, not raw `.evtx`. CONTRIBUTING.md.
+- DEC-023 Required checks (`links`, PowerShell lint) have no paths filter, so a docs-only PR still reports them. `.github/workflows/docs-check.yml`; `ps-lint.yml`.
+- DEC-024 Provenance tracks two binaries. Legacy triple comes from `Install-MagicMousePatch.ps1`; the Apple hash is pinned in `scripts/Test-ReleaseProvenance.ps1` (installer matches Authenticode, not hash). `.github/workflows/provenance.yml`.
+- DEC-025 Magic Tray detects all three states. On the Apple driver it flips Mode A/B briefly to read battery; on KMDF it reads `0x90` directly. README.md.
+- DEC-026 Dropping Test Mode for Driver 2 takes an EV certificate plus Partner Center attestation, renewed annually. That is funding, not a code change. README.md Roadmap; `STATUS.md`.
+- DEC-027 Windows gestures and virtual PTP are not in this package. `STATUS.md`.
+- DEC-028 `DriverVer` is bumped per build. Scripts derive work and stage paths from `-Version`. `STATUS.md` Settled.
+- DEC-029 The EWDK drive letter is discovered, never hardcoded. A NuGet-toolchain build is a codegen deviation and `kmdf-204-scroll-sign.ps1` refuses to sign it. `v2-kmdf-driver/BUILDING.md`.
+- DEC-030 Scripts take `-QueueRoot` / `MM_QUEUE_ROOT` instead of one PC's queue path. `.ai/` is gitignored so agent worklogs are not tracked. Commit `3c6ff87`; `.gitignore`.
+- DEC-031 The F1 watcher caps compact-mode recovery at 3 tries per episode, matching `MmSendMtEnable`, so a stuck mouse cannot storm the control channel. `v2-kmdf-driver/scripts/mm-auto-f1-watcher.ps1`.
+- DEC-032 Release notes must not tell Apple-route users to turn Test Signing on. The kit ships Apple's countersigned `.sys` and no project certificate. The "not yet verified with testsigning off" caveat stays. `.github/workflows/release.yml`; commit `66a030c`.
+- FAIL-001 2026-09-16 battery read `90 00 00`: a 1-byte HID control read matched `BufferSize > 0` and was diverted into the ACL scratch. Fixed in 2.0.4.4 source, tightened in 2.0.4.6. `INCIDENT-2026-09-16.md`; CHANGELOG.md.
+- FAIL-002 2026-09-16 scroll: 694 multitouch reports produced 0 wheel events because the lowest-id reference finger discarded every other contact. Reverted; detent 16. INCIDENT; CHANGELOG.md `[2.0.4.4]`.
+- FAIL-003 After an idle disconnect the mouse reopens the HID control channel itself. Tracking only host opens left the handle null and battery at zero. Fixed in 2.0.4.5 source. CHANGELOG.md `[2.0.4.5]`.
+- FAIL-004 Sleep/wake did not fire arrival or startup reconcile, so multitouch stayed off until `mm-f1-once.ps1`. The 2.0.4.6 watcher polls `Diag` and re-arms. CHANGELOG.md `[2.0.4.6]`.
+- FAIL-005 Package `845435CE` reused `MagicMouseDriver.inf` / `.cat` / `.sys`, overwrote DriverStore oem26, and needed Safe Mode to restore. `v2-kmdf-driver/README.md`.
+- HANDOFF-001 Build and sign 2.0.4.6 on Windows with the EWDK or WDK, then confirm battery, pointer, and 2-finger scroll on hardware. `v2-kmdf-driver/STATUS.md`; `BUILDING.md`.
+- HANDOFF-002 Run the community swap-test: `pnputil` the self-signed package, then restore the known-good signed stage. Never run. `SHIPPING.md`; `COMMUNITY-TESTING.md`.
+- HANDOFF-003 Run Driver 1 with Secure Boot on and `testsigning` off, and report whether scroll survives. Expectation only so far. `v1-binary-patch/README.md` Verification status.
+- HANDOFF-004 Battery percentage on v1 `030D` and v2 `0269` / `0310` is not characterised. No claim either way. `docs/llms.txt`.
+- HANDOFF-005 PR #50 (`ai/agents-md-and-aco-kit`) is open and ready. It adds a full AGENTS.md and an ACO kit and will conflict with this pointer-only AGENTS.md. Do not absorb that kit here.

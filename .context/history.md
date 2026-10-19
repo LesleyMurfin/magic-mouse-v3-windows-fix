@@ -1,0 +1,20 @@
+<!-- ≤80 lines. One dated bullet per entry (≤~3 lines), tagged HIST-YYYY-MM-DD; roll old entries into one-line HIST-ROLLUP lines, never delete. Never load in full: rg -n "HIST-" history.md | rg -i <keyword>. Never overrides current.md, AGENTS.md or Lesley. No transcripts or secrets. -->
+
+- HIST-2026-05-18 v1.0.0 public release: PATH-A patched installer, docs, DMCA notice, PSScriptAnalyzer CI; merged as PR #1 (`0607848`). CHANGELOG.md `[1.0.0]`.
+- HIST-2026-06-25 README v1/v2 trim, LF `.gitattributes`, ignore `.ai/` (`14a3658`). Reverted 2026-09-04 (`b788a21`).
+- HIST-2026-09-02 Pages site, v3 README, Stripe funding link; GitHub Sponsors marked pending (`9c29a33`, `b067d62`, PRs #8 #9).
+- HIST-2026-09-04 Keyword-targeted site and search/AEO notes (`cc6719b`, `d1b12b8`, PRs #12 #13). SEARCH.md.
+- HIST-2026-09-05 Main synced with the published Pages branch; Magic Tray links pointed at magictray.app (`a0ca63b`, PRs #14–#16).
+- HIST-2026-09-15 Two drivers documented as separate products, not one lineage (`aef4744`). Same day, `39e80e9` said Test Mode was required for both; `97824e3` and `0fce6be` scoped that to the legacy patched variant and to Driver 2.
+- HIST-2026-09-15 Apple `.sys` bundled unmodified; one-click install; PIDs `030D`, `0269`, `0310`, `0323` (`5ee54fe`, `5848789`).
+- HIST-2026-09-15 Driver 1 reduced to one route: copy `.sys`, create the service, write `LowerFilters`. Device restart uses PnpDevice cmdlets. An Enum ACL refusal is named instead of reported as success (`90bd3fb`, `32d0c57`, `7f4dbdf`).
+- HIST-2026-09-15 A failed PnP enumeration or a per-instance unbind must not delete shared service, file, or cert state (`82cb21d`, `6056b5c`).
+- HIST-2026-09-15 Actions suite added: provenance, docs link gate, release gates. Required jobs have no paths filter (`9ff8225`, `de5d5e3`, `0f300d4`).
+- HIST-2026-09-16 Incident: battery read back zeros and scroll emitted no wheel events. Evidence in `v2-kmdf-driver/INCIDENT-2026-09-16.md`.
+- HIST-2026-09-16 KMDF 2.0.4.4 source: COL02 Input `0x90` no longer swallowed, every dragging contact emits notches, default detent 16 (`90a10fd`, `7cdadac`). CHANGELOG.md `[2.0.4.4]`.
+- HIST-2026-09-16 Drivers hub visual redesign; site host set to drivers.magictray.app (`8eb25c4`, merged later as PR #36).
+- HIST-2026-09-17 2.0.4.5 source learns device-initiated HID control opens (`60540f8`). Out-of-tree KMDF build script starts discovering the EWDK drive (`1ee5e33`).
+- HIST-2026-09-20 2.0.4.6 source: a short control read stays out of the ACL scratch, and the watcher re-arms multitouch after sleep/wake (`a33bf72`). CHANGELOG.md `[2.0.4.6]`.
+- HIST-2026-09-21 Provenance guards taught that the repo ships two drivers (`66a030c`). Agent worklogs and one PC's paths removed; `.ai/` ignored (`3c6ff87`). EWDK path no longer shipped; F1 retry capped (`1e5013f`).
+- HIST-2026-10-15 Merged to main: PR #45 KMDF 2.0.4.6, PR #36 drivers hub, PR #46 signable out-of-tree build, PR #47 Apple-driver route. HEAD `df02e50`.
+- HIST-2026-10-15 Uninstaller stopped revoking shared MagicMouseFix trust and stopped deleting the backup when restore had not run (`f0a8b84`).
