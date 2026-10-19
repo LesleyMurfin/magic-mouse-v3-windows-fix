@@ -16,7 +16,7 @@ is 2.0.4.3 (`v2-kmdf-driver/STATUS.md`). Site is `docs/`, published at drivers.m
 is not merged, and it will conflict with this pointer-only AGENTS.md. Still open on the product:
 Driver 1 with `testsigning` off; a Windows build and sign of 2.0.4.6; the community `pnputil`
 swap-test (never run); EV attestation (funding). Battery on v1/v2 PIDs is not characterised
-(`docs/llms.txt`).
+(`docs/llms.txt`). This branch deletes `.github/CODEOWNERS` so a push does not auto-request review.
 
 **Next.** Build and sign 2.0.4.6 on a Windows host with the EWDK or WDK, then confirm battery,
 pointer, and 2-finger scroll on hardware (`v2-kmdf-driver/STATUS.md`, `BUILDING.md`).

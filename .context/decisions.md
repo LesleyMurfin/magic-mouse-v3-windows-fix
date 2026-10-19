@@ -42,3 +42,4 @@
 - HANDOFF-003 Run Driver 1 with Secure Boot on and `testsigning` off, and report whether scroll survives. Expectation only so far. `v1-binary-patch/README.md` Verification status.
 - HANDOFF-004 Battery percentage on v1 `030D` and v2 `0269` / `0310` is not characterised. No claim either way. `docs/llms.txt`.
 - HANDOFF-005 PR #50 (`ai/agents-md-and-aco-kit`) is open and ready. It adds a full AGENTS.md and an ACO kit and will conflict with this pointer-only AGENTS.md. Do not absorb that kit here.
+- DEC-033 Do not list `@LesleyMurfin` in CODEOWNERS. An owner line auto-requests that account as a reviewer. No other owners were in the file, so `.github/CODEOWNERS` is deleted.

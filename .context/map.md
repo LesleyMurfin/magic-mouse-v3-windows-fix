@@ -28,4 +28,5 @@
 | v2-kmdf-driver/STATUS.md | What 2.0.4.3 proved, what 2.0.4.4–2.0.4.6 changed in source only |
 | v2-kmdf-driver/INCIDENT-2026-09-16.md | Battery 0% and dead scroll: measurements and the two defects |
 | v2-kmdf-driver/BUILDING.md | EWDK discovery and the NuGet fallback that must not be signed |
+| AGENTS.md | Read `.context/` first; optional graph, cost check, verified build/test/lint lines |
 | .context/ | current, map, history, decisions |

@@ -18,3 +18,4 @@
 - HIST-2026-09-21 Provenance guards taught that the repo ships two drivers (`66a030c`). Agent worklogs and one PC's paths removed; `.ai/` ignored (`3c6ff87`). EWDK path no longer shipped; F1 retry capped (`1e5013f`).
 - HIST-2026-10-15 Merged to main: PR #45 KMDF 2.0.4.6, PR #36 drivers hub, PR #46 signable out-of-tree build, PR #47 Apple-driver route. HEAD `df02e50`.
 - HIST-2026-10-15 Uninstaller stopped revoking shared MagicMouseFix trust and stopped deleting the backup when restore had not run (`f0a8b84`).
+- HIST-2026-10-19 `.github/CODEOWNERS` named `@LesleyMurfin` on every path and on the installer, workflows, SECURITY.md, and DMCA-NOTICE.md. No owners remain, so the file is removed. AGENTS.md keeps the `.context/` pointer and records the commands that passed here.
