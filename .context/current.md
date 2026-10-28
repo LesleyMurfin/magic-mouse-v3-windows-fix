@@ -15,8 +15,7 @@ full charter and the ACO kit is in `.aco/` and `.ai/skills/aco-triage/` (PR #50,
 
 **Open.** Driver 1 with `testsigning` off; a Windows build and sign of 2.0.4.6; the community
 `pnputil` swap-test (never run); EV attestation (funding). Battery on v1/v2 PIDs is not
-characterised (`docs/llms.txt`). This branch adds the `.context/` pointer to the AGENTS.md charter
-and deletes `.github/CODEOWNERS`, which auto-requested `@LesleyMurfin` on every pull request.
+characterised (`docs/llms.txt`).
 
 **Next.** Build and sign 2.0.4.6 on a Windows host with the EWDK or WDK, then confirm battery,
 pointer, and 2-finger scroll on hardware (`v2-kmdf-driver/STATUS.md`, `BUILDING.md`).
