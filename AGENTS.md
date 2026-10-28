@@ -1,5 +1,7 @@
 # AGENTS.md — Magic Mouse v3 Windows Driver
 
+Read [`.context/`](.context/) first — `current.md`, `map.md`, `decisions.md`, `history.md`.
+
 ## Repo identity
 
 **Apple Magic Mouse Windows Driver** (`LesleyMurfin/magic-mouse-v3-windows-fix`) — free MIT-licensed drivers for the USB-C **Apple Magic Mouse 2024** (Bluetooth PID `0323`) on **Windows 10/11**, plus registry-bound Apple-driver support for v1/v2 PIDs.
@@ -61,6 +63,12 @@ Full rule: `rule://adhd-always` · `skill://i-have-adhd` · charter RULE #13.
 
 **Linux cannot produce a `.sys`.** KMDF builds need Windows 10/11 x64 with a mounted **Enterprise WDK (EWDK)** or Visual Studio + WDK. See [`v2-kmdf-driver/BUILDING.md`](v2-kmdf-driver/BUILDING.md).
 
+### Verified on a Linux agent host
+
+- Package check: `bash v2-kmdf-driver/tests/validate-package.sh`
+- Tests: `python3 specs/gate_4.py && python3 v2-kmdf-driver/tests/test_bsod_regress.py && python3 v2-kmdf-driver/tests/test_hid_acl.py && python3 v2-kmdf-driver/tests/test_mt_enable.py && python3 v2-kmdf-driver/tests/test_scroll_threshold.py && python3 v2-kmdf-driver/tests/test_sdp_overlay.py && python3 v2-kmdf-driver/tests/test_two_finger_scroll.py && pwsh -NoProfile -File scripts/Test-SiteLink.ps1 && pwsh -NoProfile -File scripts/Test-ReleaseProvenance.ps1`
+- Lint: `pwsh -NoProfile -Command "Import-Module PSScriptAnalyzer -RequiredVersion 1.25.0; if (@(Invoke-ScriptAnalyzer -Path . -Recurse -Settings ./PSScriptAnalyzerSettings.psd1 -Severity Warning,Error).Count -gt 0) { exit 1 }"`
+
 ### KMDF (Driver 2)
 
 ```bat
@@ -120,6 +128,8 @@ python3 .ai/skills/aco-triage/scripts/verify_graceful_degrade.py
 ```
 
 Expect PASS on the offline path. Non-zero → fix the verifier/script first; still do not block review on a missing graph.
+
+Cost gate: run `aicostoptimizer status` before long or expensive agent runs when it is installed; exit≠0 means quota fail-closed — stop and report.
 
 ### Blast-radius query (conditional, fail-open)
 
