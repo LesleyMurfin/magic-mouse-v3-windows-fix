@@ -43,6 +43,14 @@ function Log([string]$m) {
 }
 function Fail([int]$c, [string]$m) { Log "FAIL $c $m"; exit $c }
 
+# Log() appends to $Log before anything else creates $QueueRoot. A fresh
+# MM_QUEUE_ROOT (what BUILDING.md tells a builder to set) would make the first
+# Add-Content throw under -ErrorAction Stop instead of reaching the checks
+# below, so the log's parent has to exist first.
+$LogDir = Split-Path -Parent $Log
+if ($LogDir -and -not (Test-Path -LiteralPath $LogDir)) {
+    New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+}
 Log ("===== unique $Version BUILD start (queue SYNC dest) =====")
 if (-not (Test-Path -LiteralPath $Src)) { Fail 2 "missing source $Src - run KMDF-204-SYNC first" }
 if (-not $Iso) { Fail 2 'no EWDK ISO - set MM_EWDK_ISO or pass -EwdkIso' }
@@ -56,8 +64,18 @@ if (Test-Path -LiteralPath $frozen) {
 $outSys  = Join-Path $Work 'x64\Release\MagicMouseDriver-kmdf-204-scroll.sys'
 $liveSys = Join-Path $Work 'x64\Release\MagicMouseDriver.sys'
 
-Log 'mounting EWDK ISO (sources not copied to Work yet)'
-$img = Mount-DiskImage -ImagePath $Iso -PassThru
+# The EWDK is routinely left mounted between runs on the build box. Reuse an
+# existing mount instead of failing on it, and remember whether THIS run
+# attached the image so the finally below only tears down its own mount.
+$img = Get-DiskImage -ImagePath $Iso -ErrorAction SilentlyContinue
+$mountedHere = $false
+if ($img -and $img.Attached) {
+    Log 'EWDK already mounted, reusing'
+} else {
+    Log 'mounting EWDK ISO (sources not copied to Work yet)'
+    $img = Mount-DiskImage -ImagePath $Iso -PassThru
+    $mountedHere = $true
+}
 try {
     $vol = $img | Get-Volume
     $letter = $vol.DriveLetter
@@ -145,11 +163,24 @@ try {
     }
     if ($msbuildText -match 'error C[0-9]+') { Fail 1 'msbuild C compile error (not Inf2Cat)' }
     $infPath = Join-Path $Work 'MagicMouseDriver-kmdf-204-scroll.inf'
-    $infVerif = "${letter}:\Program Files\Windows Kits\10\Tools\10.0.26100.0\x64\InfVerif.exe"
-    if (-not (Test-Path -LiteralPath $infVerif)) { Fail 2 "InfVerif missing $infVerif" }
+    # EWDK kit version differs per ISO, so pin the newest Tools\<kit>\x64 that
+    # actually ships InfVerif rather than one hard-coded SDK build. Sorted on
+    # the parsed [version] because 10.0.9 sorts after 10.0.26100 lexically.
+    $toolsRoot = "${letter}:\Program Files\Windows Kits\10\Tools"
+    $infVerif = Get-ChildItem -LiteralPath $toolsRoot -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            $kit = [version]'0.0'
+            if ([version]::TryParse($_.Name, [ref]$kit)) {
+                [pscustomobject]@{ Kit = $kit; Path = (Join-Path $_.FullName 'x64\InfVerif.exe') }
+            }
+        } |
+        Where-Object { Test-Path -LiteralPath $_.Path } |
+        Sort-Object -Property Kit -Descending |
+        Select-Object -First 1 -ExpandProperty Path
+    if (-not $infVerif) { Fail 2 "InfVerif missing under $toolsRoot" }
     # Desktop KMDF lower filter uses DIRID 12 + HKLM Services. /w is Universal
     # (DIRID 13 / HKR) and is the PATHA-V5 gate, not this INF.
-    Log "InfVerif (desktop, no /w) $infPath"
+    Log "InfVerif (desktop, no /w) $infPath using $infVerif"
     & $infVerif /v $infPath >> $msbuildLog 2>&1
     $iv = $LASTEXITCODE
     Log ("InfVerif exit={0}" -f $iv)
@@ -157,8 +188,13 @@ try {
 }
 finally {
     # Runs on success AND on every Fail/exit or terminating-error path, so a
-    # failed gate can never leave the EWDK image mounted for the next run.
-    try { Dismount-DiskImage -ImagePath $Iso -ErrorAction SilentlyContinue | Out-Null; Log 'EWDK unmounted' } catch { Log "unmount warn $_" }
+    # failed gate can never leave behind an EWDK mount THIS run created. A
+    # mount the operator already had is left alone.
+    if ($mountedHere) {
+        try { Dismount-DiskImage -ImagePath $Iso -ErrorAction SilentlyContinue | Out-Null; Log 'EWDK unmounted' } catch { Log "unmount warn $_" }
+    } else {
+        Log 'EWDK left mounted (not mounted by this run)'
+    }
 }
 if (Test-Path -LiteralPath $liveSys) { Fail 3 "REFUSE emitted MagicMouseDriver.sys $liveSys" }
 if (-not (Test-Path -LiteralPath $outSys)) { Fail 2 "sys missing after build $outSys" }
