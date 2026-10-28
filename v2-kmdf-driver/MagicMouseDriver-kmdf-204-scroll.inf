@@ -82,6 +82,12 @@ Needs   = HID_Inst.NT.HW
 ; 0x00010000 = FLG_ADDREG_TYPE_MULTI_SZ — replaces any previous LowerFilters.
 HKR,,"LowerFilters",0x00010000,"MagicMouseDriver204Scroll"
 HKLM,"SYSTEM\CurrentControlSet\Services\MagicMouseDriver204Scroll\Parameters","EnableInjection",0x00010001,1
+; Hi-res scroll (issue #48) — swaps the overlaid HID descriptor for the one
+; carrying a Resolution Multiplier, so Windows scrolls in quarter lines
+; instead of WHEEL_DELTA jumps. Written as 0: the descriptor the host binds
+; is the one change here that has not been run on hardware. Flip with
+; scripts\mm-scroll-tune.ps1 -HiResScroll 1.
+HKLM,"SYSTEM\CurrentControlSet\Services\MagicMouseDriver204Scroll\Parameters","HiResScroll",0x00010001,0
 
 [MagicMouseDriver204_Install.NT.Services]
 Include    = hidbth.inf

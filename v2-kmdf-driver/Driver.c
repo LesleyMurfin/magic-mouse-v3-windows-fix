@@ -168,6 +168,7 @@ EvtDeviceAdd(_In_ WDFDRIVER Driver, _Inout_ PWDFDEVICE_INIT DeviceInit)
 
     ctx->EnableInjection = TRUE;
     ctx->ScrollStep      = MM_SCROLL_STEP;
+    ctx->HiResScroll     = FALSE;
     {
         WDFKEY paramsKey = NULL;
         NTSTATUS ks = WdfDriverOpenParametersRegistryKey(
@@ -192,6 +193,16 @@ EvtDeviceAdd(_In_ WDFDRIVER Driver, _Inout_ PWDFDEVICE_INIT DeviceInit)
                 stepVal >= MM_SCROLL_STEP_MIN && stepVal <= MM_SCROLL_STEP_MAX)
             {
                 ctx->ScrollStep = stepVal;
+            }
+
+            // Hi-res scroll, issue #48. Default off: it swaps the HID
+            // descriptor the host binds, and the last build proven on
+            // hardware is the classic one. Any non-zero value enables it.
+            ULONG hiResVal = 0;
+            RtlInitUnicodeString(&valName, L"HiResScroll");
+            if (NT_SUCCESS(WdfRegistryQueryULong(paramsKey, &valName, &hiResVal)))
+            {
+                ctx->HiResScroll = (hiResVal != 0);
             }
 
             WdfRegistryClose(paramsKey);
@@ -239,8 +250,8 @@ EvtDeviceAdd(_In_ WDFDRIVER Driver, _Inout_ PWDFDEVICE_INIT DeviceInit)
                 }
             }
         }
-        DbgPrint("MM: AddDevice ProductId=0x%04X EnableInjection=%d\n",
-                 ctx->ProductId, ctx->EnableInjection);
+        DbgPrint("MM: AddDevice ProductId=0x%04X EnableInjection=%d HiResScroll=%d\n",
+                 ctx->ProductId, ctx->EnableInjection, ctx->HiResScroll);
     }
 
     WDF_TIMER_CONFIG timerCfg;
@@ -363,11 +374,56 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
                 origHdr = origBuf[0];
             }
 
+            // Hi-res scroll (issue #48): g_HidDescriptorHiRes puts the HID
+            // Resolution Multiplier in report 0xF1, which is also Apple's
+            // multitouch enable. Windows sets the multiplier with
+            // SET_REPORT(Feature, 0xF1) at start-up and builds that payload
+            // from the descriptor, so what would reach the mouse is the
+            // multiplier value plus a zero constant byte - i.e. anything but
+            // `02 01`, which puts the device back into compact mode and takes
+            // surface scroll with it. Windows applies the multiplier itself
+            // and never needs the device to honour it, so restore Apple's
+            // payload in place. Same buffer, same size, no new BRB, and the
+            // handshake the device sends back is a real one for a report it
+            // really has - which is the whole reason the multiplier shares
+            // 0xF1 instead of getting a report ID of its own.
+            //
+            // Gated on HiResScroll so the classic path stays byte-identical:
+            // without the hi-res descriptor nothing in the host stack has a
+            // reason to write 0xF1 except mm-f1-once.ps1, which already sends
+            // exactly these two bytes.
+            // The read of origBuf[0..3] and the two stores go through a
+            // mapping this filter does not own, so they carry SEH like every
+            // other buffer touch in this driver (OnAclTransferComplete). An
+            // unwritable mapping must cost the repair, never the machine:
+            // forcedF1 stays FALSE and the transfer is forwarded untouched.
+            BOOLEAN forcedF1 = FALSE;
+            if (ctx->HiResScroll && origBuf != NULL && n >= 4)
+            {
+                __try
+                {
+                    if (origBuf[0] == MM_HID_SET_REPORT_FEATURE &&
+                        origBuf[1] == MM_REPORT_ID_VENDOR_F1 &&
+                        (origBuf[2] != MM_MT_ENABLE_B0 ||
+                         origBuf[3] != MM_MT_ENABLE_B1))
+                    {
+                        origBuf[2] = MM_MT_ENABLE_B0;
+                        origBuf[3] = MM_MT_ENABLE_B1;
+                        forcedF1 = TRUE;
+                    }
+                }
+                __except (EXCEPTION_EXECUTE_HANDLER)
+                {
+                    DbgPrint("MM: F1 feature payload repair exception, passthrough\n");
+                }
+            }
+
             WdfSpinLockAcquire(ctx->Lock);
             ctx->AclOutCount++;
             ctx->LastOutBufferSize = n;
             ctx->LastOutFlags = outFlags;
             ctx->LastOutHdr = (ULONG)origHdr;
+            if (forcedF1) { ctx->F1PayloadForced++; }
             WdfSpinLockRelease(ctx->Lock);
 
             ForwardPassthrough(Request, target);
@@ -888,7 +944,8 @@ OnSdpQueryComplete(_In_ WDFREQUEST Request, _In_ WDFIOTARGET Target,
 
     ULONG    newLen      = (ULONG)sdpLen;
     NTSTATUS patchStatus = SdpRewrite_Process((PUCHAR)buf, (ULONG)sdpLen,
-                                              (ULONG)bufAllocLen, &newLen);
+                                              (ULONG)bufAllocLen,
+                                              ctx->HiResScroll, &newLen);
 
     WdfSpinLockAcquire(ctx->Lock);
     ctx->LastPatchStatus = (ULONG)patchStatus;
@@ -1104,7 +1161,7 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
     ULONG ictlCount, scanHits, patchOk, lastSize, lastStatus;
     ULONG hidReads, rid12, aclN, aclX, lastAclR, lastAclC;
     ULONG mtStatus, mtTries, lastInLen, lastInFl, aclOut, lastOutSz, lastOutFl, lastOutHdr;
-    ULONG scrollStep, scrollTravel, scrollNotches;
+    ULONG scrollStep, scrollTravel, scrollNotches, hiRes, f1Forced;
     UCHAR lastBytes[64];
     UCHAR lastAclBytes[16];
 
@@ -1133,6 +1190,8 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
     scrollStep = ctx->ScrollStep;
     scrollTravel = ctx->ScrollTravelUnits;
     scrollNotches = ctx->ScrollNotchCount;
+    hiRes      = ctx->HiResScroll ? 1UL : 0UL;
+    f1Forced   = ctx->F1PayloadForced;
     RtlCopyMemory(lastBytes, ctx->LastSdpBytes, 64);
     RtlCopyMemory(lastAclBytes, ctx->LastAclBytes, 16);
     WdfSpinLockRelease(ctx->Lock);
@@ -1198,6 +1257,14 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
     // without guessing whether the registry write was picked up.
     MmDiagSetValueIfChanged(key, L"ScrollStep",
                             REG_DWORD, &scrollStep, sizeof(scrollStep));
+    // Which descriptor the host actually bound, and whether the filter had to
+    // repair a host-written 0xF1 payload. HiResScroll 1 with F1PayloadForced
+    // still 0 means Windows never issued the Resolution Multiplier
+    // SET_REPORT, so scrolling is still quantised to WHEEL_DELTA.
+    MmDiagSetValueIfChanged(key, L"HiResScroll",
+                            REG_DWORD, &hiRes, sizeof(hiRes));
+    MmDiagSetValueIfChanged(key, L"F1PayloadForced",
+                            REG_DWORD, &f1Forced, sizeof(f1Forced));
 
     MmDiagSetValueIfChanged(key, L"LastSdpBytes",
                             REG_BINARY, lastBytes, sizeof(lastBytes));

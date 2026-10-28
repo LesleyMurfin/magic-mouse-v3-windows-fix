@@ -66,7 +66,7 @@ Full rule: `rule://adhd-always` · `skill://i-have-adhd` · charter RULE #13.
 ### Verified on a Linux agent host
 
 - Package check: `bash v2-kmdf-driver/tests/validate-package.sh`
-- Tests: `python3 specs/gate_4.py && python3 v2-kmdf-driver/tests/test_bsod_regress.py && python3 v2-kmdf-driver/tests/test_hid_acl.py && python3 v2-kmdf-driver/tests/test_mt_enable.py && python3 v2-kmdf-driver/tests/test_scroll_threshold.py && python3 v2-kmdf-driver/tests/test_sdp_overlay.py && python3 v2-kmdf-driver/tests/test_two_finger_scroll.py && pwsh -NoProfile -File scripts/Test-SiteLink.ps1 && pwsh -NoProfile -File scripts/Test-ReleaseProvenance.ps1`
+- Tests: `python3 specs/gate_4.py && python3 v2-kmdf-driver/tests/test_bsod_regress.py && python3 v2-kmdf-driver/tests/test_hid_acl.py && python3 v2-kmdf-driver/tests/test_mt_enable.py && python3 v2-kmdf-driver/tests/test_scroll_threshold.py && python3 v2-kmdf-driver/tests/test_sdp_overlay.py && python3 v2-kmdf-driver/tests/test_two_finger_scroll.py && python3 v2-kmdf-driver/tests/test_hires_scroll.py && pwsh -NoProfile -File scripts/Test-SiteLink.ps1 && pwsh -NoProfile -File scripts/Test-ReleaseProvenance.ps1`
 - Lint: `pwsh -NoProfile -Command "Import-Module PSScriptAnalyzer -RequiredVersion 1.25.0; if (@(Invoke-ScriptAnalyzer -Path . -Recurse -Settings ./PSScriptAnalyzerSettings.psd1 -Severity Warning,Error).Count -gt 0) { exit 1 }"`
 
 ### KMDF (Driver 2)

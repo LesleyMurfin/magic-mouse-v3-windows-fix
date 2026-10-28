@@ -37,11 +37,13 @@ in `INCIDENT-2026-09-16.md`.
 | Battery after an idle disconnect | The HID control channel is also learned from device-initiated reconnects (`BRB_L2CA_OPEN_CHANNEL_RESPONSE`), not only from host-initiated opens |
 | Detent | **Every** dragging contact emits its own notches again; default `ScrollStep` **16** (the 2.0.4.3 build shipped 8) |
 | Sleep/wake | The watcher polls for compact 9-byte mode on an active mouse and re-arms multitouch itself |
+| Hi-res scroll (issue #48) | `Parameters!HiResScroll` = 1 overlays the Resolution-Multiplier descriptor and quarters the detent. **Default 0.** Source on top of 2.0.4.6 with no `DriverVer` bump; proven only by the Linux host-model gates — no Windows build, no signing, no hardware run happened in this change |
 
 ## Host gates (no compiler needed)
 
 `specs/gate_4.py` and the overlay / HID-ACL / MT-enable / BSOD / scroll-threshold /
-two-finger-scroll gates in `v2-kmdf-driver/tests/` each run as `python3 <file>`; exit 0 is a pass.
+two-finger-scroll / hi-res-scroll gates in `v2-kmdf-driver/tests/` each run as `python3 <file>`;
+exit 0 is a pass. The full chain is in `AGENTS.md` "Verified on a Linux agent host".
 `v2-kmdf-driver/tests/validate-package.sh` checks the package files themselves.
 
 ## Not in this package
@@ -51,12 +53,44 @@ Windows/macOS **gestures** (no PTP). Magic Mouse v1 `0x030D` / v2 `0x0269`. PATH
 ## Left to do
 
 1. **Build and sign 2.0.4.6** on a Windows host with the EWDK or WDK compiler (`BUILDING.md`),
-   then confirm battery, pointer and 2-finger scroll on hardware.
+   then confirm battery, pointer and 2-finger scroll on hardware. That build also carries the
+   hi-res scroll source, which needs its own pass — "Hi-res scroll — first hardware test" below.
 2. **Community swap-test** (`SHIPPING.md`) — `pnputil` of the self-signed community package has
    never been run against a real mouse.
 3. **EV certificate + Microsoft Partner Center attestation**, so users no longer need Test Mode
    with Secure Boot and memory integrity off. Funding, not code.
 4. **Virtual PTP** for real gestures — a separate driver, not this package.
+
+## Hi-res scroll — first hardware test (not yet run)
+
+`Parameters!HiResScroll` defaults to **0** because nothing in this change was compiled, signed or
+run on hardware: the only evidence is the host-model gates below. Turning it on:
+
+```
+scripts\mm-scroll-tune.ps1 -ScrollStep 16 -HiResScroll 1
+```
+
+What to confirm, in order:
+
+1. `Diag!HiResScroll` reads **1** — the restart re-read the parameter and the hi-res descriptor
+   is the one being overlaid.
+2. `Diag!F1PayloadForced` goes **above 0** — Windows issued `SET_REPORT(Feature, 0xF1)` for the
+   Resolution Multiplier and the filter repaired the payload back to Apple's `02 01` multitouch
+   enable. Still 0 means Windows never set the multiplier, so it is still 1 and scrolling is still
+   quantised to `WHEEL_DELTA`.
+3. Pointer, two-finger scroll and battery all still work. `F1PayloadForced` above 0 with scroll
+   dead would mean the repair is not covering the path Windows actually used.
+
+Expected feel: same sensitivity per unit of surface travel, four times finer steps, and no more
+discarded sub-detent or super-detent travel. A flick that the classic path collapsed into one 120
+notch now scrolls the distance the finger moved, so flicks read as slightly faster; `ScrollStep`
+is the knob if the old behaviour is wanted back.
+
+### Known app-side limit
+
+Sub-120 wheel deltas are honoured by Explorer, Edge/Chrome and WPF. Parts of Office, Photoshop,
+Visual Studio and plain Win32 text controls accumulate to `WHEEL_DELTA` themselves and still jump
+by line. The honest claim is **"much better in most apps"**, never "macOS everywhere".
 
 ## Settled — do not re-open
 

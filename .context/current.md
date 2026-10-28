@@ -13,9 +13,12 @@ source is 2.0.4.6; the last build signed and run on hardware is 2.0.4.3
 (`v2-kmdf-driver/STATUS.md`). Site is `docs/`, published at drivers.magictray.app. AGENTS.md is the
 full charter and the ACO kit is in `.aco/` and `.ai/skills/aco-triage/` (PR #50, merged).
 
-**Open.** Driver 1 with `testsigning` off; a Windows build and sign of 2.0.4.6; the community
-`pnputil` swap-test (never run); EV attestation (funding). Battery on v1/v2 PIDs is not
-characterised (`docs/llms.txt`).
+**Open.** Driver 1 with `testsigning` off; a Windows build and sign of 2.0.4.6; hi-res scroll
+(issue #48, `Parameters!HiResScroll`) is source only, default off, proven only by the Linux host
+gates; the community `pnputil` swap-test (never run); EV attestation (funding). Battery on v1/v2
+PIDs is not characterised (`docs/llms.txt`).
 
 **Next.** Build and sign 2.0.4.6 on a Windows host with the EWDK or WDK, then confirm battery,
-pointer, and 2-finger scroll on hardware (`v2-kmdf-driver/STATUS.md`, `BUILDING.md`).
+pointer, and 2-finger scroll on hardware; in the same pass run
+`mm-scroll-tune.ps1 -ScrollStep 16 -HiResScroll 1` and check `Diag!HiResScroll=1` with
+`Diag!F1PayloadForced` above 0 (`v2-kmdf-driver/STATUS.md`, `BUILDING.md`).
