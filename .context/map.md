@@ -30,3 +30,5 @@
 | v2-kmdf-driver/BUILDING.md | EWDK discovery and the NuGet fallback that must not be signed |
 | AGENTS.md | Read `.context/` first; optional graph, cost check, verified build/test/lint lines |
 | .context/ | current, map, history, decisions |
+| .aco/ | ACO maintainer kit: triage prompt, JEV docs, env sample; never commit `graph.db` |
+| .ai/skills/aco-triage/ | Portable triage skill and its graceful-degrade verifier |

@@ -11,11 +11,14 @@
 - HIST-2026-09-15 A failed PnP enumeration or a per-instance unbind must not delete shared service, file, or cert state (`82cb21d`, `6056b5c`).
 - HIST-2026-09-15 Actions suite added: provenance, docs link gate, release gates. Required jobs have no paths filter (`9ff8225`, `de5d5e3`, `0f300d4`).
 - HIST-2026-09-16 Incident: battery read back zeros and scroll emitted no wheel events. Evidence in `v2-kmdf-driver/INCIDENT-2026-09-16.md`.
-- HIST-2026-09-16 KMDF 2.0.4.4 source: COL02 Input `0x90` no longer swallowed, every dragging contact emits notches, default detent 16 (`90a10fd`, `7cdadac`). CHANGELOG.md `[2.0.4.4]`.
+- HIST-2026-09-16 KMDF 2.0.4.4 source: COL02 Input `0x90` is no longer swallowed by the ACL scratch (`90a10fd`). CHANGELOG.md `[2.0.4.4]`.
 - HIST-2026-09-16 Drivers hub visual redesign; site host set to drivers.magictray.app (`8eb25c4`, merged later as PR #36).
+- HIST-2026-09-17 2.0.4.4 scroll fix: every dragging contact emits notches, default detent 8 → 16 (`7cdadac`). CHANGELOG.md `[2.0.4.4]`.
 - HIST-2026-09-17 2.0.4.5 source learns device-initiated HID control opens (`60540f8`). Out-of-tree KMDF build script starts discovering the EWDK drive (`1ee5e33`).
 - HIST-2026-09-20 2.0.4.6 source: a short control read stays out of the ACL scratch, and the watcher re-arms multitouch after sleep/wake (`a33bf72`). CHANGELOG.md `[2.0.4.6]`.
-- HIST-2026-09-21 Provenance guards taught that the repo ships two drivers (`66a030c`). Agent worklogs and one PC's paths removed; `.ai/` ignored (`3c6ff87`). EWDK path no longer shipped; F1 retry capped (`1e5013f`).
+- HIST-2026-09-21 Provenance guards taught that the repo ships two drivers (`66a030c`). Agent worklogs and one PC's paths removed; `.ai/*` ignored (`3c6ff87`).
 - HIST-2026-10-15 Merged to main: PR #45 KMDF 2.0.4.6, PR #36 drivers hub, PR #46 signable out-of-tree build, PR #47 Apple-driver route. HEAD `df02e50`.
 - HIST-2026-10-15 Uninstaller stopped revoking shared MagicMouseFix trust and stopped deleting the backup when restore had not run (`f0a8b84`).
-- HIST-2026-10-19 `.github/CODEOWNERS` named `@LesleyMurfin` on every path and on the installer, workflows, SECURITY.md, and DMCA-NOTICE.md. No owners remain, so the file is removed. AGENTS.md keeps the `.context/` pointer and records the commands that passed here.
+- HIST-2026-10-15 One PC's EWDK path stopped shipping and the F1 retry storm was capped at 3 tries (`1e5013f`).
+- HIST-2026-10-18 `.github/CODEOWNERS` named `@LesleyMurfin` on every path and on the installer, workflows, SECURITY.md, and DMCA-NOTICE.md. No owners remain, so the file is removed. AGENTS.md keeps the `.context/` pointer and records the commands that passed here.
+- HIST-2026-10-28 PR #50 merged: AGENTS.md became the full charter and the ACO kit landed in `.aco/` and `.ai/skills/aco-triage/`. Main is `8b0a1db`, merged into this branch as `9ab11c6`.

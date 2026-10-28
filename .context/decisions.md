@@ -29,9 +29,10 @@
 - DEC-027 Windows gestures and virtual PTP are not in this package. `STATUS.md`.
 - DEC-028 `DriverVer` is bumped per build. Scripts derive work and stage paths from `-Version`. `STATUS.md` Settled.
 - DEC-029 The EWDK drive letter is discovered, never hardcoded. A NuGet-toolchain build is a codegen deviation and `kmdf-204-scroll-sign.ps1` refuses to sign it. `v2-kmdf-driver/BUILDING.md`.
-- DEC-030 Scripts take `-QueueRoot` / `MM_QUEUE_ROOT` instead of one PC's queue path. `.ai/` is gitignored so agent worklogs are not tracked. Commit `3c6ff87`; `.gitignore`.
+- DEC-030 Scripts take `-QueueRoot` / `MM_QUEUE_ROOT` instead of one PC's queue path. `.gitignore` ignores `.ai/*` except `.ai/skills/` and `.ai/hooks/`, so agent worklogs stay untracked while the ACO kit ships. Commit `3c6ff87`.
 - DEC-031 The F1 watcher caps compact-mode recovery at 3 tries per episode, matching `MmSendMtEnable`, so a stuck mouse cannot storm the control channel. `v2-kmdf-driver/scripts/mm-auto-f1-watcher.ps1`.
 - DEC-032 Release notes must not tell Apple-route users to turn Test Signing on. The kit ships Apple's countersigned `.sys` and no project certificate. The "not yet verified with testsigning off" caveat stays. `.github/workflows/release.yml`; commit `66a030c`.
+- DEC-033 Do not list `@LesleyMurfin` in CODEOWNERS. An owner line auto-requests that account as a reviewer on every pull request. No other owners were in the file, so `.github/CODEOWNERS` is deleted.
 - FAIL-001 2026-09-16 battery read `90 00 00`: a 1-byte HID control read matched `BufferSize > 0` and was diverted into the ACL scratch. Fixed in 2.0.4.4 source, tightened in 2.0.4.6. `INCIDENT-2026-09-16.md`; CHANGELOG.md.
 - FAIL-002 2026-09-16 scroll: 694 multitouch reports produced 0 wheel events because the lowest-id reference finger discarded every other contact. Reverted; detent 16. INCIDENT; CHANGELOG.md `[2.0.4.4]`.
 - FAIL-003 After an idle disconnect the mouse reopens the HID control channel itself. Tracking only host opens left the handle null and battery at zero. Fixed in 2.0.4.5 source. CHANGELOG.md `[2.0.4.5]`.
@@ -41,5 +42,3 @@
 - HANDOFF-002 Run the community swap-test: `pnputil` the self-signed package, then restore the known-good signed stage. Never run. `SHIPPING.md`; `COMMUNITY-TESTING.md`.
 - HANDOFF-003 Run Driver 1 with Secure Boot on and `testsigning` off, and report whether scroll survives. Expectation only so far. `v1-binary-patch/README.md` Verification status.
 - HANDOFF-004 Battery percentage on v1 `030D` and v2 `0269` / `0310` is not characterised. No claim either way. `docs/llms.txt`.
-- HANDOFF-005 PR #50 (`ai/agents-md-and-aco-kit`) is open and ready. It adds a full AGENTS.md and an ACO kit and will conflict with this pointer-only AGENTS.md. Do not absorb that kit here.
-- DEC-033 Do not list `@LesleyMurfin` in CODEOWNERS. An owner line auto-requests that account as a reviewer. No other owners were in the file, so `.github/CODEOWNERS` is deleted.
