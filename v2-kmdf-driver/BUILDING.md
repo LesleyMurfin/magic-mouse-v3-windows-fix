@@ -23,7 +23,10 @@ powershell -NoProfile -File scripts\Freeze-KmdfArtifact.ps1 -SysPath x64\Release
 
 ## Enterprise WDK ISO
 
-1. Mount the EWDK ISO.
+1. Mount the EWDK ISO anywhere. **Never pin it by drive letter** — a remount moves it,
+   which is the whole reason the compiler once looked "missing". `kmdf-204-scroll-build.ps1`
+   takes the letter from its own `Mount-DiskImage` handle; `kmdf-204-nuget-build.ps1`
+   scans for `BuildEnv\SetupBuildEnv.cmd` and confirms `Version.txt`.
 2. Run `LaunchBuildEnv.cmd` (or `BuildEnv\SetupBuildEnv.cmd`).
 3. `msbuild` the vcxproj as above, then freeze.
 
@@ -33,6 +36,9 @@ NuGet-installed WDK/SDK tool packages — whose default is the one baked into th
 `MM_QUEUE_ROOT` environment variable (or pass `-QueueRoot`) to point them at your own layout.
 The build script also needs the EWDK ISO itself, which has no default: set the `MM_EWDK_ISO`
 environment variable (or pass `-EwdkIso`) to the full path of your downloaded `EWDK_*.iso`.
+
+Where that ISO, the unpacked NuGet payload and the signing tools sit on the maintainer's
+machine, and which environment variables are set there, is recorded in `TOOLCHAIN.md`.
 
 ## Out-of-tree build: `scripts\kmdf-204-nuget-build.ps1`
 

@@ -2,7 +2,7 @@
 
 **Unique 2.0.4.6 scroll package** (`DriverVer 09/20/2026,2.0.4.6`) — **source only, not yet built or signed.** Over 2.0.4.4, the HID control channel is now learned from device-initiated reconnects (`BRB_L2CA_OPEN_CHANNEL_RESPONSE`) as well as host-initiated opens (2.0.4.5), a control read shorter than a mouse report is no longer diverted into the ACL scratch, and the watcher re-arms multitouch by itself after sleep/wake (2.0.4.6) — together keeping the battery percent readable and scroll alive across an idle disconnect and a resume. 2.0.4.4 had carried two fixes over 2.0.4.3: the COL02 Input `0x90` battery read is no longer swallowed by the ACL scratch diversion, and every dragging contact emits wheel notches again (default detent `ScrollStep` 8 -> **16**). **2026-09-15 hardware (the signed 2.0.4.3 build):** pointer + **2-finger** surface scroll + battery `0x90`. 1-finger glass does not scroll. Detent is the registry tunable `ScrollStep`.
 
-**Other PCs ($0):** `Setup-Community.cmd` (testsigning, Secure Boot off). **How to help test:** `COMMUNITY-TESTING.md`. Current state: `STATUS.md`. Ship plan: `SHIPPING.md`. Developer path: thumb `16940C0F` + `Install-KMDF.cmd`.
+**Other PCs ($0):** `Setup-Community.cmd` (testsigning, Secure Boot off). **How to help test:** `COMMUNITY-TESTING.md`. Current state: `STATUS.md`. Ship plan: `SHIPPING.md`. Developer path: thumb `16940C0F` + `Install-KMDF.cmd`. Build from source: `BUILDING.md`; dev-machine toolchain inventory: `TOOLCHAIN.md`.
 
 
 
@@ -81,6 +81,7 @@ v2-kmdf-driver/
   Install-KMDF.cmd / Install-KMDF.ps1   ← pnputil /add-driver only
   Uninstall-KMDF.cmd                    ← unique package only; leaves oem16
   SIGN-AND-INSTALL.md
+  BUILDING.md / TOOLCHAIN.md           ← build path; dev-machine toolchain inventory
   FREEZE-HASH.md
   HID-CONTRACT.md
   scripts/Freeze-KmdfArtifact.ps1
