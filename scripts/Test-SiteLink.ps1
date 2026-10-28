@@ -6,7 +6,7 @@
     Validates internal link integrity of the published docs/ site and of tracked Markdown.
 
 .DESCRIPTION
-    Offline link gate. Performs five checks and emits GitHub Actions error annotations
+    Offline link gate. Performs six checks and emits GitHub Actions error annotations
     for every finding:
 
       1. Internal HTML targets  - every relative href/src in docs/*.html resolves on disk.
@@ -17,6 +17,9 @@
                                   that base must address this sitemap.xml.
       4. Canonical sanity       - every <link rel="canonical"> URL appears as a <loc>.
       5. Markdown links         - every relative ](target) in tracked *.md resolves.
+      6. Backticked repo paths  - every inline code span in tracked *.md that is a bare
+                                  source/script path (scripts/foo.ps1) names a file that
+                                  exists in this tree.
 
     External HTTP(S) links are deliberately NOT checked: third-party availability is not
     this repository's correctness, and network flake must never redden main.
@@ -325,6 +328,48 @@ function Get-TrackedMarkdownFile {
     return @($tracked | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Sort-Object)
 }
 
+function Get-TrackedFileNameCount {
+    <#
+    .SYNOPSIS
+        How many tracked files carry each leaf file name.
+    .DESCRIPTION
+        A backticked reference without a separator ('mm-f1-once.ps1') is a file name, not
+        a path: it can only be resolved when exactly one tracked file answers to it. The
+        counts make that decision cheap and keep ambiguous names out of the gate.
+    #>
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory)][string]$Root
+    )
+
+    $tracked = @()
+    try {
+        $output = & git -C $Root ls-files 2>$null
+        if ($LASTEXITCODE -eq 0 -and $output) {
+            $tracked = @($output | Where-Object { $_ })
+        }
+    }
+    catch {
+        $tracked = @()
+    }
+
+    if ($tracked.Count -eq 0) {
+        $tracked = @(Get-ChildItem -LiteralPath $Root -Recurse -File |
+                Where-Object { $_.FullName -notmatch '(^|[\\/])\.git([\\/]|$)' } |
+                ForEach-Object { $_.Name })
+    }
+
+    # A PowerShell hashtable compares string keys case-insensitively, which is what the
+    # Windows file systems these docs describe do as well.
+    $count = @{}
+    foreach ($item in $tracked) {
+        $name = Split-Path -Leaf -Path ($item -replace '\\', '/')
+        if ($count.ContainsKey($name)) { $count[$name]++ } else { $count[$name] = 1 }
+    }
+
+    return $count
+}
+
 # --------------------------------------------------------------------------------------
 # Setup
 # --------------------------------------------------------------------------------------
@@ -610,6 +655,95 @@ foreach ($path in $markdownFile) {
 }
 
 Add-CheckResult -Name 'Markdown internal links' -Inspected $markdownInspected -Checked $markdownChecked -Unit 'inline link targets'
+
+# --------------------------------------------------------------------------------------
+# Check 6 - backticked repository paths resolve
+#
+# Prose here points at scripts in inline code spans rather than Markdown links, so Check 5
+# never sees them: a doc once told readers to run a build script that was not in the tree
+# and nothing caught it. The match is deliberately narrow because a false positive here
+# blocks every pull request - only a single-backtick span whose entire content is one
+# repo-relative token ending in a source or script extension is resolved at all.
+# --------------------------------------------------------------------------------------
+
+$codeSpanRegex = [regex]'(?<!`)`([^`]+)`(?!`)'
+$sourcePathRegex = [regex]'(?i)\.(?:ps1|sh|cmd|bat|psd1|psm1|c|h|rc|inf|vcxproj|sln|py|yml|yaml)$'
+# Anything that is not a plain repo-relative reference: absolute Windows path, UNC share,
+# POSIX-absolute path, glob or shell metacharacter, or a '..' segment.
+$foreignPathRegex = [regex]'^[A-Za-z]:[\\/]|^\\\\|^/|\.\.|[\s*?<>%$|]'
+$fenceRegex = [regex]'^\s{0,3}(?:```|~~~)'
+$trackedNameCount = Get-TrackedFileNameCount -Root $script:RepoRootFull
+$codePathInspected = 0
+$codePathChecked = 0
+
+foreach ($path in $markdownFile) {
+    $directory = Split-Path -Parent -Path $path
+    $line = @(Get-Content -LiteralPath $path)
+    $inFence = $false
+    for ($index = 0; $index -lt $line.Count; $index++) {
+        $text = $line[$index]
+
+        # Fenced blocks carry transcripts and samples, not claims about this tree.
+        if ($fenceRegex.IsMatch($text)) {
+            $inFence = -not $inFence
+            continue
+        }
+        if ($inFence) { continue }
+
+        foreach ($match in $codeSpanRegex.Matches($text)) {
+            $token = $match.Groups[1].Value
+            if (-not $sourcePathRegex.IsMatch($token)) { continue }
+
+            $codePathInspected++
+            if ($foreignPathRegex.IsMatch($token)) { continue }
+
+            # Docs write Windows separators; the repository stores forward slashes.
+            $relative = $token -replace '\\', '/'
+
+            if (-not $relative.Contains('/')) {
+                # A bare file name only names a file in this tree when exactly one tracked
+                # file answers to it; zero or several makes the reference unresolvable
+                # rather than wrong, so it is passed over in silence.
+                if ($trackedNameCount.ContainsKey($relative) -and $trackedNameCount[$relative] -eq 1) {
+                    $codePathChecked++
+                }
+                continue
+            }
+
+            # Docs reference scripts from the repository root ('v2-kmdf-driver/scripts/x.ps1')
+            # and from their own directory ('scripts/x.ps1' inside v2-kmdf-driver/README.md).
+            $fromRoot = [System.IO.Path]::GetFullPath((Join-Path -Path $script:RepoRootFull -ChildPath $relative))
+            $fromDocument = [System.IO.Path]::GetFullPath((Join-Path -Path $directory -ChildPath $relative))
+
+            # Docs also name paths inside things this repository does not own - the EWDK
+            # ISO's 'BuildEnv\SetupBuildEnv.cmd', a published package layout - and those
+            # can never be resolved here. A reference is a claim about this tree only when
+            # the directory it points into exists in this tree; then a missing file is a
+            # real defect rather than an unknown anchor.
+            $rootParent = [System.IO.Path]::GetDirectoryName($fromRoot)
+            $documentParent = [System.IO.Path]::GetDirectoryName($fromDocument)
+            $rootAnchored = Test-Path -LiteralPath $rootParent -PathType Container
+            $documentAnchored = Test-Path -LiteralPath $documentParent -PathType Container
+            if (-not $rootAnchored -and -not $documentAnchored) { continue }
+
+            $codePathChecked++
+
+            if ((Test-Path -LiteralPath $fromRoot) -or (Test-Path -LiteralPath $fromDocument)) { continue }
+
+            $tried = if ($fromRoot -eq $fromDocument) {
+                Get-RepoRelativePath -Path $fromRoot
+            }
+            else {
+                "$(Get-RepoRelativePath -Path $fromRoot) or $(Get-RepoRelativePath -Path $fromDocument)"
+            }
+
+            Add-Finding -Check 'repo-path' -Path $path -Line ($index + 1) `
+                -Message "Broken repository path '$token' (resolves to $tried, which does not exist)"
+        }
+    }
+}
+
+Add-CheckResult -Name 'Backticked repo paths' -Inspected $codePathInspected -Checked $codePathChecked -Unit 'code-span paths'
 
 # --------------------------------------------------------------------------------------
 # Extraction sanity - a check that saw nothing means the extractor is broken

@@ -15,6 +15,12 @@
 # sign stages and the NuGet-installed WDK/SDK tool packages. Set the
 # MM_QUEUE_ROOT environment variable, or pass -QueueRoot, to move it off the
 # default below.
+#
+# signtool.exe and Inf2Cat.exe are discovered under <QueueRoot>\wdk-packages,
+# newest kit version first and then newest package version, instead of being
+# pinned to one unpack: a package refresh renames those directories and a
+# pinned path then reports a missing tool that is sitting right there. Pass
+# -SignTool / -Inf2Cat to override the search with an exact path.
 [CmdletBinding()]
 param(
     [string]$Version = '2.0.4.6',
@@ -22,7 +28,12 @@ param(
 
     # Build dir holding x64\<Configuration>\*.sys/.inf and FROZEN-UNSIGNED.txt.
     # Default is the in-queue build kmdf-204-scroll-build.ps1 writes.
-    [string]$BuildDir
+    [string]$BuildDir,
+
+    # Full paths to the signing tools. Empty means "discover under
+    # <QueueRoot>\wdk-packages"; a value passed here is used verbatim.
+    [string]$SignTool,
+    [string]$Inf2Cat
 )
 
 $ErrorActionPreference = 'Stop'
@@ -84,21 +95,63 @@ $Forbid = @(
     '370A5555','6DF8575B','9EF6C117','D22EB163','F02ECCED','B4582C50',
     'EA1F80B4','30F91397','614DFA90','E0BC5661','1405473F','A9450168'
 )
-$SignTool = $QueueRoot + '\wdk-packages\Microsoft.Windows.SDK.CPP.10.0.26100.6584\c\bin\10.0.26100.0\x64\signtool.exe'
-$Inf2Cat = $QueueRoot + '\wdk-packages\Microsoft.Windows.WDK.x64.10.0.26100.6584\c\bin\10.0.26100.0\x86\Inf2Cat.exe'
+$SignToolGlob = $QueueRoot + '\wdk-packages\Microsoft.Windows.SDK.CPP.*\c\bin\*\x64\signtool.exe'
+$Inf2CatGlob = $QueueRoot + '\wdk-packages\Microsoft.Windows.WDK.x64.*\c\bin\*\x86\Inf2Cat.exe'
 
 function Fail([int]$c, [string]$m) { Write-Output $m; exit $c }
+
+# Kit dirs are 10.0.26100.0 and package dirs end in 10.0.26100.6584; compare the
+# numeric tail as [version] so 10.0.9 loses to 10.0.26100, which a string sort
+# would get backwards.
+function ConvertTo-ToolVersion([string]$Text) {
+    $m = [regex]::Match($Text, '(\d+(?:\.\d+)+)$')
+    if (-not $m.Success) { return [version]'0.0' }
+    $v = [version]'0.0'
+    if (-not [version]::TryParse($m.Groups[1].Value, [ref]$v)) { return [version]'0.0' }
+    return $v
+}
+
+# Newest kit wins before newest package: the bin\<kit> directory is what decides
+# which tool build signs the driver, the package version is only the wrapper it
+# shipped in and breaks ties.
+function Resolve-SigningTool([string]$Pattern) {
+    $best = $null
+    foreach ($hit in @(Get-ChildItem -Path $Pattern -File -ErrorAction SilentlyContinue)) {
+        # <pkg>\c\bin\<kit>\<arch>\<tool>.exe
+        $kitDir = Split-Path (Split-Path $hit.FullName -Parent) -Parent
+        $pkgDir = Split-Path (Split-Path (Split-Path $kitDir -Parent) -Parent) -Parent
+        $cand = [pscustomobject]@{
+            Path = $hit.FullName
+            Kit  = ConvertTo-ToolVersion (Split-Path $kitDir -Leaf)
+            Pkg  = ConvertTo-ToolVersion (Split-Path $pkgDir -Leaf)
+        }
+        if ($null -eq $best -or $cand.Kit -gt $best.Kit -or ($cand.Kit -eq $best.Kit -and $cand.Pkg -gt $best.Pkg)) {
+            $best = $cand
+        }
+    }
+    if ($null -eq $best) { return '' }
+    return $best.Path
+}
+
+# An explicit -SignTool / -Inf2Cat outranks the search: the operator pointing at
+# a specific tool knows something the queue layout does not.
+if (-not $SignTool) { $SignTool = Resolve-SigningTool $SignToolGlob }
+if (-not $Inf2Cat) { $Inf2Cat = Resolve-SigningTool $Inf2CatGlob }
 
 Write-Output ("===== unique $Version SIGN start =====")
 Write-Output ('build_dir=' + $Work)
 Write-Output ('toolchain=' + $Toolchain)
 Write-Output ('configuration=' + $Config)
+Write-Output ('signtool=' + $SignTool)
+Write-Output ('inf2cat=' + $Inf2Cat)
 Write-Output ('frozen_expects=' + $Want)
 Write-Output ('frozen_inf_expects=' + $WantInf)
 if (-not (Test-Path -LiteralPath $SrcSys)) { Fail 2 ('missing sys ' + $SrcSys) }
 if (-not (Test-Path -LiteralPath $SrcInf)) { Fail 2 ('missing inf ' + $SrcInf) }
-if (-not (Test-Path -LiteralPath $SignTool)) { Fail 2 ('missing signtool ' + $SignTool + ' - set MM_QUEUE_ROOT or pass -QueueRoot to point at the WDK/SDK packages') }
-if (-not (Test-Path -LiteralPath $Inf2Cat)) { Fail 2 ('missing Inf2Cat ' + $Inf2Cat + ' - set MM_QUEUE_ROOT or pass -QueueRoot to point at the WDK/SDK packages') }
+if (-not $SignTool) { Fail 2 ('missing signtool, no match for ' + $SignToolGlob + ' - pass -SignTool <full path to signtool.exe>, or set MM_QUEUE_ROOT or pass -QueueRoot to point at the WDK/SDK packages') }
+if (-not (Test-Path -LiteralPath $SignTool)) { Fail 2 ('missing signtool ' + $SignTool + ' - pass -SignTool <full path to signtool.exe>, or set MM_QUEUE_ROOT or pass -QueueRoot to point at the WDK/SDK packages') }
+if (-not $Inf2Cat) { Fail 2 ('missing Inf2Cat, no match for ' + $Inf2CatGlob + ' - pass -Inf2Cat <full path to Inf2Cat.exe>, or set MM_QUEUE_ROOT or pass -QueueRoot to point at the WDK/SDK packages') }
+if (-not (Test-Path -LiteralPath $Inf2Cat)) { Fail 2 ('missing Inf2Cat ' + $Inf2Cat + ' - pass -Inf2Cat <full path to Inf2Cat.exe>, or set MM_QUEUE_ROOT or pass -QueueRoot to point at the WDK/SDK packages') }
 if ($SrcSys -match 'applewirelessmouse|MagicMouseDriver\.sys$') { Fail 3 'REFUSE live or PATH-A sys name' }
 
 $hash = (Get-FileHash -LiteralPath $SrcSys -Algorithm SHA256).Hash.ToUpperInvariant()

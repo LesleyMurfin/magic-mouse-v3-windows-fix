@@ -2,8 +2,9 @@
 <!--
   KMDF MagicMouseDriver — PID 0x0323 only.
 
-  Build (Windows + WDK or mounted EWDK):
-    msbuild MagicMouseDriver.vcxproj /p:Configuration=Release /p:Platform=x64 /p:SignMode=Off
+  Build (Windows + WDK or mounted EWDK): the flag line lives in BUILDING.md and is
+  what both build scripts run. Do not keep a shorter copy here - a build made with
+  different flags is a different binary.
 
   Then run Freeze-KmdfArtifact.ps1 (names MagicMouseDriver-kmdf-2.0.4-scroll-<sha8>.sys).
   Human signs with cert thumb 16940C0F. pnputil /add-driver the unique INF only.

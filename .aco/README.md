@@ -42,8 +42,10 @@ git show origin/aco-index:.aco/manifest.json
 
 Then download the Release asset named in the manifest.
 
-Workflow source: `.github/workflows/aco-index-publish.yml` (workflow_dispatch;
-push-to-main trigger stays commented so a fork merge cannot surprise-bill CI).
+No publishing workflow is vendored here — `.github/workflows/` carries only `docs-check`,
+`provenance`, `ps-lint` and `release`. Publish the index from the ACO kit by hand
+(`workflow_dispatch`); never wire a push-to-main trigger, so a fork merge cannot
+surprise-bill CI.
 
 ## Build locally (maintainers)
 

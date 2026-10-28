@@ -10,10 +10,16 @@ Do **not** emit `MagicMouseDriver.sys`. That filename is the Apr 30 restore bina
 ## WDK / Visual Studio
 
 ```bat
-msbuild MagicMouseDriver.vcxproj /t:Build /p:Configuration=Release /p:Platform=x64 /p:SignMode=Off /p:EnableInf2cat=false /p:StampInf=false
+msbuild MagicMouseDriver.vcxproj /t:Build /m /nr:false /v:minimal /p:Configuration=Release /p:Platform=x64 /p:SignMode=Off /p:RunCodeAnalysis=false /p:EnableInf2cat=false /p:StampInf=false
 ```
 
-`EnableInf2cat=false` keeps the WDK `Build` target from running signability/Inf2Cat here; the script runs the desktop `InfVerif` check separately before freezing the `.sys`.
+That is the line both build scripts run (`kmdf-204-scroll-build.ps1`,
+`kmdf-204-nuget-build.ps1`) and the one behind every frozen artifact — keep the three
+copies identical. `EnableInf2cat=false` keeps the WDK `Build` target from running
+signability/Inf2Cat here; the script runs the desktop `InfVerif` check separately before
+freezing the `.sys`. `RunCodeAnalysis=false` keeps build-time analysis out of a
+`TreatWarningAsError` driver build; run it deliberately, not as a side effect of a build
+whose output gets hashed and signed.
 
 ```powershell
 powershell -NoProfile -File scripts\Freeze-KmdfArtifact.ps1 -SysPath x64\Release\MagicMouseDriver-kmdf-204-scroll.sys
