@@ -270,14 +270,24 @@ class _Run:
             self.failed.append(name)
 
 
-def hid_len() -> int:
+def hid_descriptor_lens() -> dict[str, int]:
+    """Byte count of EVERY `const UCHAR g_HidDescriptor*[]` blob.
+
+    Since issue #48 there are two overlay sources (classic and hi-res) and
+    SdpRewrite_Process picks between them at run time, so counting only the
+    first one would leave the second free to drift off 0x87 — which is the
+    108-vs-135 mismatch that produced the 0x50 SdpWalkStream dumps.
+    """
     text = HID_C.read_text(encoding="utf-8")
-    marker = "g_HidDescriptor[]"
-    rest = text.split(marker, 1)[1]
-    body = rest.split("{", 1)[1].split("};", 1)[0]
-    stripped = re.sub(r"//.*?$", "", body, flags=re.M)
-    nums = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]{2})\b", stripped)]
-    return len(nums)
+    out: dict[str, int] = {}
+    for match in re.finditer(
+        r"const\s+UCHAR\s+(g_HidDescriptor\w*)\s*\[\s*\]\s*=\s*\{(.*?)\n\s*\};",
+        text,
+        re.S,
+    ):
+        stripped = re.sub(r"//.*?$", "", match.group(2), flags=re.M)
+        out[match.group(1)] = len(re.findall(r"0x[0-9A-Fa-f]{2}\b", stripped))
+    return out
 
 
 def main() -> int:
@@ -291,9 +301,28 @@ def main() -> int:
     common = COMMON.read_text(encoding="utf-8") if COMMON.is_file() else ""
     ih_code = _code(ih)
     overlay_path = _function_body(ih_code, "SdpRewrite_Process")
+    # The overlay source is now a selected pointer, not a named array. The
+    # destination (buf + descOffset) and the length (SDP_HID_OVERLAY_LEN) are
+    # pinned exactly as before; `desc` itself is pinned below to the two
+    # blobs this file proves are 0x87, so the copy still cannot become a
+    # different length or a different destination.
     copy_path = re.search(
         r"RtlCopyMemory\s*\(\s*buf\s*\+\s*descOffset\s*,\s*"
-        r"g_HidDescriptor\s*,\s*SDP_HID_OVERLAY_LEN\s*\)",
+        r"desc\s*,\s*SDP_HID_OVERLAY_LEN\s*\)",
+        overlay_path,
+    )
+    desc_select = re.search(
+        r"const\s+UCHAR\s*\*\s*desc\s*=\s*HiRes\s*\?\s*"
+        r"g_HidDescriptorHiRes\s*:\s*g_HidDescriptor\s*;",
+        overlay_path,
+    )
+    # Exactly one store to `desc`: the ternary above. A second assignment
+    # could point the copy at a blob whose size was never checked.
+    desc_stores = len(re.findall(r"\bdesc\s*=(?!=)", overlay_path))
+    # Both sizes are re-validated against SDP_HID_OVERLAY_LEN before the copy.
+    size_guard = re.search(
+        r"g_HidDescriptorSize\s*!=\s*SDP_HID_OVERLAY_LEN\s*\|\|\s*"
+        r"g_HidDescriptorHiResSize\s*!=\s*SDP_HID_OVERLAY_LEN",
         overlay_path,
     )
     prefix_path = re.search(
@@ -312,20 +341,40 @@ def main() -> int:
     )
 
     # --- 0x50 SdpWalkStream (090126-18750 / 090126-17390) ---
-    n = hid_len() if HID_C.is_file() else -1
+    lens = hid_descriptor_lens() if HID_C.is_file() else {}
+    n = lens.get("g_HidDescriptor", -1)
+    n_hires = lens.get("g_HidDescriptorHiRes", -1)
+    # Every blob in the file, not just the two expected names: a third
+    # overlay source would be one SdpRewrite_Process edit away from a
+    # different-sized copy, and this gate would never have looked at it.
+    all_0x87 = bool(lens) and all(size == 0x87 for size in lens.values())
     run.check(
         "BSOD_50_HID_NOT_108",
-        n == 0x87,
-        f"sizeof={n} dumps=090126-17390-01,090126-18750-01",
+        n == 0x87 and n_hires == 0x87 and all_0x87,
+        f"g_HidDescriptor={n} g_HidDescriptorHiRes={n_hires} "
+        f"blobs={sorted(lens)} dumps=090126-17390-01,090126-18750-01",
+    )
+    rtlcopy_ok = (
+        copy_path is not None
+        and desc_select is not None
+        and desc_stores == 1
+        and size_guard is not None
+        and size_guard.start() < copy_path.start()
+        and all_0x87
+        and re.search(r"#define\s+SDP_HID_OVERLAY_LEN\s+0x87\b", ih_code)
+        is not None
     )
     run.check(
         "BSOD_50_RTLCOPY_ONLY",
-        copy_path is not None
-        and re.search(
-            r"#define\s+SDP_HID_OVERLAY_LEN\s+0x87\b", ih_code
-        )
-        is not None,
-        "SdpRewrite_Process copies g_HidDescriptor to buf+descOffset (0x87)",
+        rtlcopy_ok,
+        "SdpRewrite_Process copies desc (one of the two 0x87 blobs, both "
+        "size-checked first) to buf+descOffset for SDP_HID_OVERLAY_LEN"
+        if rtlcopy_ok
+        else (
+            f"copy={copy_path is not None} desc_ternary={desc_select is not None} "
+            f"desc_stores={desc_stores} size_guard={size_guard is not None} "
+            f"blobs_all_0x87={all_0x87}"
+        ),
     )
     run.check(
         "BSOD_50_PREFIX_IN_C",

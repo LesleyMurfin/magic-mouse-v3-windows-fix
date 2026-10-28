@@ -20,9 +20,20 @@
 # 9-byte reports - so this script re-runs F1 afterwards, exactly like
 # kmdf-204-pnputil-once.ps1 does. MmAutoF1Watcher would also catch it, but
 # waiting on a race is not verification.
+#
+# -HiResScroll writes Parameters!HiResScroll (REG_DWORD 0/1, issue #48). The
+# driver reads it in the same EvtDeviceAdd pass: 1 overlays the descriptor that
+# carries the HID Resolution Multiplier, so each emitted unit is 120/4 = 30
+# instead of 120. Same sensitivity per unit of surface travel, four times finer
+# steps, and no more discarded sub-detent or super-detent travel - flicks will
+# feel slightly faster because the classic path was collapsing them to one
+# notch. Omit the switch to leave the value alone. Diag!HiResScroll echoes what
+# the driver loaded; Diag!F1PayloadForced only rises once Windows has actually
+# issued the multiplier SET_REPORT.
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateRange(1, 224)][int]$ScrollStep
+    [Parameter(Mandatory)][ValidateRange(1, 224)][int]$ScrollStep,
+    [ValidateRange(0, 1)][int]$HiResScroll
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,23 +45,34 @@ $F1        = Join-Path $PSScriptRoot 'mm-f1-once.ps1'
 
 function Fail([int]$c, [string]$m) { Write-Output $m; exit $c }
 
-Write-Output ('===== scroll tune ScrollStep=' + $ScrollStep + ' =====')
+$setHiRes = $PSBoundParameters.ContainsKey('HiResScroll')
+$hiResBanner = if ($setHiRes) { ' HiResScroll=' + $HiResScroll } else { '' }
+Write-Output ('===== scroll tune ScrollStep=' + $ScrollStep + $hiResBanner + ' =====')
 
 if (-not (Test-Path -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Services\MagicMouseDriver204Scroll')) {
     Fail 2 'service MagicMouseDriver204Scroll not present - nothing to tune'
 }
 
 $prev = 'unset'
+$prevHiRes = 'unset'
 if (Test-Path -LiteralPath $ParamsKey) {
     $cur = Get-ItemProperty -LiteralPath $ParamsKey -Name ScrollStep -ErrorAction SilentlyContinue
     if ($null -ne $cur -and $null -ne $cur.ScrollStep) { $prev = $cur.ScrollStep }
+    $curHiRes = Get-ItemProperty -LiteralPath $ParamsKey -Name HiResScroll -ErrorAction SilentlyContinue
+    if ($null -ne $curHiRes -and $null -ne $curHiRes.HiResScroll) { $prevHiRes = $curHiRes.HiResScroll }
 } else {
     New-Item -Path $ParamsKey -Force | Out-Null
 }
 Write-Output ('previous=' + $prev)
+Write-Output ('previous_HiResScroll=' + $prevHiRes)
 
 Set-ItemProperty -LiteralPath $ParamsKey -Name ScrollStep -Type DWord -Value $ScrollStep
 Write-Output ('wrote ScrollStep=' + $ScrollStep)
+
+if ($setHiRes) {
+    Set-ItemProperty -LiteralPath $ParamsKey -Name HiResScroll -Type DWord -Value $HiResScroll
+    Write-Output ('wrote HiResScroll=' + $HiResScroll)
+}
 
 Write-Output '=== resolve present 0323 instance so EvtDeviceAdd re-reads it ==='
 $device = Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue |
@@ -102,6 +124,8 @@ if ($null -eq $diag) {
     Write-Output 'no Diag key yet - driver has not run its diag timer'
 } else {
     Write-Output ('driver_ScrollStep=' + $diag.ScrollStep)
+    Write-Output ('driver_HiResScroll=' + $diag.HiResScroll)
+    Write-Output ('F1PayloadForced='   + $diag.F1PayloadForced + '  (>0 means Windows set the Resolution Multiplier and the filter repaired the payload)')
     Write-Output ('LastAclReceived='   + $diag.LastAclReceived + '  (>=14 means multitouch, 9 means compact)')
     Write-Output ('LastOutHdr='        + $diag.LastOutHdr)
     if ($null -ne $diag.ScrollStep -and [int]$diag.ScrollStep -ne $ScrollStep) {
@@ -112,6 +136,18 @@ if ($null -eq $diag) {
             exit 3010
         }
         Fail 3 $diagMsg
+    }
+    if ($setHiRes -and $null -ne $diag.HiResScroll -and [int]$diag.HiResScroll -ne $HiResScroll) {
+        $hiResMsg = 'driver still reports HiResScroll=' + $diag.HiResScroll + ' - restart did not pick up the new value'
+        if ($rebootRequired) {
+            Write-Output ($hiResMsg + ' - the device restart reported 3010, so the re-read is deferred to the reboot')
+            Write-Output 'reboot and re-run this script to verify'
+            exit 3010
+        }
+        Fail 3 $hiResMsg
+    }
+    if ($setHiRes -and $HiResScroll -eq 1 -and [int]$diag.F1PayloadForced -eq 0) {
+        Write-Output 'F1PayloadForced is still 0 - Windows has not issued SET_REPORT(Feature, 0xF1) yet, so the multiplier is still 1 and scrolling stays quantised to WHEEL_DELTA'
     }
 }
 

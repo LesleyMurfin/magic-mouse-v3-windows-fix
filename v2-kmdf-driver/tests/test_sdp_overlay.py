@@ -45,18 +45,25 @@ NATIVE_351_HEX = (
 )
 
 
-def hid_descriptor_bytes() -> bytes:
-    """Parse g_HidDescriptor[] `{`…`};` hex from HidDescriptor.c."""
+def hid_descriptor_bytes(name: str = "g_HidDescriptor") -> bytes:
+    """Parse one `const UCHAR <name>[] = { … };` hex blob from HidDescriptor.c.
+
+    Anchored on the full declaration, not on a bare `g_HidDescriptor`
+    substring: since issue #48 the file also declares g_HidDescriptorHiRes,
+    and a prefix split would pick whichever happened to come first.
+    """
     text = HID_C.read_text(encoding="utf-8")
-    marker = "g_HidDescriptor[]"
-    if marker not in text:
-        raise ValueError("g_HidDescriptor[] not found")
-    rest = text.split(marker, 1)[1]
-    if "{" not in rest or "};" not in rest:
-        raise ValueError("g_HidDescriptor[] `{`…`};` not found")
-    body = rest.split("{", 1)[1].split("};", 1)[0]
-    stripped = re.sub(r"//.*?$", "", body, flags=re.M)
+    match = re.search(
+        r"const\s+UCHAR\s+" + re.escape(name) + r"\s*\[\s*\]\s*=\s*\{(.*?)\n\s*\};",
+        text,
+        re.S,
+    )
+    if match is None:
+        raise ValueError(f"const UCHAR {name}[] = {{ … }}; not found")
+    stripped = re.sub(r"//.*?$", "", match.group(1), flags=re.M)
     nums = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]{2})\b", stripped)]
+    if not nums:
+        raise ValueError(f"{name}[] has no 0xNN bytes")
     return bytes(nums)
 
 def _code(text: str) -> str:
@@ -100,9 +107,22 @@ def _production_overlay_contract() -> tuple[bytes, int] | None:
     size_match = re.search(
         r"#define\s+SDP_HID_OVERLAY_LEN\s+0x([0-9A-Fa-f]+)\b", code
     )
+    # The copy source is a pointer selected from the two same-size blobs.
+    # Destination and length are unchanged; the selection itself is pinned so
+    # the overlay can never source a blob whose size was not checked.
     copy_ok = re.search(
         r"RtlCopyMemory\s*\(\s*buf\s*\+\s*descOffset\s*,\s*"
-        r"g_HidDescriptor\s*,\s*SDP_HID_OVERLAY_LEN\s*\)",
+        r"desc\s*,\s*SDP_HID_OVERLAY_LEN\s*\)",
+        body,
+    )
+    desc_ok = re.search(
+        r"const\s+UCHAR\s*\*\s*desc\s*=\s*HiRes\s*\?\s*"
+        r"g_HidDescriptorHiRes\s*:\s*g_HidDescriptor\s*;",
+        body,
+    )
+    both_sizes_ok = re.search(
+        r"g_HidDescriptorSize\s*!=\s*SDP_HID_OVERLAY_LEN\s*\|\|\s*"
+        r"g_HidDescriptorHiResSize\s*!=\s*SDP_HID_OVERLAY_LEN",
         body,
     )
     prefix_ok = re.search(
@@ -127,6 +147,8 @@ def _production_overlay_contract() -> tuple[bytes, int] | None:
         prefix_match
         and size_match
         and copy_ok
+        and desc_ok
+        and both_sizes_ok
         and prefix_ok
         and not_found_ok
         and fit_ok
@@ -223,98 +245,148 @@ def main() -> int:
     fit = hid_off >= 0 and hid_off + HID_LEN <= len(native)
     run.check("NATIVE_HID_FITS", fit, f"off={hid_off}")
 
-    try:
-        hid = hid_descriptor_bytes()
-        parse_ok = True
-        parse_err = ""
-    except (OSError, ValueError) as e:
-        hid = b""
-        parse_ok = False
-        parse_err = str(e)
-    run.check("HID_C_PARSE", parse_ok, parse_err or f"len={len(hid)}")
-    run.check("HID_SIZE_0x87", len(hid) == HID_LEN, f"sizeof={len(hid)}")
-    run.check("HID_HAS_09_38", b"\x09\x38" in hid)
-    run.check("HID_HAS_85_90", b"\x85\x90" in hid)
-    run.check("HID_HAS_85_F1", b"\x85\xf1" in hid)
-    run.check("HID_NO_85_47", b"\x85\x47" not in hid)
-    run.check("HID_NO_85_02", b"\x85\x02" not in hid)
-    c1, ac, order, detail = hid_count1_acpan_wheel(hid) if hid else (False, False, False, "no hid")
-    run.check("HID_COUNT1_BEFORE_WHEEL", c1, detail)
-    run.check("HID_HAS_0A_38_02", ac, detail)
-    run.check("HID_ACPAN_THEN_WHEEL", order, detail)
+    contract = _production_overlay_contract()
 
-    overlaid = bytearray(native)
-    applied = apply_production_overlay(
-        overlaid, hid, _production_overlay_contract()
-    )
-    run.check(
-        "OVERLAY_APPLIED",
-        applied,
-        "memcpy 135 after prefix" if applied else "no-op (prefix missing or sizeof != 0x87)",
-    )
-    run.check("OVERLAY_LEN_351", len(overlaid) == 351, f"len={len(overlaid)}")
+    def overlay_mode(tag: str, name: str) -> bytes:
+        """Run the production copy path with one of the two 0x87 blobs.
 
-    prefix_ok = False
-    if idx >= 0:
-        prefix_ok = bytes(overlaid[idx : idx + len(PREFIX)]) == PREFIX
-    run.check(
-        "PREFIX_UNCHANGED",
-        prefix_ok,
-        "09 02 06 35 8D 35 8B 08 22 25 87",
-    )
-
-    if fit:
-        changed = [
-            i
-            for i in range(len(native))
-            if overlaid[i] != native[i]
-        ]
-        hid_span = set(range(hid_off, hid_off + HID_LEN))
-        outside = [i for i in changed if i not in hid_span]
+        `tag` is "" for the classic descriptor (the historical check names)
+        and "HIRES_" for g_HidDescriptorHiRes. Both are overlaid into the
+        same native 351-byte CachedServices blob, because the whole point of
+        keeping the hi-res variant at 0x87 is that the overlay stays
+        same-size and the SDP length stores stay untouched in both modes.
+        """
+        try:
+            hid = hid_descriptor_bytes(name)
+            parse_ok = True
+            parse_err = ""
+        except (OSError, ValueError) as exc:
+            hid = b""
+            parse_ok = False
+            parse_err = str(exc)
+        run.check(f"{tag}HID_C_PARSE", parse_ok, parse_err or f"{name} len={len(hid)}")
         run.check(
-            "ONLY_135_BYTES_DIFFER",
-            not outside,
-            f"outside={outside[:8]} n={len(outside)}" if outside else "prefix+tail unchanged",
+            f"{tag}HID_SIZE_0x87", len(hid) == HID_LEN, f"{name} sizeof={len(hid)}"
         )
-        copied = bytes(overlaid[hid_off : hid_off + HID_LEN])
-        run.check(
-            "OVERLAY_COPIED_135",
-            applied and copied == hid,
-            f"applied={applied} hid_len={len(hid)}",
+        run.check(f"{tag}HID_HAS_09_38", b"\x09\x38" in hid)
+        run.check(f"{tag}HID_HAS_85_90", b"\x85\x90" in hid)
+        run.check(f"{tag}HID_HAS_85_F1", b"\x85\xf1" in hid)
+        run.check(f"{tag}HID_NO_85_47", b"\x85\x47" not in hid)
+        run.check(f"{tag}HID_NO_85_02", b"\x85\x02" not in hid)
+        c1, ac, order, detail = (
+            hid_count1_acpan_wheel(hid) if hid else (False, False, False, "no hid")
         )
-        region = copied if applied else bytes(native[hid_off : hid_off + HID_LEN])
-        run.check("OVERLAY_HAS_09_38", b"\x09\x38" in region)
-        run.check("OVERLAY_HAS_85_90", b"\x85\x90" in region)
-        run.check("OVERLAY_HAS_85_F1", b"\x85\xf1" in region)
-        run.check("OVERLAY_NO_85_47", b"\x85\x47" not in region)
-        run.check("OVERLAY_NO_85_02", b"\x85\x02" not in region)
-        oc1, oac, oorder, odetail = hid_count1_acpan_wheel(region)
-        run.check("OVERLAY_COUNT1_BEFORE_WHEEL", oc1, odetail)
-        run.check("OVERLAY_HAS_0A_38_02", oac, odetail)
-        run.check("OVERLAY_ACPAN_THEN_WHEEL", oorder, odetail)
-    else:
-        run.check("ONLY_135_BYTES_DIFFER", False, "native HID span invalid")
-        run.check("OVERLAY_COPIED_135", False, "native HID span invalid")
-        run.check("OVERLAY_HAS_09_38", False, "native HID span invalid")
-        run.check("OVERLAY_HAS_85_90", False, "native HID span invalid")
-        run.check("OVERLAY_HAS_85_F1", False, "native HID span invalid")
-        run.check("OVERLAY_NO_85_47", False, "native HID span invalid")
-        run.check("OVERLAY_NO_85_02", False, "native HID span invalid")
-        run.check("OVERLAY_COUNT1_BEFORE_WHEEL", False, "native HID span invalid")
-        run.check("OVERLAY_HAS_0A_38_02", False, "native HID span invalid")
-        run.check("OVERLAY_ACPAN_THEN_WHEEL", False, "native HID span invalid")
+        run.check(f"{tag}HID_COUNT1_BEFORE_WHEEL", c1, detail)
+        run.check(f"{tag}HID_HAS_0A_38_02", ac, detail)
+        run.check(f"{tag}HID_ACPAN_THEN_WHEEL", order, detail)
 
-    missing = bytearray(native)
-    if idx >= 0:
-        missing[idx] ^= 0xFF
-    before = bytes(missing)
-    missing_applied = apply_production_overlay(
-        missing, hid, _production_overlay_contract()
+        overlaid = bytearray(native)
+        applied = apply_production_overlay(overlaid, hid, contract)
+        run.check(
+            f"{tag}OVERLAY_APPLIED",
+            applied,
+            "memcpy 135 after prefix"
+            if applied
+            else "no-op (prefix missing or sizeof != 0x87)",
+        )
+        run.check(
+            f"{tag}OVERLAY_LEN_351", len(overlaid) == 351, f"len={len(overlaid)}"
+        )
+
+        prefix_kept = idx >= 0 and bytes(overlaid[idx : idx + len(PREFIX)]) == PREFIX
+        run.check(
+            f"{tag}PREFIX_UNCHANGED",
+            prefix_kept,
+            "09 02 06 35 8D 35 8B 08 22 25 87",
+        )
+        # The four length stores the 0x50 SdpWalkStream dumps came from:
+        # outer SEQ 35 8D, inner SEQ 35 8B, TEXT_STRING 25 87, and the
+        # AttributeLists length at buf[4]. None of them is a function of
+        # which descriptor was selected.
+        len_stores_kept = idx >= 0 and (
+            bytes(overlaid[idx + 3 : idx + 7]) == bytes.fromhex("358D358B")
+            and bytes(overlaid[idx + 9 : idx + 11]) == bytes.fromhex("2587")
+            and overlaid[4] == native[4]
+        )
+        run.check(
+            f"{tag}SDP_LEN_STORES_UNTOUCHED",
+            len_stores_kept,
+            "35 8D / 35 8B / 25 87 / buf[4] identical to native"
+            if len_stores_kept
+            else f"idx={idx} prefix region={bytes(overlaid[idx:idx+11]).hex()}",
+        )
+
+        if fit:
+            changed = [i for i in range(len(native)) if overlaid[i] != native[i]]
+            hid_span = set(range(hid_off, hid_off + HID_LEN))
+            outside = [i for i in changed if i not in hid_span]
+            run.check(
+                f"{tag}ONLY_135_BYTES_DIFFER",
+                not outside,
+                f"outside={outside[:8]} n={len(outside)}"
+                if outside
+                else "prefix+tail unchanged",
+            )
+            copied = bytes(overlaid[hid_off : hid_off + HID_LEN])
+            run.check(
+                f"{tag}OVERLAY_COPIED_135",
+                applied and copied == hid,
+                f"applied={applied} hid_len={len(hid)}",
+            )
+            region = copied if applied else bytes(native[hid_off : hid_off + HID_LEN])
+            run.check(f"{tag}OVERLAY_HAS_09_38", b"\x09\x38" in region)
+            run.check(f"{tag}OVERLAY_HAS_85_90", b"\x85\x90" in region)
+            run.check(f"{tag}OVERLAY_HAS_85_F1", b"\x85\xf1" in region)
+            run.check(f"{tag}OVERLAY_NO_85_47", b"\x85\x47" not in region)
+            run.check(f"{tag}OVERLAY_NO_85_02", b"\x85\x02" not in region)
+            oc1, oac, oorder, odetail = hid_count1_acpan_wheel(region)
+            run.check(f"{tag}OVERLAY_COUNT1_BEFORE_WHEEL", oc1, odetail)
+            run.check(f"{tag}OVERLAY_HAS_0A_38_02", oac, odetail)
+            run.check(f"{tag}OVERLAY_ACPAN_THEN_WHEEL", oorder, odetail)
+        else:
+            for suffix in (
+                "ONLY_135_BYTES_DIFFER",
+                "OVERLAY_COPIED_135",
+                "OVERLAY_HAS_09_38",
+                "OVERLAY_HAS_85_90",
+                "OVERLAY_HAS_85_F1",
+                "OVERLAY_NO_85_47",
+                "OVERLAY_NO_85_02",
+                "OVERLAY_COUNT1_BEFORE_WHEEL",
+                "OVERLAY_HAS_0A_38_02",
+                "OVERLAY_ACPAN_THEN_WHEEL",
+            ):
+                run.check(f"{tag}{suffix}", False, "native HID span invalid")
+
+        missing = bytearray(native)
+        if idx >= 0:
+            missing[idx] ^= 0xFF
+        before = bytes(missing)
+        missing_applied = apply_production_overlay(missing, hid, contract)
+        run.check(
+            f"{tag}MISSING_PREFIX_NO_MUTATION",
+            (not missing_applied) and bytes(missing) == before,
+            f"applied={missing_applied}",
+        )
+        return hid
+
+    hid = overlay_mode("", "g_HidDescriptor")
+    hid_hires = overlay_mode("HIRES_", "g_HidDescriptorHiRes")
+    run.check(
+        "HIRES_SAME_SIZE_AS_CLASSIC",
+        len(hid) == len(hid_hires) == HID_LEN,
+        f"classic={len(hid)} hires={len(hid_hires)} (the overlay is same-size "
+        "in both modes, so no SDP length store is a function of HiRes)",
     )
     run.check(
-        "MISSING_PREFIX_NO_MUTATION",
-        (not missing_applied) and bytes(missing) == before,
-        f"applied={missing_applied}",
+        "HIRES_IS_A_DIFFERENT_BLOB",
+        bool(hid) and hid != hid_hires,
+        "g_HidDescriptorHiRes is not a copy of g_HidDescriptor",
+    )
+    run.check(
+        "HIRES_HAS_09_48",
+        b"\x09\x48" in hid_hires and b"\x09\x48" not in hid,
+        "Resolution Multiplier usage 0x48 only in the hi-res blob",
     )
 
     return 1 if run.failed else 0

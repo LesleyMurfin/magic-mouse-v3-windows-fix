@@ -45,6 +45,43 @@ ReadI12Le(_In_reads_(2) const UCHAR* p)
     return v >> 20;
 }
 
+// Travel -> wheel units for one axis, plus the travel those units consume.
+//
+// Classic (hiRes FALSE) is the 2026-09-01 hardware-proven rule, unchanged:
+// one unit once travel crosses the detent, anchor snapped to the current
+// position so the overshoot is dropped. One unit is WHEEL_DELTA 120 to
+// hidclass, which is the one-line jump issue #48 is about.
+//
+// Hi-res (hiRes TRUE) takes the quotient instead, so a report that travelled
+// three detents emits three units rather than one, and consumes exactly
+// units * step — the remainder stays in the anchor and is spent on the next
+// report instead of being thrown away. Both behaviours are the same code
+// path at step == travel; only the sub-detent and super-detent remainders
+// differ, which is precisely what the Resolution Multiplier makes visible.
+static __forceinline INT
+DetentUnits(
+    _In_ INT travel,
+    _In_ INT step,
+    _In_ BOOLEAN hiRes,
+    _Out_ INT* consumed)
+{
+    if (hiRes)
+    {
+        INT units = travel / step;      // truncates toward zero, sign kept
+        *consumed = units * step;
+        return units;
+    }
+
+    if (travel >= step || travel <= -step)
+    {
+        *consumed = travel;
+        return (travel > 0) ? 1 : -1;
+    }
+
+    *consumed = 0;
+    return 0;
+}
+
 static VOID
 AccumulateSurfaceScroll(
     _In_reads_bytes_(inLen) PUCHAR in,
@@ -75,9 +112,22 @@ AccumulateSurfaceScroll(
 
     WdfSpinLockAcquire(ctx->Lock);
 
+    BOOLEAN hiRes = ctx->HiResScroll;
+
     ULONG step = ctx->ScrollStep;
     if (step < MM_SCROLL_STEP_MIN) { step = MM_SCROLL_STEP; }
     if (step > MM_SCROLL_STEP_MAX) { step = MM_SCROLL_STEP_MAX; }
+
+    // Hi-res divides the detent by exactly the multiplier the host was told
+    // about, so the same drag still scrolls the same distance - in
+    // MM_HIRES_MULTIPLIER smaller steps. Floor at 1: step 0 would emit a unit
+    // on every report regardless of travel, and 1/4 of the minimum tunable
+    // detent rounds to 0.
+    if (hiRes)
+    {
+        step /= MM_HIRES_MULTIPLIER;
+        if (step < 1) { step = 1; }
+    }
 
     // Every contact in DRAG with a valid anchor emits its own notches.
     //
@@ -161,21 +211,28 @@ AccumulateSurfaceScroll(
         // reference-finger bug; notches climbing while raw input shows no wheel
         // is loss downstream of this filter; flat travel means the user is not
         // scrolling at all. Travel counts the touch units consumed at a
-        // threshold crossing, notches counts every +1/-1 emitted on either
+        // threshold crossing, notches counts every unit emitted on either
         // axis. Wrapping ULONG adds under the lock this function already holds.
-        if (stepY >= (INT)step || stepY <= -(INT)step)
+        INT consumedY = 0;
+        INT unitsY = DetentUnits(stepY, (INT)step, hiRes, &consumedY);
+        if (unitsY != 0)
         {
-            *outWheel += (stepY > 0) ? 1 : -1;
-            ctx->ScrollTravelUnits += (ULONG)(stepY < 0 ? -stepY : stepY);
-            ctx->ScrollNotchCount++;
-            ctx->TouchAnchorY[id] = (INT16)y;
+            *outWheel += unitsY;
+            ctx->ScrollTravelUnits += (ULONG)(consumedY < 0 ? -consumedY : consumedY);
+            ctx->ScrollNotchCount  += (ULONG)(unitsY < 0 ? -unitsY : unitsY);
+            ctx->TouchAnchorY[id] = (INT16)((INT)ctx->TouchAnchorY[id] - consumedY);
         }
-        if (stepX >= (INT)step || stepX <= -(INT)step)
+
+        INT consumedX = 0;
+        INT unitsX = DetentUnits(stepX, (INT)step, hiRes, &consumedX);
+        if (unitsX != 0)
         {
-            *outHWheel += (stepX > 0) ? -1 : 1;
-            ctx->ScrollTravelUnits += (ULONG)(stepX < 0 ? -stepX : stepX);
-            ctx->ScrollNotchCount++;
-            ctx->TouchAnchorX[id] = (INT16)x;
+            // AC Pan is inverted against surface travel, as it has been since
+            // the first working build.
+            *outHWheel += -unitsX;
+            ctx->ScrollTravelUnits += (ULONG)(consumedX < 0 ? -consumedX : consumedX);
+            ctx->ScrollNotchCount  += (ULONG)(unitsX < 0 ? -unitsX : unitsX);
+            ctx->TouchAnchorX[id] = (INT16)((INT)ctx->TouchAnchorX[id] - consumedX);
         }
     }
 

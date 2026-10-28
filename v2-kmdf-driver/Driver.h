@@ -65,6 +65,17 @@
 #define MM_TOUCH_SLOTS 16
 #define MM_ACL_MAX_PARSE (14 + 8 * MM_TOUCH_SLOTS)
 
+// HIDP transaction header and the Apple vendor Feature report that carries
+// both the multitouch enable and, in g_HidDescriptorHiRes, the HID
+// Resolution Multiplier. Linux hid-magicmouse feature_mt_mouse2 is
+// { 0xF1, 0x02, 0x01 }; on the Bluetooth control channel that is the wire
+// sequence 53 F1 02 01. MmSendMtEnable spells those bytes out literally -
+// these names are for the filter's inspection of a host-issued SET_REPORT.
+#define MM_HID_SET_REPORT_FEATURE ((UCHAR)0x53)
+#define MM_REPORT_ID_VENDOR_F1    ((UCHAR)0xF1)
+#define MM_MT_ENABLE_B0           ((UCHAR)0x02)
+#define MM_MT_ENABLE_B1           ((UCHAR)0x01)
+
 typedef struct _DEVICE_CONTEXT
 {
     WDFSPINLOCK Lock;
@@ -110,6 +121,22 @@ typedef struct _DEVICE_CONTEXT
     // sensitive. Read once in EvtDeviceAdd, so a change needs a device
     // restart, not a driver reinstall.
     ULONG   ScrollStep;
+
+    // Hi-res scroll (issue #48), Parameters!HiResScroll (REG_DWORD, default
+    // 0). When set, SdpRewrite_Process overlays g_HidDescriptorHiRes instead
+    // of g_HidDescriptor, AccumulateSurfaceScroll divides the detent by
+    // MM_HIRES_MULTIPLIER and carries the sub-detent remainder, and the
+    // outbound SET_REPORT(Feature, 0xF1) payload is restored to Apple's
+    // multitouch enable. Off leaves every one of those paths byte-identical
+    // to the 2026-09-01 hardware-proven build. Read once in EvtDeviceAdd, so
+    // a change needs a device restart.
+    BOOLEAN HiResScroll;
+
+    // Times the filter rewrote a host SET_REPORT(Feature, 0xF1) payload back
+    // to 02 01. Published to Diag: hi-res scroll working while this stays 0
+    // means Windows never set the multiplier, and multitouch dying right
+    // after enabling hi-res means this is not firing.
+    ULONG   F1PayloadForced;
 
     // Scroll diagnosis pair, published to Diag alongside Rid12Count.
     // Counters alone cannot tell a hand resting motionless on the surface -
