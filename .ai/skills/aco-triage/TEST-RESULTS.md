@@ -15,7 +15,26 @@ agents: [RunLayerA, RunLayerB, RunLayerC, RunLayerD]
 **Layers:** A–D recorded inline below  
 **Matrix:** [`TEST-MATRIX.md`](./TEST-MATRIX.md)
 
-## Executive scorecard
+> **Provenance — inherited, not reproduced here.** Every number in the Layer A–D
+> sections below was produced by the ACO kit's 2026-10-13 run in the kit's home
+> repository against the `riley_kg` monorepo and a real ~214MB `graph.db`. None of it
+> was measured in `magic-mouse-v3-windows-fix`, which ships no `graph.db` and has
+> neither `riley-kg` nor `aicostoptimizer` on `PATH`. Treat those rows as the upstream
+> baseline. The only results measured in this repo are in **Local re-run** directly
+> below.
+
+## Local re-run (this repo)
+
+Measured in `magic-mouse-v3-windows-fix` on 2026-10-28, Node v20.20.0:
+
+| Check | Command | Result |
+|-------|---------|--------|
+| A2/A3 verifier, offline-only | `python3 .ai/skills/aco-triage/scripts/verify_graceful_degrade.py --offline-only` | exit **0**, `passed=24 failed=0`, `RESULT: PASS` |
+| A1 smoke | `python3 .ai/skills/aco-triage/tests/test_graceful_degrade_smoke.py` | exit **0**, `Ran 4 tests ... OK` |
+| A4 probe self-test | `node --experimental-strip-types ... jev-probe.self-test.ts` | **not run** — needs Node 22.6+; this host is v20.20.0, which is why the verifier is run with `--offline-only` |
+| B/C layers | `riley-kg` + `.aco/graph.db` | **not applicable** — neither is present in this repo |
+
+## Executive scorecard (inherited run)
 
 | Layer | IDs | Result vs baseline | Notes |
 |-------|-----|--------------------|-------|

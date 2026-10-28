@@ -74,25 +74,30 @@ python3 -m pytest tests/test_aicostoptimizer_status.py tests/test_token_guard.py
 
 ```bash
 cd <kit-target-root>
-export PYTHONPATH=<agents-root>
-python3 -m riley_kg.cli --help
-python3 -m riley_kg.cli blast-radius --db .aco/graph.db src/main/ipc/app.ts
-python3 -m riley_kg.cli blast-radius --db .aco/graph.db cloud/apps/relay/src/assignment-store.ts
-python3 -m riley_kg.cli callers --db .aco/graph.db registerAppHandlers
+riley-kg --help
+riley-kg blast-radius --db .aco/graph.db v2-kmdf-driver/GestureEngine.c
+riley-kg blast-radius --db .aco/graph.db v2-kmdf-driver/Driver.c
+riley-kg callers --db .aco/graph.db AccumulateSurfaceScroll
 sqlite3 .aco/graph.db "SELECT COUNT(*) FROM kg_nodes; SELECT COUNT(*) FROM kg_edges;"
 du -h .aco/graph.db
 ```
 
+`riley-kg` comes from `LesleyMurfin/agents@agents-sqlite-graph`. Absent CLI or absent
+`.aco/graph.db` skips Layer C — it never fails a review.
+
 | ID | Check | Pass criteria |
 |----|-------|---------------|
 | C1 | CLI `--help` / subcommand help | exit 0 |
-| C2 | blast-radius `app.ts` | exit 0, wall &lt; 1.0s |
-| C3 | blast-radius hot path | exit 0, wall &lt; 2.0s |
+| C2 | blast-radius `GestureEngine.c` | exit 0, wall &lt; 1.0s |
+| C3 | blast-radius `Driver.c` | exit 0, wall &lt; 2.0s |
 | C4 | callers | exit 0, JSON list |
-| C5 | sqlite counts | nodes/edges &gt; 0; files ~32k symbols ~99k band |
-| C6 | db size | present; ~200MB+ class (do not commit) |
+| C5 | sqlite counts | nodes/edges &gt; 0 |
+| C6 | db size | present; scales with repo (do not commit) |
 
 ## Layer D — CI publisher static
+
+Only when the repo installed the kit with `--with-publish-workflow`. This repo did not,
+so `.github/workflows/aco-index-publish.yml` is absent and Layer D is skipped.
 
 ```bash
 python3 -c "import yaml; yaml.safe_load(open('.github/workflows/aco-index-publish.yml'))"
@@ -109,7 +114,7 @@ Run **A1+A2+A4 + B1 + C2**. That is the minimum merge bar for kit+engine PRs.
 
 ## Out of scope for this matrix
 
-- Full Electron / Playwright e2e
+- Full Playwright / UI e2e
 - Live Jev/XERJ as required dependency
 - Committing `graph.db` into git
 

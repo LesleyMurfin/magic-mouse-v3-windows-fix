@@ -2,6 +2,8 @@
 
 Read [`.context/`](.context/) first — `current.md`, `map.md`, `decisions.md`, `history.md`.
 
+- Code graph (optional, fail-open): when `.aco/graph.db` and `riley-kg` are both present and the query returns, `riley-kg blast-radius --db .aco/graph.db <file>` / `riley-kg callers --db .aco/graph.db <symbol>` (from LesleyMurfin/agents@agents-sqlite-graph); otherwise use `rg`/`git`. Never block on the graph.
+
 ## Repo identity
 
 **Apple Magic Mouse Windows Driver** (`LesleyMurfin/magic-mouse-v3-windows-fix`) — free MIT-licensed drivers for the USB-C **Apple Magic Mouse 2024** (Bluetooth PID `0323`) on **Windows 10/11**, plus registry-bound Apple-driver support for v1/v2 PIDs.
@@ -106,52 +108,37 @@ When EWDK / hardware is unavailable:
 - Frozen versions are one-shot; bump version for new builds.
 - HID / scroll contracts: `v2-kmdf-driver/HID-CONTRACT.md`.
 
-## AICostOptimizer & Code Graph Triage (binding)
+## Code graph and cost (binding)
 
 KMDF/driver context: structural triage prefers C callers under `v2-kmdf-driver/` and
-registry/INF paths under `v1-binary-patch/`. Fail-open to `git`/`rg` when the graph is empty.
+registry/INF paths under `v1-binary-patch/`.
 
-1. **Prompt:** Reference `.aco/ACO-TRIAGE-PROMPT.txt` for structural and semantic analysis.
-2. **Semantic Routing (Jev/Kev):** Active when `JEV_URL` is set:
-   - Risk classification: `python3 -m aicostoptimizer jev choice --state ... --question ...`
-   - Safety invariants ($p \ge 0.95$): `python3 -m aicostoptimizer jev noul --state ... --statement ...`
-   - ADR compliance scoring: `python3 -m aicostoptimizer jev score --state ... --question ...`
-   - Fail-open if `JEV_URL` unset/unreachable → local `.aco/graph.db` + `git`/`rg` for C/INF. Optional: `JEV_DISABLED=1`.
-3. **Structural Graph:** Uses local `.aco/graph.db` when present; fails open to `git`/`rg` for C/INF if Jev is unset/unreachable or the graph is empty.
-4. **Output Contract:** Every PR review ends with ```json aco-triage-run```.
-5. **Clean repo:** Never commit `.aco/graph.db`.
+1. **Prompt:** Reference `.aco/ACO-TRIAGE-PROMPT.txt` for structural triage.
+2. **Graph:** When `.aco/graph.db` and `riley-kg` are both present and the query returns, `riley-kg blast-radius --db .aco/graph.db <file>` and `riley-kg callers --db .aco/graph.db <symbol>` (engine: LesleyMurfin/agents@agents-sqlite-graph). If the file, the CLI, or the query is missing, empty, or stalled, use `rg` and `git`. Never block on the graph.
+3. **Output Contract:** Every PR review ends with ```json aco-triage-run```.
+4. **Clean repo:** Never commit `.aco/graph.db`.
 
 ### Pre-flight
 
 ```bash
-python3 .ai/skills/aco-triage/scripts/verify_graceful_degrade.py
+python3 .ai/skills/aco-triage/scripts/verify_graceful_degrade.py --offline-only
 ```
 
-Expect PASS on the offline path. Non-zero → fix the verifier/script first; still do not block review on a missing graph.
+Expect PASS. `--offline-only` skips the optional TypeScript probe self-test, which needs Node 22.6+; drop the flag to exercise it. Non-zero → fix the verifier/script first; still do not block review on a missing graph.
 
-Cost gate: run `aicostoptimizer status` before long or expensive agent runs when it is installed; exit≠0 means quota fail-closed — stop and report.
+### Blast-radius targets
 
-### Blast-radius query (conditional, fail-open)
+Typical C/KMDF targets: `v2-kmdf-driver/` (`Driver.c`, `InputHandler.c`, `GestureEngine.c`, `HidDescriptor.c`, `MagicMouseDriver-kmdf-204-scroll.inf`), symbols such as `AccumulateSurfaceScroll` / `SdpRewrite_Process` / `ScrollStep`, and registry / `LowerFilters` paths under `v1-binary-patch/`.
 
-When **both** `.aco/graph.db` and the `riley_kg` CLI are present:
-
-```bash
-PYTHONPATH="${RILEY_KG_ROOT:-${ACO_RILEY_KG_ROOT:-}}" \
-  python3 -m riley_kg.cli blast-radius --db .aco/graph.db <path-or-symbol>
-```
-
-Typical C/KMDF targets: `v2-kmdf-driver/` (`Driver.c`, `InputHandler.c`, `GestureEngine.c`, `HidDescriptor.c`, INF/RC).
-
-If graph DB, CLI, or C extract is missing / times out / empty:
-
-- **Fail-open immediately to `git` + `rg`** for C callers and INF/service references (label `method: "rg"` / heuristic).
-- Set `graph.present=false` in the run footer.
-- **Never** block a PR review on graph availability.
+Without the graph, the same questions are answered with `rg` and `git` (label `method: "rg"` / heuristic):
 
 ```bash
 rg -n "ScrollStep|LowerFilters|MagicMouseDriver|InputHandler|GestureEngine" v2-kmdf-driver v1-binary-patch
 git grep -n "PID_0323\|0x0323"
 ```
+
+When the graph is unavailable, say so in the run footer rather than omitting it: `graph.present=false`
+(or `true` with `node_count=0`), `tooling.riley_kg_ok=false`, and `blast_radius[].method="rg"`.
 
 ### Zero daemons
 
@@ -180,7 +167,7 @@ Every ACO triage / PR review **MUST** end with exactly one full machine footer:
   "verification": [{ "command": "InfVerif.exe /v MagicMouseDriver-kmdf-204-scroll.inf", "exit_code": null, "passed": false }],
   "diff_stats": null,
   "residual_risks": ["EWDK/hardware not on agent host → document-only driver validation"],
-  "prompt_version": "1.4.0-quick",
+  "prompt_version": "1.5.0-quick",
   "pr_comment_status": "skipped|posted",
   "pr_comment_urls": []
 }
@@ -193,7 +180,7 @@ Populate from the real run. Chat narrative alone is not enough for ingest. If a 
 
 - `.ai/skills/aco-triage/SKILL.md`
 - `.ai/skills/aco-triage/scripts/verify_graceful_degrade.py`
-- `.aco/README.md` · optional `.aco/JEV.md` + `.aco/jev.env.sample`
+- `.aco/README.md` (cost, graph, and smoke commands) · `.aco/jev.env.sample` (probe variables)
 
 ## PR hygiene
 
