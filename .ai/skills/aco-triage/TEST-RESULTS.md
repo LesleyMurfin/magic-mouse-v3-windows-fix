@@ -12,7 +12,7 @@ agents: [RunLayerA, RunLayerB, RunLayerC, RunLayerD]
 
 **Run date:** 2026-10-13  
 **Executors:** short-lived agents `RunLayerA|B|C|D`  
-**Detail files:** `TEST-RESULTS-{A,B,C,D}.md`  
+**Layers:** A–D recorded inline below  
 **Matrix:** [`TEST-MATRIX.md`](./TEST-MATRIX.md)
 
 ## Executive scorecard
@@ -120,11 +120,7 @@ agents: [RunLayerA, RunLayerB, RunLayerC, RunLayerD]
 | File | Role |
 |------|------|
 | [`TEST-MATRIX.md`](./TEST-MATRIX.md) | What to run |
-| [`TEST-RESULTS-A.md`](./TEST-RESULTS-A.md) | Layer A raw |
-| [`TEST-RESULTS-B.md`](./TEST-RESULTS-B.md) | Layer B raw |
-| [`TEST-RESULTS-C.md`](./TEST-RESULTS-C.md) | Layer C raw |
-| [`TEST-RESULTS-D.md`](./TEST-RESULTS-D.md) | Layer D raw |
-| This file | Consolidated comparison |
+| This file | Layer A–D raw results + consolidated comparison |
 
 ## Bottom line
 
