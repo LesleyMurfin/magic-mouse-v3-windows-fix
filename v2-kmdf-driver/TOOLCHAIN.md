@@ -76,8 +76,9 @@ are.
 ## Signing and packaging tools
 
 Both live under `%MM_QUEUE_ROOT%\wdk-packages\` and need no EWDK;
-`kmdf-204-scroll-sign.ps1` builds these paths from `-QueueRoot`. `Inf2Cat` is x86-only by
-design — it is a host tool and the target arch comes from `/os:`.
+`kmdf-204-scroll-sign.ps1` locates them from `-QueueRoot`. The package and kit versions
+below are what is unpacked here today, not a contract. `Inf2Cat` is x86-only by design —
+it is a host tool and the target arch comes from `/os:`.
 
 | Tool | Path under `wdk-packages\` |
 | --- | --- |
