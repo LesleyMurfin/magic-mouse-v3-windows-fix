@@ -4,60 +4,211 @@
 RED-first. Unique INF / kernel already at 7087f4b is not a pass (tautology).
 Keyword presence in a Python self-model is not a pass.
 
-This is a META-gate: it does not re-assert the driver contracts, it asserts
-that the gate files which DO assert them are still there, still reading
-driver source, and still PUBLISHING the named checks. The distinction
-matters — every requirement below is expressed as "this name is passed to a
-check() call", not "this string appears in the file", so a check that is
-deleted, renamed or demoted to a comment turns this red instead of being
-greened by the prose that survives it.
+This gate RUNS the seven host gate tests as subprocesses and pins the check
+names each one prints. A check that is deleted, renamed, commented out or
+quietly skipped stops being printed, so it turns this red; prose that
+survives the deletion cannot green it. The names are compared exactly as
+printed, which also covers the f-string-composed names (`f"{tag}HID_C_PARSE"`
+-> HIRES_HID_C_PARSE) that a source grep for check("...") never sees. Any
+non-zero exit from a gate test is a failure here too.
 
-Groups:
-  * v2-kmdf-driver/tests/test_sdp_overlay.py quotes native prefix
-    09 02 06 35 8D 35 8B 08 22 25 87 unchanged after overlay and HID sizeof
-    0x87, for BOTH overlay sources (issue #48 added g_HidDescriptorHiRes).
-  * v2-kmdf-driver/tests/test_hid_acl.py fail-closed-asserts 0x90 passthrough
-    and 6-byte no-grow against driver source (AclTranslate.c and Driver.c)
-  * v2-kmdf-driver/tests/test_bsod_regress.py quotes 090126-18750 / BSOD_50 /
-    buf[4] / 0x87 / applewirelessmouse, and counts BOTH descriptor arrays
-  * tests/test_sdp_walk.py must not gate PATCHED_0x25_IS_108 (that 0x50'd)
-  * v2-kmdf-driver/tests/test_mt_enable.py binds 53 F1 02 01 to MmSendMtEnable
-  * v2-kmdf-driver/tests/test_scroll_threshold.py binds SCROLL_STEP_8 to
-    GestureEngine.c (that test owns the detent / one-finger assertions, which
-    it makes against comment-stripped source; re-grepping the tokens here
-    would only re-pass on prose)
-  * v2-kmdf-driver/tests/test_hires_scroll.py owns issue #48: the hi-res
-    descriptor parse, the gain equivalence, and the 0xF1 payload repair.
-
-Deliberate change for issue #48: this gate used to pin the Count-1 AC Pan
-shape by grepping the overlay test's source for the raw bytes 95 01 and
-0A 38 02. That is exactly the "file contains string" failure mode — it could
-not tell a real assertion from a comment, and it hard-coded the CLASSIC
-descriptor's spelling, in which AC Pan and Wheel sit directly in the Physical
-collection. The hi-res blob keeps Report Count 1 and keeps AC Pan before
-Wheel, but wraps both in a Collection (Logical) so the Resolution Multiplier
-has a scope. The property is unchanged; the byte neighbourhood is not. It is
-now pinned as published check names covering BOTH blobs, and the descriptor
-is proven by a real HID item parser in test_hires_scroll.py rather than by
-substring search.
+What this gate deliberately does NOT do: re-assert the driver contracts, or
+grep the test sources for tokens. The tests own the contracts — descriptor
+parsing, gain equivalence, the 0xF1 repair, the 135-byte overlay — and this
+file owns the fact that they all still run and still publish their results.
 """
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = ROOT / "v2-kmdf-driver" / "tests"
-TEST = TESTS / "test_hid_acl.py"
-OVERLAY = TESTS / "test_sdp_overlay.py"
-BSOD = TESTS / "test_bsod_regress.py"
 WALK = TESTS / "test_sdp_walk.py"
 MT = TESTS / "test_mt_enable.py"
-SCROLL_THRESHOLD = TESTS / "test_scroll_threshold.py"
-HIRES = TESTS / "test_hires_scroll.py"
-AGENTS = ROOT / "AGENTS.md"
-NATIVE_PREFIX = "09 02 06 35 8D 35 8B 08 22 25 87"
+
+RESULT_LINE = re.compile(r"^(?:PASS|FAIL): ([A-Za-z0-9_]+)", re.MULTILINE)
+FAIL_LINE = re.compile(r"^FAIL: ([A-Za-z0-9_]+)", re.MULTILINE)
+
+# Every name each gate test must still print. Produced by running them; keep
+# it in step with the tests, never by relaxing it to what happens to pass.
+EXPECTED: dict[str, frozenset[str]] = {
+    "v2-kmdf-driver/tests/test_sdp_overlay.py": frozenset(
+        {
+            # classic g_HidDescriptor blob + the overlaid region
+            "HID_ACPAN_THEN_WHEEL",
+            "HID_COUNT1_BEFORE_WHEEL",
+            "HID_C_PARSE",
+            "HID_HAS_09_38",
+            "HID_HAS_0A_38_02",
+            "HID_HAS_85_90",
+            "HID_HAS_85_F1",
+            "HID_NO_85_02",
+            "HID_NO_85_47",
+            "HID_SIZE_0x87",
+            "MISSING_PREFIX_NO_MUTATION",
+            "NATIVE_351_LEN",
+            "NATIVE_ENDS_09020E2801",
+            "NATIVE_HID_FITS",
+            "NATIVE_HID_LEN_0x87",
+            "NATIVE_STARTS_36015C",
+            "ONLY_135_BYTES_DIFFER",
+            "OVERLAY_ACPAN_THEN_WHEEL",
+            "OVERLAY_APPLIED",
+            "OVERLAY_COPIED_135",
+            "OVERLAY_COUNT1_BEFORE_WHEEL",
+            "OVERLAY_HAS_09_38",
+            "OVERLAY_HAS_0A_38_02",
+            "OVERLAY_HAS_85_90",
+            "OVERLAY_HAS_85_F1",
+            "OVERLAY_LEN_351",
+            "OVERLAY_NO_85_02",
+            "OVERLAY_NO_85_47",
+            "PREFIX_PRESENT",
+            "PREFIX_UNCHANGED",
+            # issue #48: the same pass re-run over g_HidDescriptorHiRes
+            "HIRES_HAS_09_48",
+            "HIRES_HID_ACPAN_THEN_WHEEL",
+            "HIRES_HID_COUNT1_BEFORE_WHEEL",
+            "HIRES_HID_C_PARSE",
+            "HIRES_HID_HAS_09_38",
+            "HIRES_HID_HAS_0A_38_02",
+            "HIRES_HID_HAS_85_90",
+            "HIRES_HID_HAS_85_F1",
+            "HIRES_HID_NO_85_02",
+            "HIRES_HID_NO_85_47",
+            "HIRES_HID_SIZE_0x87",
+            "HIRES_IS_A_DIFFERENT_BLOB",
+            "HIRES_MISSING_PREFIX_NO_MUTATION",
+            "HIRES_ONLY_135_BYTES_DIFFER",
+            "HIRES_OVERLAY_ACPAN_THEN_WHEEL",
+            "HIRES_OVERLAY_APPLIED",
+            "HIRES_OVERLAY_COPIED_135",
+            "HIRES_OVERLAY_COUNT1_BEFORE_WHEEL",
+            "HIRES_OVERLAY_HAS_09_38",
+            "HIRES_OVERLAY_HAS_0A_38_02",
+            "HIRES_OVERLAY_HAS_85_90",
+            "HIRES_OVERLAY_HAS_85_F1",
+            "HIRES_OVERLAY_LEN_351",
+            "HIRES_OVERLAY_NO_85_02",
+            "HIRES_OVERLAY_NO_85_47",
+            "HIRES_PREFIX_UNCHANGED",
+        }
+    ),
+    "v2-kmdf-driver/tests/test_hid_acl.py": frozenset(
+        {
+            "BATTERY_PASSTHROUGH",
+            "C_SOURCE_ACL_CONTRACT",
+            "C_SOURCE_ACL_RESIDUE",
+            "C_SOURCE_CONTROL_CHANNEL_GATE",
+            "C_SOURCE_CONTROL_CHANNEL_LATCH",
+            "NO_FEATURE_47",
+            "NO_GROW_WITHOUT_CAPACITY",
+            "NO_GROW_WITHOUT_SDP",
+            "UNIQUE_SCM",
+            "WHEEL_NOTCH_ACROSS_REPORTS",
+            "WHEEL_ON_0x12",
+        }
+    ),
+    "v2-kmdf-driver/tests/test_bsod_regress.py": frozenset(
+        {
+            "BSOD_41_CAPACITY",
+            "BSOD_41_INSTALL_REFUSES_UNSIGNED",
+            "BSOD_41_NO_SYSTEM32_COPY",
+            "BSOD_41_SDP_GATE",
+            "BSOD_41_UNIQUE_SCM",
+            "BSOD_50_HID_NOT_108",
+            "BSOD_50_NEWLEN_UNCHANGED",
+            "BSOD_50_NO_BUF4_STORE",
+            "BSOD_50_NO_BUF_ASSIGN",
+            "BSOD_50_NO_PATCHSDP",
+            "BSOD_50_PREFIX_IN_C",
+            "BSOD_50_RTLCOPY_ONLY",
+            "BSOD_D1_NO_PATHA",
+            "BSOD_OOB_READ_PARSE_LEN",
+        }
+    ),
+    "v2-kmdf-driver/tests/test_mt_enable.py": frozenset(
+        {
+            "MT_ENABLE_ACL_BYTES",
+            "MT_ENABLE_AFTER_SDP",
+            "MT_ENABLE_F1_02_01",
+            "MT_ENABLE_WIRE_53",
+        }
+    ),
+    "v2-kmdf-driver/tests/test_scroll_threshold.py": frozenset(
+        {
+            "COMPACT_GARBAGE_NO_WHEEL",
+            "COMPACT_NO_NATIVE_WHEEL",
+            "DOWN_LT_2",
+            "FRONT_GATE_FOREIGN_RID_0x11",
+            "FRONT_GATE_SHORT_5",
+            "FRONT_GATE_UNALIGNED_18",
+            "MM_SCROLL_STEP_DEFAULT",
+            "ONE_SLOT_DRAG_15",
+            "ONE_SLOT_DRAG_16",
+            "ONE_SLOT_DRAG_20",
+            "SCROLL_STEP_8",
+            "SCROLL_STEP_CLAMP_HIGH",
+            "SCROLL_STEP_CLAMP_LOW",
+            "TWO_FINGER",
+            "TWO_FINGER_TRAVEL_NOTCHES",
+        }
+    ),
+    "v2-kmdf-driver/tests/test_two_finger_scroll.py": frozenset(
+        {
+            "COMPACT_GARBAGE_NO_WHEEL",
+            "COMPACT_NO_NATIVE_WHEEL",
+            "DOWN_LT_2",
+            "ONE_FINGER_ANCHOR_REFRESH",
+            "ONE_FINGER_DRAG_NO_WHEEL",
+            "ONE_FINGER_TRAVEL_NOT_BANKED",
+            "PINCH_EMITS_NOTHING",
+            "STATIONARY_LOW_ID_STILL_SCROLLS",
+            "TWO_FINGER",
+            "TWO_FINGER_START_DRAG_WHEEL",
+        }
+    ),
+    "v2-kmdf-driver/tests/test_hires_scroll.py": frozenset(
+        {
+            "HIRES_ACPAN_MIRRORS_WHEEL",
+            "HIRES_COL02_BATTERY_UNCHANGED",
+            "HIRES_CTX_DEFAULT_FALSE",
+            "HIRES_C_DETENT_UNITS",
+            "HIRES_C_F1_FORCED_COUNTER",
+            "HIRES_C_F1_REPAIR",
+            "HIRES_C_F1_REPAIR_CONSTANTS",
+            "HIRES_C_HOST_MULTIPLIER_CAPTURED",
+            "HIRES_C_REPORT_SATURATION_CAP",
+            "HIRES_C_STEP_DIVIDE",
+            "HIRES_DESC_BOTH_0x87",
+            "HIRES_DESC_COLLECTIONS_BALANCED",
+            "HIRES_DESC_ITEMS_PARSE",
+            "HIRES_DETENT_IS_STEP_OVER_HOST_MULTIPLIER",
+            "HIRES_FLICK_NOT_COLLAPSED",
+            "HIRES_GAIN_EXACT_ON_MULTIPLE",
+            "HIRES_INF_WRITES_NO_HIRES_VALUE",
+            "HIRES_MORE_SMALLER_STEPS",
+            "HIRES_MULTIPLIER_IN_LOGICAL_COLLECTION",
+            "HIRES_MULTIPLIER_IS_FEATURE",
+            "HIRES_MULTIPLIER_MATCHES_HEADER",
+            "HIRES_MULTIPLIER_RANGE_1_4",
+            "HIRES_NEGATIVE_MIRRORS",
+            "HIRES_NEVER_DELIVERS_LESS",
+            "HIRES_REPORT_12_LAYOUT_IDENTICAL",
+            "HIRES_REPORT_F1_TWO_BYTES",
+            "HIRES_REPORT_SATURATION_KEPT_IN_ANCHOR",
+            "HIRES_RESIDUE_SMALLER",
+            "HIRES_SDP_CTX_FLAG_PASSED",
+            "HIRES_STEP_ROUNDS_TO_NEAREST",
+            "HIRES_SUBDETENT_NUDGE_EMITS",
+            "HIRES_TRUNCATES_TOWARD_ZERO",
+            "HIRES_UNARMED_HOST_NOT_FASTER",
+        }
+    ),
+}
 
 fails = 0
 
@@ -72,572 +223,85 @@ def fail_(msg: str) -> None:
     print(f"FAIL: {msg}")
 
 
-def search(text: str, pattern: str) -> bool:
-    return re.search(pattern, text, re.IGNORECASE | re.MULTILINE) is not None
-
-
-_CHECK_CALL = re.compile(r"\bcheck\(\s*f?[\"']([^\"']+)[\"']")
-
-
-def check_names(src: str) -> set[str]:
-    """Names actually passed to a check() call in that gate file.
-
-    A name that only appears in a docstring, a comment or a failure message
-    is NOT a check. f-string names (`f"{tag}OVERLAY_APPLIED"`) are reduced to
-    their literal part, which is the name the untagged run prints.
-    """
-    names: set[str] = set()
-    for raw in _CHECK_CALL.findall(src):
-        name = re.sub(r"\{[^}]*\}", "", raw).strip()
-        if name:
-            names.add(name)
-    return names
-
-
-def missing(src: str, required: set[str]) -> list[str]:
-    return sorted(required - check_names(src))
-
-
-def readable(path: Path, label: str, consequence: str) -> str | None:
-    """Return the source, or None after reporting why the group cannot pass."""
+def run_gate(rel: str, required: frozenset[str]) -> None:
+    """Run one gate test and compare the names it printed with `required`."""
+    path = ROOT / rel
     if not path.is_file():
-        fail_(f"{label} {path.relative_to(ROOT)} missing")
-        fail_(consequence)
-        return None
-    src = path.read_text(encoding="utf-8", errors="replace")
-    if not src.strip():
-        fail_(f"{label} {path.relative_to(ROOT)} is empty")
-        fail_(consequence)
-        return None
-    return src
-
-
-def reads_driver_source(src: str, name: str) -> bool:
-    """True if the host test loads that C file via a quoted path."""
-    q = re.escape(name)
-    return search(
-        src,
-        r'(ROOT\s*/\s*["\']' + q + r'["\']'
-        r'|Path\([^)]*["\']' + q + r'["\']'
-        r'|open\(\s*["\'][^"\']*' + q + r'["\']'
-        r'|joinpath\(\s*["\']' + q + r'["\']'
-        r'|/\s*["\']' + q + r'["\'])',
-    )
-
-
-def asserts_c_0x90_passthrough(src: str) -> bool:
-    """Host test must fail if AclTranslate.c drops 0x90 passthrough."""
-    if not reads_driver_source(src, "AclTranslate.c"):
-        return False
-    has_rid = search(src, r"0x90|MM_REPORT_ID_BATTERY")
-    has_pass = search(
-        src,
-        r"passthrough|never\s+rewrit|not\s+rewrit|do\s+not\s+rewrit|"
-        r"return FALSE|unchanged",
-    )
-    return has_rid and has_pass
-
-
-def asserts_c_6byte_nogrow(src: str) -> bool:
-    """Host test must fail if C grows 6→8 without SdpPatchSuccess/capacity."""
-    reads_acl = reads_driver_source(src, "AclTranslate.c")
-    reads_drv = reads_driver_source(src, "Driver.c")
-    if not (reads_acl or reads_drv):
-        return False
-    has_six = search(src, r"\b6\b|6-byte|6\s*byte")
-    has_nogrow = search(
-        src,
-        r"no[-_ ]grow|nogrow|capacity\s*<|cannot\s+grow|pointer[- ]safe|"
-        r"refuse",
-    )
-    has_gate = search(src, r"SdpPatchSuccess|sdpOk|sdp_ok|capacity")
-    return has_six and has_nogrow and has_gate
-
-
-def asserts_overlay_prefix_and_size(src: str) -> bool:
-    """Overlay test must quote the 11-byte native prefix and HID size 0x87."""
-    compact = re.sub(r"[\s,xX\\]", "", src.upper())
-    has_prefix = "090206358D358B08222587" in compact
-    has_size = search(src, r"0x87")
-    return has_prefix and has_size
-
-
-def check_overlay() -> None:
-    src = readable(
-        OVERLAY,
-        "overlay test",
-        "native prefix 09 02 06 35 8D 35 8B 08 22 25 87 unchanged after "
-        "overlay and HID sizeof 0x87 not asserted",
-    )
-    if src is None:
+        fail_(f"{rel} missing — {len(required)} checks are unasserted")
         return
 
-    if asserts_overlay_prefix_and_size(src):
-        pass_(
-            "overlay test quotes prefix 09 02 06 35 8D 35 8B 08 22 25 87 "
-            "and HID sizeof 0x87"
-        )
-    else:
-        fail_(
-            "overlay test does not quote prefix "
-            "09 02 06 35 8D 35 8B 08 22 25 87 unchanged after overlay "
-            "and HID sizeof 0x87"
-        )
-
-    # Count-1 AC Pan before Wheel, and no Count-2 inherit, published as
-    # checks rather than grepped as bytes — see the module docstring.
-    want_shape = {
-        "HID_COUNT1_BEFORE_WHEEL",
-        "HID_HAS_0A_38_02",
-        "HID_ACPAN_THEN_WHEEL",
-        "OVERLAY_COUNT1_BEFORE_WHEEL",
-        "OVERLAY_HAS_0A_38_02",
-        "OVERLAY_ACPAN_THEN_WHEEL",
-    }
-    gap = missing(src, want_shape)
-    if gap:
-        fail_(
-            "overlay test no longer publishes "
-            + ", ".join(gap)
-            + " — Count-1 AC Pan before Wheel (Count-2 Wheel inherit is "
-            "ExpertHid CHANGES-NEEDED) is unasserted"
-        )
-    else:
-        pass_(
-            "overlay test publishes Count 1 + AC Pan before Wheel for the "
-            "parsed blob and for the overlaid region"
-        )
-
-    want_f1 = {"HID_HAS_85_F1", "OVERLAY_HAS_85_F1"}
-    gap = missing(src, want_f1)
-    compact = re.sub(r"[\s,xX\\]", "", src.upper())
-    if gap or "85F1" not in compact:
-        fail_(
-            "overlay test does not publish HID_HAS_85_F1 / OVERLAY_HAS_85_F1 "
-            "for Feature report 85 F1"
-        )
-    else:
-        pass_("overlay test publishes Feature 85 F1 for blob and overlay")
-
-    # Issue #48: the overlay now has two sources and both must be proven
-    # same-size, with the SDP length stores untouched either way.
-    want_hires = {
-        "HID_SIZE_0x87",
-        "ONLY_135_BYTES_DIFFER",
-        "PREFIX_UNCHANGED",
-        "SDP_LEN_STORES_UNTOUCHED",
-        "HIRES_SAME_SIZE_AS_CLASSIC",
-    }
-    gap = missing(src, want_hires)
-    runs_both = "g_HidDescriptorHiRes" in src and '"HIRES_"' in src
-    if gap or not runs_both:
-        fail_(
-            "overlay test does not run the same-size overlay for both "
-            "descriptors: missing "
-            + (", ".join(gap) if gap else "the HIRES_ pass over "
-               "g_HidDescriptorHiRes")
-        )
-    else:
-        pass_(
-            "overlay test runs the overlay for g_HidDescriptor and "
-            "g_HidDescriptorHiRes: both 0x87, prefix and SDP length stores "
-            "untouched, only 135 bytes differ"
-        )
-
-
-def check_hid_acl() -> None:
-    src = readable(
-        TEST,
-        "host test",
-        "0x90 passthrough and 6-byte no-grow not asserted against "
-        "AclTranslate.c / Driver.c",
+    proc = subprocess.run(
+        [sys.executable, str(path)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=600,
     )
-    if src is None:
-        return
-
-    if asserts_c_0x90_passthrough(src):
-        pass_("host test asserts 0x90 passthrough against AclTranslate.c")
+    printed = set(RESULT_LINE.findall(proc.stdout))
+    gone = sorted(required - printed)
+    if gone:
+        fail_(f"{rel} no longer prints " + ", ".join(gone))
     else:
-        fail_(
-            "host test does not assert 0x90 passthrough against AclTranslate.c "
-            "(Python self-model is not fail-closed on driver source)"
-        )
+        pass_(f"{rel} prints all {len(required)} required checks")
 
-    if asserts_c_6byte_nogrow(src):
-        pass_(
-            "host test asserts 6-byte no-grow without SdpPatchSuccess/capacity "
-            "against Driver.c/AclTranslate.c"
-        )
+    if proc.returncode == 0:
+        pass_(f"{rel} exits 0 ({len(printed)} checks)")
     else:
-        fail_(
-            "host test does not assert 6-byte no-grow without "
-            "SdpPatchSuccess/capacity against Driver.c/AclTranslate.c "
-            "(Python self-model is not fail-closed on driver source)"
-        )
-
-    gap = missing(
-        src,
-        {
-            "BATTERY_PASSTHROUGH",
-            "NO_GROW_WITHOUT_CAPACITY",
-            "NO_GROW_WITHOUT_SDP",
-            "WHEEL_ON_0x12",
-            "C_SOURCE_ACL_CONTRACT",
-        },
-    )
-    if gap:
-        fail_("host test no longer publishes " + ", ".join(gap))
-    else:
-        pass_(
-            "host test publishes BATTERY_PASSTHROUGH / NO_GROW_* / "
-            "WHEEL_ON_0x12 / C_SOURCE_ACL_CONTRACT"
-        )
+        failed = sorted(set(FAIL_LINE.findall(proc.stdout)))
+        detail = ", ".join(failed) if failed else (
+            proc.stderr.strip().splitlines() or ["no output"]
+        )[-1]
+        fail_(f"{rel} exits {proc.returncode}: {detail}")
 
 
-def check_bsod() -> None:
-    if WALK.is_file():
-        walk_src = WALK.read_text(encoding="utf-8", errors="replace")
-        if "PATCHED_0x25_IS_108" in walk_src or "HID_DESC_108" in walk_src:
-            fail_(
-                "test_sdp_walk.py still gates 108-byte length rewrite "
-                "(090126-18750 0x50) — delete it; overlay + test_bsod_regress.py"
-            )
-        else:
-            pass_("test_sdp_walk.py is not a 108-byte rewrite gate")
-    else:
+def check_walk_absent() -> None:
+    """Survivor: no gate test is run from a file that does not exist, so only
+    a source check can keep a resurrected test_sdp_walk.py from re-gating the
+    108-byte length rewrite that caused 090126-18750 (0x50)."""
+    if not WALK.is_file():
         pass_("test_sdp_walk.py absent (no host SdpWalkStream)")
-
-    src = readable(
-        BSOD,
-        "BSOD regression test",
-        "090126-18750 / BSOD_50 / buf[4] / HID 0x87 / applewirelessmouse "
-        "not asserted",
-    )
-    if src is None:
         return
+    src = WALK.read_text(encoding="utf-8", errors="replace")
+    if "PATCHED_0x25_IS_108" in src or "HID_DESC_108" in src:
+        fail_(
+            "test_sdp_walk.py gates the 108-byte length rewrite "
+            "(090126-18750 0x50) — delete it; the overlay and "
+            "test_bsod_regress.py own that length now"
+        )
+    else:
+        pass_("test_sdp_walk.py is not a 108-byte rewrite gate")
 
-    ok = (
-        "090126-18750" in src
-        and "BSOD_50" in src
-        and "buf[4]" in src
-        and "0x87" in src
-        and "applewirelessmouse" in src.lower()
-        and "108" in src
-    )
-    if ok:
+
+def check_mt_scoped() -> None:
+    """Survivor: MT_ENABLE_WIRE_53 passing says the bytes 53 F1 02 01 were
+    found, not where — issue #48 added a second SET_REPORT(Feature, 0xF1)
+    site to Driver.c, so only the source proves the search is still scoped to
+    MmSendMtEnable's own body."""
+    if not MT.is_file():
+        return  # run_gate already reported the missing file
+    src = MT.read_text(encoding="utf-8", errors="replace")
+    if re.search(
+        r"_function_body\(\s*code\s*,\s*[\"']MmSendMtEnable[\"']\s*\)", src
+    ):
         pass_(
-            "BSOD regression quotes 090126-18750 / BSOD_50 / buf[4] / "
-            "HID 0x87 / applewirelessmouse"
+            "test_mt_enable.py scopes 53 F1 02 01 to MmSendMtEnable's own "
+            "body (the hi-res 0xF1 repair cannot green it)"
         )
     else:
         fail_(
-            "BSOD regression does not quote 090126-18750 / BSOD_50 / buf[4] / "
-            "HID 0x87 not-108 / applewirelessmouse"
-        )
-
-    gap = missing(
-        src,
-        {
-            "BSOD_50_HID_NOT_108",
-            "BSOD_50_RTLCOPY_ONLY",
-            "BSOD_50_PREFIX_IN_C",
-            "BSOD_50_NEWLEN_UNCHANGED",
-            "BSOD_50_NO_BUF4_STORE",
-        },
-    )
-    if gap:
-        fail_("BSOD regression no longer publishes " + ", ".join(gap))
-    else:
-        pass_(
-            "BSOD regression publishes BSOD_50_HID_NOT_108 / RTLCOPY_ONLY / "
-            "PREFIX_IN_C / NEWLEN_UNCHANGED / NO_BUF4_STORE"
-        )
-
-    # The 0x50 cause was a descriptor whose size did not match the SDP length
-    # store. With two descriptors, sizing only the first one re-opens it.
-    counts_both = "g_HidDescriptorHiRes" in src and "g_HidDescriptor" in src
-    if counts_both:
-        pass_(
-            "BSOD regression sizes both g_HidDescriptor and "
-            "g_HidDescriptorHiRes against 0x87"
-        )
-    else:
-        fail_(
-            "BSOD regression does not size g_HidDescriptorHiRes — the second "
-            "overlay source could drift off 0x87 unchecked (090126-18750 class)"
-        )
-
-
-def check_mt() -> None:
-    src = readable(
-        MT,
-        "MT enable test",
-        "Linux feature_mt_mouse2 F1 02 01 / wire 53 F1 02 01 not asserted "
-        "against Driver.c",
-    )
-    if src is None:
-        return
-
-    ok = (
-        "LastAclBytes" in src
-        and "Driver.c" in src
-        and "MT_ENABLE_ACL_BYTES" in src
-    )
-    if ok:
-        pass_("MT enable test quotes LastAclBytes / MT_ENABLE_ACL_BYTES against Driver.c")
-    else:
-        fail_(
-            "MT enable test does not quote MT_ENABLE_ACL_BYTES "
-            "(last interrupt ACL payload in Diag)"
-        )
-
-    gap = missing(
-        src,
-        {"MT_ENABLE_F1_02_01", "MT_ENABLE_WIRE_53", "MT_ENABLE_AFTER_SDP"},
-    )
-    if gap:
-        fail_("MT enable test no longer publishes " + ", ".join(gap))
-    else:
-        pass_(
-            "MT enable test publishes MT_ENABLE_F1_02_01 / WIRE_53 / AFTER_SDP"
-        )
-
-    # Issue #48 added a second site that handles SET_REPORT(Feature, 0xF1):
-    # the hi-res payload repair. The enable packet must still be proven
-    # inside MmSendMtEnable, not anywhere in the file.
-    scoped = search(src, r"MmSendMtEnable") and search(
-        src, r"_function_body\(\s*code\s*,\s*[\"']MmSendMtEnable[\"']\s*\)"
-    )
-    if scoped:
-        pass_(
-            "MT enable test scopes 53 F1 02 01 to MmSendMtEnable's own body "
-            "(the hi-res 0xF1 repair cannot green it)"
-        )
-    else:
-        fail_(
-            "MT enable test searches the whole of Driver.c for 53 F1 02 01 — "
-            "the issue #48 SET_REPORT(Feature, 0xF1) repair would green it "
-            "even with MmSendMtEnable gone"
-        )
-
-
-def check_scroll_threshold() -> None:
-    # Do not green because this file mentions SCROLL_STEP_8.
-    src = readable(
-        SCROLL_THRESHOLD,
-        "scroll threshold test",
-        "SCROLL_STEP_8 not quoted against GestureEngine.c",
-    )
-    if src is None:
-        return
-
-    if "SCROLL_STEP_8" in src and "GestureEngine.c" in src:
-        pass_(
-            "test_scroll_threshold.py quotes SCROLL_STEP_8 against GestureEngine.c"
-        )
-    else:
-        fail_(
-            "test_scroll_threshold.py does not quote SCROLL_STEP_8 / GestureEngine.c"
-        )
-
-    gap = missing(
-        src,
-        {
-            "SCROLL_STEP_8",
-            "DOWN_LT_2",
-            "TWO_FINGER",
-            "MM_SCROLL_STEP_DEFAULT",
-            "SCROLL_STEP_CLAMP_LOW",
-            "SCROLL_STEP_CLAMP_HIGH",
-            "TWO_FINGER_TRAVEL_NOTCHES",
-        },
-    )
-    if gap:
-        fail_("test_scroll_threshold.py no longer publishes " + ", ".join(gap))
-    else:
-        pass_(
-            "test_scroll_threshold.py publishes SCROLL_STEP_8 / DOWN_LT_2 / "
-            "TWO_FINGER / the ULONG clamp pair / TWO_FINGER_TRAVEL_NOTCHES"
-        )
-
-    # The detent moved into DetentUnits. The source binding must follow it,
-    # or SCROLL_STEP_8 degrades to a token hunt in a comment.
-    if "DetentUnits" in src:
-        pass_(
-            "test_scroll_threshold.py binds the detent to DetentUnits, where "
-            "AccumulateSurfaceScroll now computes it"
-        )
-    else:
-        fail_(
-            "test_scroll_threshold.py does not mention DetentUnits — the "
-            "detent assertion is no longer bound to the code that emits"
-        )
-
-
-def check_hires() -> None:
-    src = readable(
-        HIRES,
-        "hi-res scroll test",
-        "issue #48 Resolution Multiplier descriptor, gain equivalence and "
-        "0xF1 payload repair not asserted",
-    )
-    if src is None:
-        return
-
-    # 1. The descriptor is proven by parsing, not by substring search.
-    parses = (
-        reads_driver_source(src, "HidDescriptor.c")
-        and "g_HidDescriptorHiRes" in src
-        and search(src, r"def\s+parse_items\s*\(")
-        and search(src, r"def\s+walk_descriptor\s*\(")
-        and search(src, r"\(\s*0\s*,\s*1\s*,\s*2\s*,\s*4\s*\)")
-    )
-    gap = missing(
-        src,
-        {
-            "HIRES_DESC_BOTH_0x87",
-            "HIRES_DESC_ITEMS_PARSE",
-            "HIRES_DESC_COLLECTIONS_BALANCED",
-            "HIRES_MULTIPLIER_IS_FEATURE",
-            "HIRES_MULTIPLIER_IN_LOGICAL_COLLECTION",
-            "HIRES_MULTIPLIER_RANGE_1_4",
-            "HIRES_MULTIPLIER_MATCHES_HEADER",
-            "HIRES_REPORT_12_LAYOUT_IDENTICAL",
-            "HIRES_REPORT_F1_TWO_BYTES",
-            "HIRES_COL02_BATTERY_UNCHANGED",
-        },
-    )
-    if parses and not gap:
-        pass_(
-            "hi-res test parses both descriptors as HID items (short-item "
-            "bSize 0/1/2/3 -> 0/1/2/4) and publishes the multiplier, "
-            "collection, report 0x12, report 0xF1 and COL02 checks"
-        )
-    else:
-        fail_(
-            "hi-res test does not prove the descriptor by parsing it: "
-            + (", ".join(gap) if gap else "no parse_items / walk_descriptor / "
-               "short-item size table over HidDescriptor.c")
-        )
-
-    # 2. Gain equivalence is measured against the host model, not asserted
-    #    in prose, and the sub-detent / truncation cases are covered.
-    gap = missing(
-        src,
-        {
-            "HIRES_DETENT_IS_STEP_OVER_MULTIPLIER",
-            "HIRES_DEFAULT_IS_CLASSIC",
-            "HIRES_GAIN_EXACT_ON_MULTIPLE",
-            "HIRES_NEVER_DELIVERS_LESS",
-            "HIRES_RESIDUE_SMALLER",
-            "HIRES_MORE_SMALLER_STEPS",
-            "HIRES_SUBDETENT_NUDGE_EMITS",
-            "HIRES_FLICK_NOT_COLLAPSED",
-            "HIRES_NEGATIVE_MIRRORS",
-            "HIRES_TRUNCATES_TOWARD_ZERO",
-        },
-    )
-    uses_model = (
-        search(src, r"from\s+hostmodel\s+import")
-        and "detent_units" in src
-        and "MM_HIRES_MULTIPLIER" in src
-        and "WHEEL_DELTA" in src
-    )
-    if uses_model and not gap:
-        pass_(
-            "hi-res test measures gain equivalence through hostmodel "
-            "(exact on a detent multiple, never worse otherwise, smaller "
-            "residue, sub-detent nudge, flick, negative, truncate-to-zero)"
-        )
-    else:
-        fail_(
-            "hi-res test does not measure gain equivalence against the host "
-            "model: "
-            + (", ".join(gap) if gap else "no hostmodel detent_units / "
-               "MM_HIRES_MULTIPLIER / WHEEL_DELTA")
-        )
-
-    # 3. The 0xF1 payload repair, both directions.
-    gap = missing(
-        src,
-        {
-            "HIRES_C_DETENT_UNITS",
-            "HIRES_C_STEP_DIVIDE",
-            "HIRES_C_F1_REPAIR",
-            "HIRES_C_F1_REPAIR_CONSTANTS",
-            "HIRES_F1_REPAIR_VECTORS",
-            "HIRES_MT_ENABLE_LITERAL",
-            "HIRES_SDP_BOTH_SIZES_VALIDATED",
-            "HIRES_SDP_CTX_FLAG_PASSED",
-            "HIRES_INF_DEFAULT_0",
-            "HIRES_CTX_DEFAULT_FALSE",
-        },
-    )
-    reads_c = (
-        reads_driver_source(src, "Driver.c")
-        and reads_driver_source(src, "Driver.h")
-        and reads_driver_source(src, "InputHandler.c")
-        and reads_driver_source(src, "GestureEngine.c")
-    )
-    if reads_c and not gap:
-        pass_(
-            "hi-res test binds the 0xF1 repair, the SdpRewrite_Process "
-            "two-size guard and the HiResScroll defaults to driver source, "
-            "and proves the repair is unreachable with HiResScroll off"
-        )
-    else:
-        fail_(
-            "hi-res test does not bind the 0xF1 repair / SDP selection / "
-            "HiResScroll defaults to driver source: "
-            + (", ".join(gap) if gap else "does not read Driver.c, Driver.h, "
-               "InputHandler.c and GestureEngine.c")
-        )
-
-    # 4. A gate nobody runs is not a gate.
-    if not AGENTS.is_file():
-        fail_("AGENTS.md missing — cannot confirm the documented test command")
-        return
-    agents = AGENTS.read_text(encoding="utf-8", errors="replace")
-    line = next(
-        (
-            ln
-            for ln in agents.splitlines()
-            if "specs/gate_4.py" in ln and "python3" in ln
-        ),
-        "",
-    )
-    wanted = [
-        "specs/gate_4.py",
-        "v2-kmdf-driver/tests/test_bsod_regress.py",
-        "v2-kmdf-driver/tests/test_hid_acl.py",
-        "v2-kmdf-driver/tests/test_mt_enable.py",
-        "v2-kmdf-driver/tests/test_scroll_threshold.py",
-        "v2-kmdf-driver/tests/test_sdp_overlay.py",
-        "v2-kmdf-driver/tests/test_two_finger_scroll.py",
-        "v2-kmdf-driver/tests/test_hires_scroll.py",
-    ]
-    absent = [name for name in wanted if name not in line]
-    if line and not absent:
-        pass_(
-            "AGENTS.md documents one test command line that runs every gate, "
-            "test_hires_scroll.py included"
-        )
-    else:
-        fail_(
-            "AGENTS.md test command line does not run "
-            + (", ".join(absent) if absent else "any gate (line not found)")
+            "test_mt_enable.py searches the whole of Driver.c for "
+            "53 F1 02 01 — the issue #48 SET_REPORT(Feature, 0xF1) repair "
+            "would green it even with MmSendMtEnable gone"
         )
 
 
 def main() -> int:
     # Unique INF / dest / SCM / HidDescriptor already present at 7087f4b.
     # Checking them here would green this gate on a tautology.
-    check_overlay()
-    check_hid_acl()
-    check_bsod()
-    check_mt()
-    check_scroll_threshold()
-    check_hires()
+    for rel, required in EXPECTED.items():
+        run_gate(rel, required)
+    check_walk_absent()
+    check_mt_scoped()
     return 1 if fails else 0
 
 

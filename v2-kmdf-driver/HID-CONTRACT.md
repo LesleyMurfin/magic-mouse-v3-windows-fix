@@ -85,10 +85,15 @@ Linux `feature_mt_mouse2`). Windows sets the Resolution Multiplier with
 `SET_REPORT(Feature, 0xF1)` and builds its own payload, which is not `02 01`. If that payload
 reached the mouse it would drop the device back to compact 9-byte mode and surface scroll would
 die. `Driver.c` therefore repairs it **in place** on the outbound control channel: when
-`ctx->HiResScroll` is set and an outbound buffer of `>= 4` bytes starts `0x53 0xF1` with bytes 2/3
-not already `02 01`, it writes `origBuf[2] = 0x02; origBuf[3] = 0x01;` and increments
-`ctx->F1PayloadForced` (published to `Diag!F1PayloadForced`). `MmSendMtEnable` is untouched and
-still spells `53 F1 02 01` literally.
+`ctx->HiResScroll` is set and an outbound buffer of `>= 4` bytes starts `0x53 0xF1` with bytes
+2/3 that are **not** already `02 01`, it records the multiplier the host asked for (`origBuf[2]`,
+clamped to `1..MM_HIRES_MULTIPLIER`, 0 treated as 1) in `ctx->HostMultiplier`, then writes
+`origBuf[2] = 0x02; origBuf[3] = 0x01;` and increments `ctx->F1PayloadForced` (published to
+`Diag!F1PayloadForced`). The capture is the only record of the host's multiplier, since the
+repair overwrites the byte. An `02 01` payload is left alone and is **not** read as "multiplier
+2": on this shared report ID it is indistinguishable from an MT-enable write, so
+`ctx->HostMultiplier` stays 1 and the detent keeps the classic feel — the safe direction.
+`MmSendMtEnable` is untouched and still spells `53 F1 02 01` literally.
 
 ### Why the multiplier shares 0xF1 instead of taking its own report ID
 
@@ -108,20 +113,31 @@ The `Collection (Logical)` wrapper and the multiplier items were paid for by:
 That is what keeps the overlay 0x87 in both modes, which keeps the `0x50 SdpWalkStream` bugcheck
 class (INCIDENT / `tests/test_bsod_regress.py`) out of scope. **Do not grow either descriptor.**
 
-### Sensitivity — same gain per touch unit, finer steps, no discarded travel
+### Sensitivity — the detent follows the multiplier the host actually armed
 
-`MM_SCROLL_STEP` is 16 and `MM_HIRES_MULTIPLIER` is 4, so in hi-res mode the detent is 4 touch
-units and each emitted unit is `120 / 4 = 30`. Gain per unit of surface travel is identical:
-classic is 1 unit per 16 travel × 120 = 7.5 per touch unit, hi-res is 1 unit per 4 travel × 30 =
-7.5 per touch unit. On a drag that is an exact multiple of the detent the two deliver the same
-total.
+`MM_HIRES_MULTIPLIER` (4) is only the descriptor's Logical Maximum: it is the largest multiplier
+the host may ask for, not the one in force. The host applies its own multiplier to every unit it
+receives, so the driver divides the detent by `ctx->HostMultiplier` — the value Windows requested
+in the last `SET_REPORT(Feature, 0xF1)`, captured from `origBuf[2]` before the payload repair and
+clamped to `1..MM_HIRES_MULTIPLIER`. It is **1 until Windows actually arms the multiplier**, so
+hi-res then feels exactly like classic rather than scrolling 4× too fast; dividing by a constant
+4 while the host still delivers 120 per unit is precisely that bug.
 
-They are **not** equal in general, and that is deliberate. Classic emits at most one unit per
-report and re-anchors to the current position, so sub-detent and super-detent travel is thrown
-away; `DetentUnits` in hi-res mode returns `travel / step` and consumes only `units * step`, so
-the remainder is carried. The contract is therefore: **same sensitivity per unit of surface
-travel, four times finer steps, and no more discarded sub-detent or super-detent travel** — never
-"identical feel" or "same total scroll" unqualified. A fast flick is the extreme case, where
-classic collapses the whole gesture into one 120 notch, so a tester may perceive hi-res as
-slightly faster on flicks. `ScrollStep` is still the sensitivity knob if the old behaviour is
-wanted back.
+With `ScrollStep` 16 and an armed multiplier of 4 the detent is 4 touch units and each unit is
+`120 / 4 = 30`: gain is `1/4 × 30 = 7.5` per touch unit, the same as classic's `1/16 × 120`. The
+division is **nearest-rounded** (`(step + m/2) / m`, floor 1), so gain is exact when `ScrollStep`
+is a multiple of the armed multiplier and off by the rounding otherwise — e.g. `ScrollStep` 18 at
+multiplier 4 gives detent 5, i.e. 24 per touch unit against classic's 120/18 = 6.67.
+
+Beyond that, hi-res and classic are **not** equal in general, deliberately. Classic emits at most
+one unit per report and re-anchors to the current position, so sub-detent and super-detent travel
+is thrown away; `DetentUnits` in hi-res mode returns `travel / step` and consumes only
+`units * step`, so the remainder is carried. Units are additionally capped per report against the
+`±127` the INT8 wheel fields can carry, with `consumed` recomputed from the capped units, so a
+saturating report leaves the surplus in the anchor instead of discarding it. The contract is
+therefore: **gain matched to the multiplier the host armed, exact when `ScrollStep` is a multiple
+of it, finer steps once it is armed, and no discarded sub-detent, super-detent or saturated
+travel** — never "identical feel" or "same total scroll" unqualified. A fast flick is the extreme
+case, where classic collapses the whole gesture into one 120 notch, so a tester may perceive
+hi-res as slightly faster on flicks. `ScrollStep` is still the sensitivity knob if the old
+behaviour is wanted back.

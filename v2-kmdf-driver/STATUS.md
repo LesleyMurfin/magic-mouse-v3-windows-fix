@@ -37,7 +37,7 @@ in `INCIDENT-2026-09-16.md`.
 | Battery after an idle disconnect | The HID control channel is also learned from device-initiated reconnects (`BRB_L2CA_OPEN_CHANNEL_RESPONSE`), not only from host-initiated opens |
 | Detent | **Every** dragging contact emits its own notches again; default `ScrollStep` **16** (the 2.0.4.3 build shipped 8) |
 | Sleep/wake | The watcher polls for compact 9-byte mode on an active mouse and re-arms multitouch itself |
-| Hi-res scroll (issue #48) | `Parameters!HiResScroll` = 1 overlays the Resolution-Multiplier descriptor and quarters the detent. **Default 0.** Source on top of 2.0.4.6 with no `DriverVer` bump; proven only by the Linux host-model gates — no Windows build, no signing, no hardware run happened in this change |
+| Hi-res scroll (issue #48) | `Parameters!HiResScroll` = 1 overlays the Resolution-Multiplier descriptor; the detent is divided by the multiplier the host actually armed (`ctx->HostMultiplier`, 1 until Windows issues the `0xF1` SET_REPORT), so it feels like classic until then. **Default 0.** Source on top of 2.0.4.6 with no `DriverVer` bump; proven only by the Linux host-model gates — no Windows build, no signing, no hardware run happened in this change |
 
 ## Host gates (no compiler needed)
 
@@ -76,15 +76,17 @@ What to confirm, in order:
    is the one being overlaid.
 2. `Diag!F1PayloadForced` goes **above 0** — Windows issued `SET_REPORT(Feature, 0xF1)` for the
    Resolution Multiplier and the filter repaired the payload back to Apple's `02 01` multitouch
-   enable. Still 0 means Windows never set the multiplier, so it is still 1 and scrolling is still
-   quantised to `WHEEL_DELTA`.
+   enable. Still 0 means Windows never set the multiplier, so `ctx->HostMultiplier` stays 1, the
+   detent stays the classic `ScrollStep`, and scrolling is still quantised to `WHEEL_DELTA`.
 3. Pointer, two-finger scroll and battery all still work. `F1PayloadForced` above 0 with scroll
    dead would mean the repair is not covering the path Windows actually used.
 
-Expected feel: same sensitivity per unit of surface travel, four times finer steps, and no more
-discarded sub-detent or super-detent travel. A flick that the classic path collapsed into one 120
-notch now scrolls the distance the finger moved, so flicks read as slightly faster; `ScrollStep`
-is the knob if the old behaviour is wanted back.
+Expected feel: while the host has not armed the multiplier, hi-res is indistinguishable from
+classic. Once it has, gain per unit of surface travel is exact when `ScrollStep` is a multiple of
+the armed multiplier and nearest-rounded otherwise, in that many times finer steps, with no
+discarded sub-detent, super-detent or saturated travel. A flick that the classic path collapsed
+into one 120 notch then scrolls the distance the finger moved, so flicks read as slightly faster;
+`ScrollStep` is the knob if the old behaviour is wanted back.
 
 ### Known app-side limit
 

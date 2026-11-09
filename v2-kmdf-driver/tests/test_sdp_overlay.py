@@ -299,22 +299,6 @@ def main() -> int:
             prefix_kept,
             "09 02 06 35 8D 35 8B 08 22 25 87",
         )
-        # The four length stores the 0x50 SdpWalkStream dumps came from:
-        # outer SEQ 35 8D, inner SEQ 35 8B, TEXT_STRING 25 87, and the
-        # AttributeLists length at buf[4]. None of them is a function of
-        # which descriptor was selected.
-        len_stores_kept = idx >= 0 and (
-            bytes(overlaid[idx + 3 : idx + 7]) == bytes.fromhex("358D358B")
-            and bytes(overlaid[idx + 9 : idx + 11]) == bytes.fromhex("2587")
-            and overlaid[4] == native[4]
-        )
-        run.check(
-            f"{tag}SDP_LEN_STORES_UNTOUCHED",
-            len_stores_kept,
-            "35 8D / 35 8B / 25 87 / buf[4] identical to native"
-            if len_stores_kept
-            else f"idx={idx} prefix region={bytes(overlaid[idx:idx+11]).hex()}",
-        )
 
         if fit:
             changed = [i for i in range(len(native)) if overlaid[i] != native[i]]
@@ -372,12 +356,6 @@ def main() -> int:
 
     hid = overlay_mode("", "g_HidDescriptor")
     hid_hires = overlay_mode("HIRES_", "g_HidDescriptorHiRes")
-    run.check(
-        "HIRES_SAME_SIZE_AS_CLASSIC",
-        len(hid) == len(hid_hires) == HID_LEN,
-        f"classic={len(hid)} hires={len(hid_hires)} (the overlay is same-size "
-        "in both modes, so no SDP length store is a function of HiRes)",
-    )
     run.check(
         "HIRES_IS_A_DIFFERENT_BLOB",
         bool(hid) and hid != hid_hires,

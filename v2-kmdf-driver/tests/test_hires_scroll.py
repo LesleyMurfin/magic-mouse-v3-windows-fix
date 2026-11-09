@@ -50,6 +50,7 @@ from hostmodel import (  # noqa: E402
     TOUCH_STATE_DRAG,
     WHEEL_DELTA,
     Ctx,
+    cap_units_to_report,
     detent_units,
     effective_step,
     i8,
@@ -65,7 +66,6 @@ GESTURE_C = ROOT / "GestureEngine.c"
 GESTURE_H = ROOT / "GestureEngine.h"
 DRV_C = ROOT / "Driver.c"
 DRV_H = ROOT / "Driver.h"
-IH_C = ROOT / "InputHandler.c"
 INF = ROOT / "MagicMouseDriver-kmdf-204-scroll.inf"
 
 HID_LEN = 0x87
@@ -665,37 +665,58 @@ class Drag(NamedTuple):
     unit_delta: int = WHEEL_DELTA
 
 
-def two_finger_drag(deltas: list[int], hi_res: bool) -> Drag:
-    """Drive two pre-anchored contacts through per-report y deltas.
+def two_finger_drag(
+    deltas: list[int],
+    hi_res: bool,
+    axis: str = "y",
+    host_mult: int = MM_HIRES_MULTIPLIER,
+) -> Drag:
+    """Drive two pre-anchored contacts through per-report deltas on one axis.
 
     Both slots are DRAG for the whole gesture, so down is 2 on every report
     and travel is the only variable. `residue` is the travel still sitting in
     the anchors when the gesture ends — the part that never scrolled.
+
+    `axis` picks which surface axis the fingers travel along and therefore
+    which output byte is read: y -> Wheel at payload[7], x -> AC Pan at
+    payload[6]. The two axes are fed the identical per-contact travel, so a
+    correct engine mirrors them (AC Pan is inverted against surface travel).
     """
-    ctx = Ctx(hi_res=hi_res)
-    for tid, x in ((0, 0), (1, 40)):
+    ctx = Ctx(hi_res=hi_res, host_multiplier=host_mult if hi_res else 1)
+    bases = (0, 40)
+    for tid, x in enumerate(bases):
         ctx.TouchAnchorValid[tid] = True
         ctx.TouchAnchorX[tid] = x
         ctx.TouchAnchorY[tid] = 0
     units = 0
     emitting = 0
-    y = 0
+    travel = 0
+    byte = 7 if axis == "y" else 6
     for delta in deltas:
-        y += delta
-        inp = make_mt(
-            [
-                pack_touch(0, -y, 0, TOUCH_STATE_DRAG),
-                pack_touch(40, -y, 1, TOUCH_STATE_DRAG),
+        travel += delta
+        if axis == "y":
+            touches = [
+                pack_touch(bases[tid], -travel, tid, TOUCH_STATE_DRAG)
+                for tid in (0, 1)
             ]
-        )
-        res = translate_mouse2_to_hid(inp, ctx)
+        else:
+            touches = [
+                pack_touch(bases[tid] - travel, 0, tid, TOUCH_STATE_DRAG)
+                for tid in (0, 1)
+            ]
+        res = translate_mouse2_to_hid(make_mt(touches), ctx)
         if not res.ok:
             raise SystemExit("FAIL: host model rejected a well-formed report")
-        wheel = i8(res.payload[7])
-        units += wheel
-        if wheel:
+        emitted = i8(res.payload[byte])
+        units += emitted
+        if emitted:
             emitting += 1
-    residue = sum(abs(ctx.TouchAnchorY[tid] + y) for tid in (0, 1))
+    if axis == "y":
+        residue = sum(abs(ctx.TouchAnchorY[tid] + travel) for tid in (0, 1))
+    else:
+        residue = sum(
+            abs(ctx.TouchAnchorX[tid] - (bases[tid] - travel)) for tid in (0, 1)
+        )
     return Drag(
         units=units,
         emitting=emitting,
@@ -707,39 +728,61 @@ def two_finger_drag(deltas: list[int], hi_res: bool) -> Drag:
 def test_arithmetic(run: _Run) -> None:
     default_ctx = Ctx()
     classic_step = effective_step(default_ctx)
-    hires_step = effective_step(Ctx(hi_res=True))
-    tiny_step = effective_step(Ctx(scroll_step=1, hi_res=True))
+    armed = Ctx(hi_res=True, host_multiplier=MM_HIRES_MULTIPLIER)
+    hires_step = effective_step(armed)
+    unarmed_step = effective_step(Ctx(hi_res=True))
+    tiny_step = effective_step(
+        Ctx(scroll_step=1, hi_res=True, host_multiplier=MM_HIRES_MULTIPLIER)
+    )
     step_ok = (
         default_ctx.HiResScroll is False
+        and default_ctx.HostMultiplier == 1
         and classic_step == MM_SCROLL_STEP
         and hires_step == HIRES_STEP
         and hires_step * MM_HIRES_MULTIPLIER == MM_SCROLL_STEP
+        and unarmed_step == MM_SCROLL_STEP
         and tiny_step == 1
     )
     run.check(
-        "HIRES_DETENT_IS_STEP_OVER_MULTIPLIER",
+        "HIRES_DETENT_IS_STEP_OVER_HOST_MULTIPLIER",
         step_ok,
-        f"detent {classic_step} classic / {hires_step} hi-res "
-        f"(= {MM_SCROLL_STEP} / {MM_HIRES_MULTIPLIER}); ScrollStep 1 floors "
-        f"at {tiny_step}, never 0"
+        f"detent {classic_step} classic / {hires_step} hi-res once the host "
+        f"armed multiplier {MM_HIRES_MULTIPLIER}; with the default "
+        f"HostMultiplier 1 the hi-res detent stays {unarmed_step}, so an "
+        f"un-armed host is not scrolled {MM_HIRES_MULTIPLIER}x too fast. "
+        f"ScrollStep 1 floors at {tiny_step}, never 0"
         if step_ok
-        else f"classic={classic_step} hires={hires_step} floor={tiny_step} "
-        f"default HiResScroll={default_ctx.HiResScroll}",
+        else f"classic={classic_step} hires={hires_step} "
+        f"unarmed={unarmed_step} floor={tiny_step} "
+        f"default HiResScroll={default_ctx.HiResScroll} "
+        f"default HostMultiplier={default_ctx.HostMultiplier}",
+    )
+
+    # Rounding is to NEAREST, not truncating: ScrollStep 10 with multiplier
+    # 4 is 2.5 detents, and 3 is closer to the requested gain than 2. A
+    # truncating divide biases every non-multiple detent downward, i.e. it
+    # scrolls faster than the host asked for.
+    def hstep(step: int, mult: int) -> int:
+        return effective_step(Ctx(scroll_step=step, hi_res=True, host_multiplier=mult))
+
+    rounded = {(s, m): hstep(s, m) for s, m in ((10, 4), (18, 4), (16, 3), (16, 2))}
+    round_ok = (
+        rounded == {(10, 4): 3, (18, 4): 5, (16, 3): 5, (16, 2): 8}
+        and hstep(16, 4) == HIRES_STEP
+        and hstep(1, 4) == 1
+    )
+    run.check(
+        "HIRES_STEP_ROUNDS_TO_NEAREST",
+        round_ok,
+        "(step + mult/2) / mult: 10/4 -> 3 and 18/4 -> 5, not the truncating "
+        "2 and 4 that would scroll faster than the host asked for; 1/4 still "
+        "floors at 1"
+        if round_ok
+        else f"{rounded} 16@4={hstep(16, 4)} 1@4={hstep(1, 4)}",
     )
 
     steady = [1] * 64
     plain = two_finger_drag(steady, hi_res=False)
-    explicit = two_finger_drag(steady, hi_res=False)
-    default_run = two_finger_drag(steady, hi_res=Ctx().HiResScroll)
-    default_ok = (plain == explicit == default_run) and plain.units != 0
-    run.check(
-        "HIRES_DEFAULT_IS_CLASSIC",
-        default_ok,
-        f"Ctx() defaults HiResScroll False; the 64-unit drag is unchanged "
-        f"({plain.units} units, {plain.emitting} emitting reports)"
-        if default_ok
-        else f"plain={plain} explicit={explicit} default={default_run}",
-    )
 
     hires = two_finger_drag(steady, hi_res=True)
     exact_ok = (
@@ -911,6 +954,87 @@ def test_arithmetic(run: _Run) -> None:
         else f"units={units} consumed={consumed} floor={floor_units} neg={neg}",
     )
 
+    # The x axis is not a second copy of the y path with a different name:
+    # AC Pan sits in out[6] and carries the NEGATED units, and it debits
+    # TouchAnchorX. Driving the identical travel on x must mirror the wheel
+    # exactly — inverting the sign of either the emit or the anchor debit
+    # shows up here and nowhere else.
+    pan = two_finger_drag(steady, hi_res=True, axis="x")
+    pan_classic = two_finger_drag(nudge, hi_res=False, axis="x")
+    pan_ok = (
+        pan.units == -hires.units
+        and pan.residue == 0
+        and pan.emitting == hires.emitting
+        and pan_classic.units == 0
+        and pan_classic.residue == c_nudge.residue
+    )
+    run.check(
+        "HIRES_ACPAN_MIRRORS_WHEEL",
+        pan_ok,
+        f"the same 64-unit drag on x emits {pan.units} AC Pan units in "
+        f"out[6] against {hires.units} Wheel units in out[7], residue "
+        f"{pan.residue}; a 12-unit x nudge still emits nothing in classic"
+        if pan_ok
+        else f"pan={pan} wheel={hires} classic nudge={pan_classic}",
+    )
+
+    # HostMultiplier is 1 until a host SET_REPORT(Feature, 0xF1) arms the
+    # Resolution Multiplier. Dividing the detent by the compile-time 4 while
+    # the host still scales every unit by 1 scrolls 4x too fast; the safe
+    # failure direction is "hi-res feels exactly like classic".
+    unarmed = two_finger_drag(steady, hi_res=True, host_mult=1)
+    unarmed_nudge = two_finger_drag(nudge, hi_res=True, host_mult=1)
+    unarmed_ok = (
+        unarmed.units == plain.units
+        and unarmed.emitting == plain.emitting
+        and unarmed.residue == plain.residue
+        and unarmed.units * MM_HIRES_MULTIPLIER == hires.units
+        and unarmed_nudge.units == c_nudge.units == 0
+    )
+    run.check(
+        "HIRES_UNARMED_HOST_NOT_FASTER",
+        unarmed_ok,
+        f"HostMultiplier 1: the 64-unit drag emits {unarmed.units} units, "
+        f"identical to classic's {plain.units}, not the {hires.units} the "
+        f"armed multiplier earns. The host applies its own multiplier, so "
+        "the un-armed case must not be pre-divided"
+        if unarmed_ok
+        else f"unarmed={unarmed} classic={plain} armed={hires} "
+        f"nudge={unarmed_nudge}",
+    )
+
+    # One report can travel further than an INT8 wheel field can carry. The
+    # cap has to happen BEFORE the anchor is debited: capping in ClampI8 on
+    # the way out debits travel that was never delivered, and the gesture
+    # silently loses it.
+    sat = two_finger_drag([600], hi_res=True)
+    sat_pan = two_finger_drag([600], hi_res=True, axis="x")
+    sat_up = two_finger_drag([-600], hi_res=True)
+    delivered = 127 * HIRES_STEP
+    sat_ok = (
+        sat.units == 127
+        and sat_up.units == -127
+        and sat_pan.units == -127
+        and sat.residue == (600 - delivered) + 600
+        and sat.residue == sat_pan.residue == sat_up.residue
+        and cap_units_to_report(0, 150) == 127
+        and cap_units_to_report(127, 1) == 0
+        and cap_units_to_report(-127, -1) == 0
+        and cap_units_to_report(-100, -50) == -27
+        and cap_units_to_report(0, 0) == 0
+    )
+    run.check(
+        "HIRES_REPORT_SATURATION_KEPT_IN_ANCHOR",
+        sat_ok,
+        f"a 600-unit single report wants 150 units per contact: the report "
+        f"emits {sat.units} (the INT8 maximum) and leaves {sat.residue} "
+        f"touch units in the anchors for the next report, on Wheel and on "
+        "AC Pan, in both directions — nothing is discarded by ClampI8"
+        if sat_ok
+        else f"down={sat} up={sat_up} pan={sat_pan} "
+        f"want units=127 residue={(600 - delivered) + 600}",
+    )
+
 
 # ---------------------------------------------------------------------------
 # Driver source
@@ -942,6 +1066,11 @@ def f1_repair_contract(drv_code: str, drv_h: str) -> dict[str, int] | None:
         r"[\s\S]{0,120}?origBuf\s*\[\s*1\s*\]\s*==\s*MM_REPORT_ID_VENDOR_F1"
         r"[\s\S]{0,200}?origBuf\s*\[\s*2\s*\]\s*!=\s*MM_MT_ENABLE_B0"
         r"[\s\S]{0,120}?origBuf\s*\[\s*3\s*\]\s*!=\s*MM_MT_ENABLE_B1"
+        r"[\s\S]{0,160}?hostMult\s*=\s*\(\s*ULONG\s*\)\s*origBuf\s*\[\s*2\s*\]\s*;"
+        r"[\s\S]{0,120}?hostMult\s*<\s*1\s*\)\s*\{\s*hostMult\s*=\s*1\s*;"
+        r"[\s\S]{0,160}?hostMult\s*>\s*MM_HIRES_MULTIPLIER\s*\)\s*\{\s*"
+        r"hostMult\s*=\s*MM_HIRES_MULTIPLIER\s*;"
+        r"[\s\S]{0,120}?sawMult\s*=\s*TRUE\s*;"
         r"[\s\S]{0,200}?origBuf\s*\[\s*2\s*\]\s*=\s*MM_MT_ENABLE_B0\s*;"
         r"[\s\S]{0,120}?origBuf\s*\[\s*3\s*\]\s*=\s*MM_MT_ENABLE_B1\s*;"
         r"[\s\S]{0,120}?forcedF1\s*=\s*TRUE\s*;"
@@ -964,74 +1093,121 @@ def f1_repair_contract(drv_code: str, drv_h: str) -> dict[str, int] | None:
     return values
 
 
-def f1_repair(buf: bytearray, n: int, hi_res: bool, k: dict[str, int]) -> bool:
-    """Host execution of the outbound SET_REPORT(Feature, 0xF1) repair."""
-    if (
-        hi_res
-        and n >= 4
-        and buf[0] == k["MM_HID_SET_REPORT_FEATURE"]
-        and buf[1] == k["MM_REPORT_ID_VENDOR_F1"]
-        and (buf[2] != k["MM_MT_ENABLE_B0"] or buf[3] != k["MM_MT_ENABLE_B1"])
-    ):
-        buf[2] = k["MM_MT_ENABLE_B0"]
-        buf[3] = k["MM_MT_ENABLE_B1"]
-        return True
-    return False
-
-
 def test_c_source(run: _Run) -> None:
     gesture = strip_c_comments(_read(GESTURE_C))
     helper = _function_body(gesture, "DetentUnits")
     active = _function_body(gesture, "AccumulateSurfaceScroll")
 
+    guard = re.search(
+        r"\A\s*if\s*\(\s*step\s*<\s*1\s*\)\s*\{\s*"
+        r"\*consumed\s*=\s*0\s*;\s*return\s+0\s*;",
+        helper,
+    )
     hi_branch = re.search(
         r"if\s*\(\s*hiRes\s*\)\s*\{[\s\S]{0,300}?"
         r"INT\s+units\s*=\s*travel\s*/\s*step\s*;[\s\S]{0,200}?"
         r"\*consumed\s*=\s*units\s*\*\s*step\s*;[\s\S]{0,160}?return\s+units\s*;",
         helper,
     )
-    classic_branch = re.search(
-        r"travel\s*>=\s*step\s*\|\|\s*travel\s*<=\s*-\s*step"
-        r"[\s\S]{0,200}?\*consumed\s*=\s*travel\s*;"
-        r"[\s\S]{0,160}?return\s*\(\s*travel\s*>\s*0\s*\)\s*\?\s*1\s*:\s*-1\s*;",
-        helper,
-    )
-    detent_ok = bool(helper) and hi_branch is not None and classic_branch is not None
+    detent_ok = bool(helper) and hi_branch is not None and guard is not None
     run.check(
         "HIRES_C_DETENT_UNITS",
         detent_ok,
-        "DetentUnits keeps both rules: hi-res takes the quotient and consumes "
-        "units * step (remainder stays in the anchor); classic emits one unit "
-        "and consumes the whole travel"
+        "DetentUnits rejects step < 1 as its very first statement (the "
+        "hi-res branch divides by step at DISPATCH_LEVEL), then hi-res takes "
+        "the quotient and consumes units * step (remainder stays in the "
+        "anchor); classic emits one unit and consumes the whole travel"
         if detent_ok
         else f"body={bool(helper)} hiRes branch={hi_branch is not None} "
-        f"classic branch={classic_branch is not None}",
+        f"step<1 guard first={guard is not None}",
     )
 
     clamp = re.search(r"step\s*>\s*MM_SCROLL_STEP_MAX", active)
     divide = re.search(
         r"if\s*\(\s*hiRes\s*\)\s*\{[\s\S]{0,200}?"
-        r"step\s*/=\s*MM_HIRES_MULTIPLIER\s*;[\s\S]{0,160}?"
-        r"if\s*\(\s*step\s*<\s*1\s*\)\s*\{\s*step\s*=\s*1\s*;",
+        r"step\s*=\s*\(\s*step\s*\+\s*hostMult\s*/\s*2\s*\)\s*/\s*hostMult\s*;"
+        r"[\s\S]{0,160}?if\s*\(\s*step\s*<\s*1\s*\)\s*\{\s*step\s*=\s*1\s*;",
         active,
     )
     reads_flag = re.search(r"BOOLEAN\s+hiRes\s*=\s*ctx->HiResScroll\s*;", active)
+    reads_mult = re.search(
+        r"ULONG\s+hostMult\s*=\s*ctx->HostMultiplier\s*;"
+        r"[\s\S]{0,120}?hostMult\s*<\s*1\s*\)\s*\{\s*hostMult\s*=\s*1\s*;"
+        r"[\s\S]{0,160}?hostMult\s*>\s*MM_HIRES_MULTIPLIER\s*\)\s*\{\s*"
+        r"hostMult\s*=\s*MM_HIRES_MULTIPLIER\s*;",
+        active,
+    )
     divide_ok = (
         divide is not None
         and clamp is not None
         and reads_flag is not None
+        and reads_mult is not None
         and clamp.start() < divide.start()
         and reads_flag.start() < divide.start()
+        and reads_mult.start() < divide.start()
     )
     run.check(
         "HIRES_C_STEP_DIVIDE",
         divide_ok,
-        "AccumulateSurfaceScroll reads ctx->HiResScroll, clamps ScrollStep to "
-        "[MIN, MAX], and only then divides by MM_HIRES_MULTIPLIER with a "
-        "floor of 1 — a 0 detent would emit a unit on every report"
+        "AccumulateSurfaceScroll reads ctx->HiResScroll and "
+        "ctx->HostMultiplier (clamped to 1..MM_HIRES_MULTIPLIER), clamps "
+        "ScrollStep to [MIN, MAX], and only then divides by the multiplier "
+        "the HOST armed, rounded to nearest, floor 1 — dividing by the "
+        "compile-time constant would scroll 4x too fast on a host that never "
+        "set the Resolution Multiplier, and a 0 detent would emit on every "
+        "report"
         if divide_ok
         else f"hiRes read={reads_flag is not None} clamp={clamp is not None} "
-        f"divide={divide is not None}",
+        f"hostMult read={reads_mult is not None} divide={divide is not None}",
+    )
+
+    cap_helper = _function_body(gesture, "CapUnitsToReport")
+    cap_body = cap_helper is not None and bool(
+        re.search(
+            r"units\s*>\s*0[\s\S]{0,200}?INT\s+room\s*=\s*127\s*-\s*total\s*;"
+            r"[\s\S]{0,200}?units\s*<\s*0[\s\S]{0,200}?"
+            r"INT\s+room\s*=\s*-\s*127\s*-\s*total\s*;",
+            cap_helper,
+        )
+    )
+    cap_y = re.search(
+        r"if\s*\(\s*hiRes\s*&&\s*unitsY\s*!=\s*0\s*\)\s*\{[\s\S]{0,200}?"
+        r"unitsY\s*=\s*CapUnitsToReport\s*\(\s*\*outWheel\s*,\s*unitsY\s*\)\s*;"
+        r"[\s\S]{0,120}?consumedY\s*=\s*unitsY\s*\*\s*\(\s*INT\s*\)\s*step\s*;",
+        active,
+    )
+    cap_x = re.search(
+        r"if\s*\(\s*hiRes\s*&&\s*unitsX\s*!=\s*0\s*\)\s*\{[\s\S]{0,200}?"
+        r"unitsX\s*=\s*-\s*CapUnitsToReport\s*\(\s*\*outHWheel\s*,\s*"
+        r"-\s*unitsX\s*\)\s*;"
+        r"[\s\S]{0,120}?consumedX\s*=\s*unitsX\s*\*\s*\(\s*INT\s*\)\s*step\s*;",
+        active,
+    )
+    debit_y = re.search(
+        r"ctx->TouchAnchorY\s*\[\s*id\s*\]\s*=[^;]*?-\s*consumedY\s*\)", active
+    )
+    debit_x = re.search(
+        r"ctx->TouchAnchorX\s*\[\s*id\s*\]\s*=[^;]*?-\s*consumedX\s*\)", active
+    )
+    debit_after = (
+        cap_y is not None
+        and cap_x is not None
+        and debit_y is not None
+        and debit_x is not None
+        and cap_y.end() < debit_y.start()
+        and cap_x.end() < debit_x.start()
+    )
+    cap_ok = cap_body and debit_after
+    run.check(
+        "HIRES_C_REPORT_SATURATION_CAP",
+        cap_ok,
+        "CapUnitsToReport bounds each axis to what the INT8 field can still "
+        "carry, and both axes recompute consumed from the capped units "
+        "BEFORE the anchor is debited — so travel ClampI8 would have eaten "
+        "stays in the anchor for the next report"
+        if cap_ok
+        else f"helper={cap_body} capY={cap_y is not None} "
+        f"capX={cap_x is not None} before debit={debit_after}",
     )
 
     drv_code = strip_c_comments(_read(DRV_C))
@@ -1087,130 +1263,24 @@ def test_c_source(run: _Run) -> None:
         else f"counter={counter is not None} diag values published={published}",
     )
 
-    sender = _function_body(drv_code, "MmSendMtEnable")
-    literal = re.search(
-        r"pkt\s*\[\s*0\s*\]\s*=\s*0x53\s*;[\s\S]{0,80}?"
-        r"pkt\s*\[\s*1\s*\]\s*=\s*0xF1\s*;[\s\S]{0,80}?"
-        r"pkt\s*\[\s*2\s*\]\s*=\s*0x02\s*;[\s\S]{0,80}?"
-        r"pkt\s*\[\s*3\s*\]\s*=\s*0x01\s*;",
-        sender,
-        re.I,
+    field = re.search(r"ULONG\s+HostMultiplier\s*;", drv_h)
+    init = re.search(r"ctx->HostMultiplier\s*=\s*1\s*;", drv_code)
+    stored = re.search(
+        r"WdfSpinLockAcquire\s*\(\s*ctx->Lock\s*\)\s*;[\s\S]{0,400}?"
+        r"if\s*\(\s*sawMult\s*\)\s*\{\s*ctx->HostMultiplier\s*=\s*hostMult\s*;"
+        r"[\s\S]{0,200}?WdfSpinLockRelease\s*\(\s*ctx->Lock\s*\)\s*;",
+        drv_code,
     )
+    mult_ok = field is not None and init is not None and stored is not None
     run.check(
-        "HIRES_MT_ENABLE_LITERAL",
-        literal is not None,
-        "MmSendMtEnable still spells 53 F1 02 01 out literally — the enable "
-        "the device needs does not depend on HiResScroll or on the repair"
-        if literal is not None
-        else "MmSendMtEnable no longer writes the literal 53 F1 02 01 packet",
-    )
-
-    if constants_ok and constants is not None:
-        vectors: list[tuple[str, bytes, int, bool, bytes, bool]] = [
-            # name, payload, n, hi_res, expected bytes, expected forced
-            (
-                "windows multiplier payload repaired",
-                bytes([0x53, 0xF1, 0x04, 0x00]),
-                4,
-                True,
-                bytes([0x53, 0xF1, 0x02, 0x01]),
-                True,
-            ),
-            (
-                "already 02 01 left alone",
-                bytes([0x53, 0xF1, 0x02, 0x01]),
-                4,
-                True,
-                bytes([0x53, 0xF1, 0x02, 0x01]),
-                False,
-            ),
-            (
-                "short transfer untouched",
-                bytes([0x53, 0xF1, 0x04, 0x00]),
-                3,
-                True,
-                bytes([0x53, 0xF1, 0x04, 0x00]),
-                False,
-            ),
-            (
-                "other report id untouched",
-                bytes([0x53, 0xF2, 0x04, 0x00]),
-                4,
-                True,
-                bytes([0x53, 0xF2, 0x04, 0x00]),
-                False,
-            ),
-            (
-                "not a SET_REPORT(Feature) untouched",
-                bytes([0xA2, 0xF1, 0x04, 0x00]),
-                4,
-                True,
-                bytes([0xA2, 0xF1, 0x04, 0x00]),
-                False,
-            ),
-            (
-                "unreachable with HiResScroll off",
-                bytes([0x53, 0xF1, 0x04, 0x00]),
-                4,
-                False,
-                bytes([0x53, 0xF1, 0x04, 0x00]),
-                False,
-            ),
-        ]
-        bad: list[str] = []
-        for name, payload, n, hi_res, want, want_forced in vectors:
-            buf = bytearray(payload)
-            forced = f1_repair(buf, n, hi_res, constants)
-            if bytes(buf) != want or forced != want_forced:
-                bad.append(f"{name}: got {bytes(buf).hex()} forced={forced}")
-        run.check(
-            "HIRES_F1_REPAIR_VECTORS",
-            not bad,
-            f"{len(vectors)} vectors: only a >= 4 byte 53 F1 … with "
-            "HiResScroll set is rewritten, and it is rewritten to 02 01"
-            if not bad
-            else "; ".join(bad),
-        )
-    else:
-        run.check(
-            "HIRES_F1_REPAIR_VECTORS",
-            False,
-            "repair contract unusable, vectors disabled",
-        )
-
-    ih_code = strip_c_comments(_read(IH_C))
-    overlay = _function_body(ih_code, "SdpRewrite_Process")
-    both_sizes = re.search(
-        r"g_HidDescriptorSize\s*!=\s*SDP_HID_OVERLAY_LEN\s*\|\|\s*"
-        r"g_HidDescriptorHiResSize\s*!=\s*SDP_HID_OVERLAY_LEN",
-        overlay,
-    )
-    select = re.search(
-        r"const\s+UCHAR\s*\*\s*desc\s*=\s*HiRes\s*\?\s*"
-        r"g_HidDescriptorHiRes\s*:\s*g_HidDescriptor\s*;",
-        overlay,
-    )
-    copy = re.search(
-        r"RtlCopyMemory\s*\(\s*buf\s*\+\s*descOffset\s*,\s*desc\s*,\s*"
-        r"SDP_HID_OVERLAY_LEN\s*\)",
-        overlay,
-    )
-    sizes_ok = (
-        both_sizes is not None
-        and select is not None
-        and copy is not None
-        and both_sizes.start() < select.start() < copy.start()
-    )
-    run.check(
-        "HIRES_SDP_BOTH_SIZES_VALIDATED",
-        sizes_ok,
-        "SdpRewrite_Process re-checks BOTH g_HidDescriptorSize and "
-        "g_HidDescriptorHiResSize against SDP_HID_OVERLAY_LEN before it "
-        "selects desc and copies — the same-size overlay cannot become a "
-        "resize through the new flag"
-        if sizes_ok
-        else f"both sizes={both_sizes is not None} select={select is not None} "
-        f"copy={copy is not None}",
+        "HIRES_C_HOST_MULTIPLIER_CAPTURED",
+        mult_ok,
+        "DEVICE_CONTEXT carries ULONG HostMultiplier, EvtDeviceAdd starts it "
+        "at 1, and the 0xF1 path stores the multiplier the host asked for "
+        "under ctx->Lock — the byte the repair overwrites is read first"
+        if mult_ok
+        else f"field={field is not None} init={init is not None} "
+        f"stored under lock={stored is not None}",
     )
 
     passes_flag = re.search(
@@ -1227,18 +1297,16 @@ def test_c_source(run: _Run) -> None:
     )
 
     inf = _read(INF)
-    inf_default = re.search(
-        r'Parameters"\s*,\s*"HiResScroll"\s*,\s*0x00010001\s*,\s*0\s*$',
-        inf,
-        re.M,
-    )
+    inf_addreg = re.search(r"^HKR[^\n]*HiResScroll", inf, re.M)
     run.check(
-        "HIRES_INF_DEFAULT_0",
-        inf_default is not None,
-        "the INF writes Parameters!HiResScroll as REG_DWORD 0: hi-res is "
-        "opt-in, the shipped default is the hardware-proven classic path"
-        if inf_default is not None
-        else "INF does not write HiResScroll 0x00010001 with value 0",
+        "HIRES_INF_WRITES_NO_HIRES_VALUE",
+        inf_addreg is None,
+        "the INF deliberately has no HiResScroll AddReg line: ctx->HiResScroll "
+        "already defaults to FALSE when Parameters!HiResScroll is absent, and "
+        "an AddReg would stomp the user's mm-scroll-tune.ps1 choice on every "
+        "pnputil /add-driver"
+        if inf_addreg is None
+        else f"INF re-added an AddReg for HiResScroll: {inf_addreg.group(0)!r}",
     )
 
     ctx_default = re.search(r"ctx->HiResScroll\s*=\s*FALSE\s*;", drv_code)

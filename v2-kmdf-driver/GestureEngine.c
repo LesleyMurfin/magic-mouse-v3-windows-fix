@@ -65,6 +65,14 @@ DetentUnits(
     _In_ BOOLEAN hiRes,
     _Out_ INT* consumed)
 {
+    // The hi-res branch divides by `step` at DISPATCH_LEVEL; a zero detent
+    // would bugcheck, so it is rejected here as well as at the caller.
+    if (step < 1)
+    {
+        *consumed = 0;
+        return 0;
+    }
+
     if (hiRes)
     {
         INT units = travel / step;      // truncates toward zero, sign kept
@@ -80,6 +88,28 @@ DetentUnits(
 
     *consumed = 0;
     return 0;
+}
+
+// Cap `units` so that `total + units` stays inside the +/-127 an INT8 wheel
+// field can carry. Returns the units that still fit; the caller recomputes
+// `consumed` from them so the rest stays in the anchor instead of being
+// silently eaten by ClampI8.
+static __forceinline INT
+CapUnitsToReport(_In_ INT total, _In_ INT units)
+{
+    if (units > 0)
+    {
+        INT room = 127 - total;
+        if (room < 0) { room = 0; }
+        if (units > room) { units = room; }
+    }
+    else if (units < 0)
+    {
+        INT room = -127 - total;
+        if (room > 0) { room = 0; }
+        if (units < room) { units = room; }
+    }
+    return units;
 }
 
 static VOID
@@ -113,19 +143,24 @@ AccumulateSurfaceScroll(
     WdfSpinLockAcquire(ctx->Lock);
 
     BOOLEAN hiRes = ctx->HiResScroll;
+    ULONG hostMult = ctx->HostMultiplier;
+    if (hostMult < 1) { hostMult = 1; }
+    if (hostMult > MM_HIRES_MULTIPLIER) { hostMult = MM_HIRES_MULTIPLIER; }
 
     ULONG step = ctx->ScrollStep;
     if (step < MM_SCROLL_STEP_MIN) { step = MM_SCROLL_STEP; }
     if (step > MM_SCROLL_STEP_MAX) { step = MM_SCROLL_STEP_MAX; }
 
-    // Hi-res divides the detent by exactly the multiplier the host was told
-    // about, so the same drag still scrolls the same distance - in
-    // MM_HIRES_MULTIPLIER smaller steps. Floor at 1: step 0 would emit a unit
-    // on every report regardless of travel, and 1/4 of the minimum tunable
-    // detent rounds to 0.
+    // Hi-res divides the detent by the multiplier the host ACTUALLY armed
+    // (HostMultiplier, 1 until a SET_REPORT(Feature, 0xF1) says otherwise),
+    // because the host scales every emitted unit by that same number.
+    // Dividing by the compile-time maximum while the host still delivers 120
+    // per unit would scroll MM_HIRES_MULTIPLIER times too fast. Nearest
+    // rounding keeps the gain closest when ScrollStep is not a multiple;
+    // floor at 1 because a zero detent divides by zero below.
     if (hiRes)
     {
-        step /= MM_HIRES_MULTIPLIER;
+        step = (step + hostMult / 2) / hostMult;
         if (step < 1) { step = 1; }
     }
 
@@ -215,6 +250,15 @@ AccumulateSurfaceScroll(
         // axis. Wrapping ULONG adds under the lock this function already holds.
         INT consumedY = 0;
         INT unitsY = DetentUnits(stepY, (INT)step, hiRes, &consumedY);
+        if (hiRes && unitsY != 0)
+        {
+            // out[7] is an INT8: cap against what this report can still
+            // carry and recompute the debit, so the surplus travel stays in
+            // the anchor instead of being eaten by ClampI8. Classic emits at
+            // most one unit per contact, so 16 slots can never saturate.
+            unitsY = CapUnitsToReport(*outWheel, unitsY);
+            consumedY = unitsY * (INT)step;
+        }
         if (unitsY != 0)
         {
             *outWheel += unitsY;
@@ -225,6 +269,12 @@ AccumulateSurfaceScroll(
 
         INT consumedX = 0;
         INT unitsX = DetentUnits(stepX, (INT)step, hiRes, &consumedX);
+        if (hiRes && unitsX != 0)
+        {
+            // AC Pan carries -unitsX, so cap the emitted sign and map back.
+            unitsX = -CapUnitsToReport(*outHWheel, -unitsX);
+            consumedX = unitsX * (INT)step;
+        }
         if (unitsX != 0)
         {
             // AC Pan is inverted against surface travel, as it has been since

@@ -169,6 +169,7 @@ EvtDeviceAdd(_In_ WDFDRIVER Driver, _Inout_ PWDFDEVICE_INIT DeviceInit)
     ctx->EnableInjection = TRUE;
     ctx->ScrollStep      = MM_SCROLL_STEP;
     ctx->HiResScroll     = FALSE;
+    ctx->HostMultiplier  = 1;   // until the host arms the multiplier
     {
         WDFKEY paramsKey = NULL;
         NTSTATUS ks = WdfDriverOpenParametersRegistryKey(
@@ -397,7 +398,15 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
             // other buffer touch in this driver (OnAclTransferComplete). An
             // unwritable mapping must cost the repair, never the machine:
             // forcedF1 stays FALSE and the transfer is forwarded untouched.
+            // origBuf[2] is the Resolution Multiplier Windows asked for and
+            // the byte the repair overwrites, so it is captured before the
+            // stores. A payload that already *is* the MT-enable literal is
+            // ambiguous with "multiplier 2" on this shared report ID and is
+            // deliberately not taken as arming: HostMultiplier stays 1 and
+            // the detent keeps the classic feel, the safe failure direction.
             BOOLEAN forcedF1 = FALSE;
+            BOOLEAN sawMult = FALSE;
+            ULONG hostMult = 1;
             if (ctx->HiResScroll && origBuf != NULL && n >= 4)
             {
                 __try
@@ -407,6 +416,11 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
                         (origBuf[2] != MM_MT_ENABLE_B0 ||
                          origBuf[3] != MM_MT_ENABLE_B1))
                     {
+                        hostMult = (ULONG)origBuf[2];
+                        if (hostMult < 1) { hostMult = 1; }
+                        if (hostMult > MM_HIRES_MULTIPLIER) { hostMult = MM_HIRES_MULTIPLIER; }
+                        sawMult = TRUE;
+
                         origBuf[2] = MM_MT_ENABLE_B0;
                         origBuf[3] = MM_MT_ENABLE_B1;
                         forcedF1 = TRUE;
@@ -423,6 +437,7 @@ EvtIoInternalDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request,
             ctx->LastOutBufferSize = n;
             ctx->LastOutFlags = outFlags;
             ctx->LastOutHdr = (ULONG)origHdr;
+            if (sawMult) { ctx->HostMultiplier = hostMult; }
             if (forcedF1) { ctx->F1PayloadForced++; }
             WdfSpinLockRelease(ctx->Lock);
 
@@ -1260,7 +1275,8 @@ MmDiagWorkItemFunc(_In_ WDFWORKITEM WorkItem)
     // Which descriptor the host actually bound, and whether the filter had to
     // repair a host-written 0xF1 payload. HiResScroll 1 with F1PayloadForced
     // still 0 means Windows never issued the Resolution Multiplier
-    // SET_REPORT, so scrolling is still quantised to WHEEL_DELTA.
+    // SET_REPORT, so ctx->HostMultiplier is still 1 and the detent - hence
+    // the feel - is the classic one.
     MmDiagSetValueIfChanged(key, L"HiResScroll",
                             REG_DWORD, &hiRes, sizeof(hiRes));
     MmDiagSetValueIfChanged(key, L"F1PayloadForced",

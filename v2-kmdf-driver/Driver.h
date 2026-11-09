@@ -132,6 +132,13 @@ typedef struct _DEVICE_CONTEXT
     // a change needs a device restart.
     BOOLEAN HiResScroll;
 
+    // The Resolution Multiplier value Windows actually requested in the last
+    // SET_REPORT(Feature, 0xF1) it issued, clamped to 1..MM_HIRES_MULTIPLIER.
+    // 1 until the host arms the multiplier, which is also the install
+    // default: the host scales every emitted unit by this number, so the
+    // hi-res detent is divided by it and not by the compile-time maximum.
+    ULONG   HostMultiplier;
+
     // Times the filter rewrote a host SET_REPORT(Feature, 0xF1) payload back
     // to 02 01. Published to Diag: hi-res scroll working while this stays 0
     // means Windows never set the multiplier, and multitouch dying right

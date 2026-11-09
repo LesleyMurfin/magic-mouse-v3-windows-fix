@@ -23,13 +23,16 @@
 #
 # -HiResScroll writes Parameters!HiResScroll (REG_DWORD 0/1, issue #48). The
 # driver reads it in the same EvtDeviceAdd pass: 1 overlays the descriptor that
-# carries the HID Resolution Multiplier, so each emitted unit is 120/4 = 30
-# instead of 120. Same sensitivity per unit of surface travel, four times finer
-# steps, and no more discarded sub-detent or super-detent travel - flicks will
-# feel slightly faster because the classic path was collapsing them to one
-# notch. Omit the switch to leave the value alone. Diag!HiResScroll echoes what
-# the driver loaded; Diag!F1PayloadForced only rises once Windows has actually
-# issued the multiplier SET_REPORT.
+# carries the HID Resolution Multiplier. The detent is then divided by the
+# multiplier Windows actually armed via SET_REPORT(Feature, 0xF1) - 1 until it
+# does, so until then hi-res feels exactly like classic. Once armed (max 4),
+# each emitted unit is 120/multiplier and the gain per unit of surface travel
+# is exact when ScrollStep is a multiple of that multiplier, nearest-rounded
+# otherwise; no sub-detent, super-detent or saturated travel is discarded, so
+# flicks feel slightly faster than the classic path's single notch. Omit the
+# switch to leave the value alone. Diag!HiResScroll echoes what the driver
+# loaded; Diag!F1PayloadForced only rises once Windows has actually issued the
+# multiplier SET_REPORT.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidateRange(1, 224)][int]$ScrollStep,
@@ -147,7 +150,7 @@ if ($null -eq $diag) {
         Fail 3 $hiResMsg
     }
     if ($setHiRes -and $HiResScroll -eq 1 -and [int]$diag.F1PayloadForced -eq 0) {
-        Write-Output 'F1PayloadForced is still 0 - Windows has not issued SET_REPORT(Feature, 0xF1) yet, so the multiplier is still 1 and scrolling stays quantised to WHEEL_DELTA'
+        Write-Output 'F1PayloadForced is still 0 - Windows has not issued SET_REPORT(Feature, 0xF1) yet, so the driver keeps HostMultiplier=1: the detent stays the classic ScrollStep and scrolling stays quantised to WHEEL_DELTA'
     }
 }
 

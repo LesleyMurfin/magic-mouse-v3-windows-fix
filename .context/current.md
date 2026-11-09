@@ -15,7 +15,9 @@ full charter and the ACO kit is in `.aco/` and `.ai/skills/aco-triage/` (PR #50,
 
 **Open.** Driver 1 with `testsigning` off; a Windows build and sign of 2.0.4.6; hi-res scroll
 (issue #48, `Parameters!HiResScroll`) is source only, default off, proven only by the Linux host
-gates; the community `pnputil` swap-test (never run); EV attestation (funding). Battery on v1/v2
+gates — its detent now follows `ctx->HostMultiplier`, the multiplier the host actually armed (1
+until it does), so it feels like classic until Windows issues the `0xF1` SET_REPORT; the
+community `pnputil` swap-test (never run); EV attestation (funding). Battery on v1/v2
 PIDs is not characterised (`docs/llms.txt`).
 
 **Next.** Build and sign 2.0.4.6 on a Windows host with the EWDK or WDK, then confirm battery,
