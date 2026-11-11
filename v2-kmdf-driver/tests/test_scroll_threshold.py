@@ -111,15 +111,48 @@ def test_c_source(run: _Run) -> None:
     active_raw = _function_body(raw, "AccumulateSurfaceScroll")
     active = _function_body(code, "AccumulateSurfaceScroll")
     down_match = re.search(r"down\s*<\s*2", active)
+    # The detent is no longer spelled inline. AccumulateSurfaceScroll hands
+    # this contact's own Y travel and the clamped registry step to
+    # DetentUnits and emits the units it hands back, so the invariant the old
+    # `stepY >= (INT)step ... *outWheel` regex pinned — per-contact travel,
+    # clamped step, then *outWheel, all after the down < 2 gate — is re-pinned
+    # against the call site instead of the arithmetic it moved into.
     detent_match = re.search(
-        r"stepY\s*>=\s*\(INT\)\s*step.*?\*outWheel",
+        r"DetentUnits\s*\(\s*stepY\s*,\s*\(\s*INT\s*\)\s*step\s*,"
+        r"\s*hiRes\s*,\s*&\s*consumedY\s*\)"
+        r".*?\*outWheel\s*\+=\s*unitsY\s*;",
         active,
         re.S,
+    )
+    # DetentUnits still owns the classic rule verbatim: cross the detent in
+    # either direction, emit exactly one unit, consume the whole travel (so
+    # `anchor -= consumed` is the old `anchor = y`). The hi-res branch is
+    # gated separately in test_hires_scroll.py.
+    helper = _function_body(code, "DetentUnits")
+    classic_rule = (
+        re.search(
+            r"travel\s*>=\s*step\s*\|\|\s*travel\s*<=\s*-\s*step"
+            r"[\s\S]{0,200}?\*consumed\s*=\s*travel\s*;"
+            r"[\s\S]{0,120}?return\s*\(\s*travel\s*>\s*0\s*\)\s*\?\s*1\s*:\s*-1\s*;",
+            helper,
+        )
+        is not None
+    )
+    # The anchor advances by exactly the travel those units consumed.
+    anchor_rule = (
+        re.search(
+            r"ctx->TouchAnchorY\s*\[\s*id\s*\]\s*=[^;]*?"
+            r"ctx->TouchAnchorY\s*\[\s*id\s*\]\s*-\s*consumedY",
+            active,
+        )
+        is not None
     )
     has_active_detent = (
         bool(active)
         and re.search(r"step\s*=\s*ctx->ScrollStep", active) is not None
         and detent_match is not None
+        and classic_rule
+        and anchor_rule
         and down_match is not None
         and down_match.start() < detent_match.start()
     )

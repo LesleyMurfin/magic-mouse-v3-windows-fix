@@ -30,6 +30,7 @@ SdpRewrite_Process(
     _Inout_updates_bytes_(allocLen) PUCHAR  buf,
     _In_  ULONG  usedLen,
     _In_  ULONG  allocLen,
+    _In_  BOOLEAN HiRes,
     _Out_ PULONG newLen)
 {
     *newLen = usedLen;
@@ -39,10 +40,15 @@ SdpRewrite_Process(
         return STATUS_INVALID_PARAMETER;
     }
 
-    if (g_HidDescriptorSize != SDP_HID_OVERLAY_LEN)
+    // Both blobs are compile-time asserted at 0x87; re-check here so a
+    // selection bug can never turn the same-size overlay into a resize.
+    if (g_HidDescriptorSize != SDP_HID_OVERLAY_LEN ||
+        g_HidDescriptorHiResSize != SDP_HID_OVERLAY_LEN)
     {
         return STATUS_INVALID_PARAMETER;
     }
+
+    const UCHAR* desc = HiRes ? g_HidDescriptorHiRes : g_HidDescriptor;
 
     if (usedLen < SDP_HID_PREFIX_LEN)
     {
@@ -79,9 +85,9 @@ SdpRewrite_Process(
         return STATUS_BUFFER_TOO_SMALL;
     }
 
-    RtlCopyMemory(buf + descOffset, g_HidDescriptor, SDP_HID_OVERLAY_LEN);
+    RtlCopyMemory(buf + descOffset, desc, SDP_HID_OVERLAY_LEN);
     *newLen = usedLen;
-    DbgPrint("MM: SDP overlay 135 B at buf[%lu] (len unchanged %lu)\n",
-             descOffset, usedLen);
+    DbgPrint("MM: SDP overlay 135 B at buf[%lu] (len unchanged %lu) hires=%d\n",
+             descOffset, usedLen, HiRes ? 1 : 0);
     return STATUS_SUCCESS;
 }

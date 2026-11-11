@@ -82,6 +82,11 @@ Needs   = HID_Inst.NT.HW
 ; 0x00010000 = FLG_ADDREG_TYPE_MULTI_SZ — replaces any previous LowerFilters.
 HKR,,"LowerFilters",0x00010000,"MagicMouseDriver204Scroll"
 HKLM,"SYSTEM\CurrentControlSet\Services\MagicMouseDriver204Scroll\Parameters","EnableInjection",0x00010001,1
+; Hi-res scroll (issue #48) has deliberately NO AddReg line: ctx->HiResScroll
+; already defaults to FALSE when Parameters!HiResScroll is absent, so writing
+; it here would add nothing on a fresh install and would silently revert a
+; user's `mm-scroll-tune.ps1 -HiResScroll 1` on every pnputil /add-driver.
+; ScrollStep is absent for the same reason.
 
 [MagicMouseDriver204_Install.NT.Services]
 Include    = hidbth.inf

@@ -92,3 +92,118 @@ const UCHAR g_HidDescriptor[] = {
 C_ASSERT(sizeof(g_HidDescriptor) == 0x87);
 
 const ULONG g_HidDescriptorSize = sizeof(g_HidDescriptor);
+
+// ---------------------------------------------------------------------------
+// Hi-res variant — identical wire format, 135 bytes (0x87), issue #48.
+//
+// One integer Wheel notch is 120 (WHEEL_DELTA) to hidclass, which is the
+// "1 line jump" users report. HID Resolution Multiplier (Generic Desktop
+// 0x48) is the documented way out: the host divides 120 by the multiplier,
+// so a mouse that stays a mouse can emit quarter-line steps. Windows sets it
+// with SET_FEATURE at start-up and then applies it itself; the device never
+// has to understand it.
+//
+// Three constraints shaped this blob, all of them hard:
+//
+//  1. Still exactly 0x87. SdpRewrite_Process is a same-size overlay of the
+//     SDP TEXT_STRING body and the 09 02 06 35 8D 35 8B 08 22 25 87 prefix
+//     stays untouched — rewriting those length stores is the 0x50
+//     SdpWalkStream bugcheck (see INCIDENT / test_bsod_regress.py). Budget
+//     came from folding AC Pan + Wheel into the Logical collection the
+//     multiplier needs anyway, dropping the now-redundant vendor Usage Page
+//     on report 0xF1, and deleting a duplicate Logical Minimum (0) in COL02.
+//
+//  2. The multiplier shares report 0xF1 with Apple's multitouch enable.
+//     A separate Feature report ID would be a report the mouse does not have:
+//     HidBth would put it on the Bluetooth control channel and the device
+//     would HANDSHAKE an error, so the SET would fail and the multiplier
+//     would stay 1. 0xF1 is a Feature report this hardware demonstrably
+//     accepts (`53 F1 02 01`, hardware-proven 2026-09-01). Windows therefore
+//     gets a real success handshake. The payload Windows would send is wrong
+//     for the device — Driver.c restores `02 01` on the way out.
+//
+//  3. No Physical Minimum / Maximum. With them absent the multiplier is the
+//     logical value, so Logical 1..4 is a 1x..4x range with no zero in it and
+//     nothing to reset before COL02. That is 8 bytes this budget did not have.
+//
+// Report 0xF1 stays 2 bytes so HidD_SetFeature(F1) from mm-f1-once.ps1 keeps
+// working: byte 0 is the multiplier, byte 1 is constant padding.
+const UCHAR g_HidDescriptorHiRes[] = {
+    // ---- COL01: Mouse, Report ID 0x12 ----
+    0x05, 0x01,             // Usage Page (Generic Desktop)
+    0x09, 0x02,             // Usage (Mouse)
+    0xA1, 0x01,             // Collection (Application)
+    0x85, 0x12,             //   Report ID (0x12)
+
+    0x05, 0x09,             //   Usage Page (Button)
+    0x19, 0x01,             //   Usage Minimum (Button 1)
+    0x29, 0x02,             //   Usage Maximum (Button 2)
+    0x15, 0x00,             //   Logical Minimum (0)
+    0x25, 0x01,             //   Logical Maximum (1)
+    0x95, 0x02,             //   Report Count (2)
+    0x75, 0x01,             //   Report Size (1)
+    0x81, 0x02,             //   Input (Data, Var, Abs)
+    0x95, 0x01,             //   Report Count (1)
+    0x75, 0x06,             //   Report Size (6)
+    0x81, 0x03,             //   Input (Constant)
+
+    0x05, 0x01,             //   Usage Page (Generic Desktop)
+    0x09, 0x01,             //   Usage (Pointer)
+    0xA1, 0x00,             //   Collection (Physical)
+    0x16, 0x01, 0xF8,       //     Logical Minimum (-2047)
+    0x26, 0xFF, 0x07,       //     Logical Maximum (2047)
+    0x09, 0x30,             //     Usage (X)
+    0x09, 0x31,             //     Usage (Y)
+    0x75, 0x10,             //     Report Size (16)
+    0x95, 0x02,             //     Report Count (2)
+    0x81, 0x06,             //     Input (Data, Var, Rel)
+
+    0xA1, 0x02,             //     Collection (Logical) — multiplier scope
+    0x15, 0x81,             //       Logical Minimum (-127)
+    0x25, 0x7F,             //       Logical Maximum (127)
+    0x75, 0x08,             //       Report Size (8)
+    0x95, 0x01,             //       Report Count (1) — reset; do not inherit 2
+    0x05, 0x0C,             //       Usage Page (Consumer)
+    0x0A, 0x38, 0x02,       //       Usage (AC Pan) — report byte 6
+    0x81, 0x06,             //       Input (Data, Var, Rel)
+    0x05, 0x01,             //       Usage Page (Generic Desktop)
+    0x09, 0x38,             //       Usage (Wheel) — report byte 7
+    0x81, 0x06,             //       Input (Data, Var, Rel)
+    0x85, 0xF1,             //       Report ID (0xF1) Linux feature_mt_mouse2
+    0x09, 0x48,             //       Usage (Resolution Multiplier)
+    0x15, 0x01,             //       Logical Minimum (1)  — 1x, never 0
+    0x25, 0x04,             //       Logical Maximum (4)  — 4x, 30 per step
+    0xB1, 0x02,             //       Feature (Data, Var, Abs) — F1 byte 0
+    0xB1, 0x03,             //       Feature (Constant)       — F1 byte 1
+    0xC0,                   //     End Collection (Logical)
+    0xC0,                   //   End Collection (Physical)
+    0xC0,                   // End Collection (Application)
+
+    // ---- COL02: Battery, Report ID 0x90 Input ----
+    0x06, 0x00, 0xFF,       // Usage Page (Vendor 0xFF00)
+    0x09, 0x14,             // Usage (0x14)
+    0xA1, 0x01,             // Collection (Application)
+    0x85, 0x90,             //   Report ID (0x90)
+    0x05, 0x84,             //   Usage Page (Power Device)
+    0x75, 0x01,             //   Report Size (1)
+    0x95, 0x03,             //   Report Count (3)
+    0x15, 0x00,             //   Logical Minimum (0)
+    0x25, 0x01,             //   Logical Maximum (1)
+    0x09, 0x61,             //   Usage (Present)
+    0x05, 0x85,             //   Usage Page (Battery System)
+    0x09, 0x44,             //   Usage (Charging)
+    0x09, 0x46,             //   Usage (Discharging)
+    0x81, 0x02,             //   Input (Data, Var, Abs)
+    0x95, 0x05,             //   Report Count (5)
+    0x81, 0x01,             //   Input (Constant)
+    0x75, 0x08,             //   Report Size (8)
+    0x95, 0x01,             //   Report Count (1)
+    0x26, 0xFF, 0x00,       //   Logical Maximum (255) — Minimum still 0
+    0x09, 0x65,             //   Usage (Relative State of Charge)
+    0x81, 0x02,             //   Input (Data, Var, Abs)
+    0xC0,                   // End Collection
+};
+
+C_ASSERT(sizeof(g_HidDescriptorHiRes) == sizeof(g_HidDescriptor));
+
+const ULONG g_HidDescriptorHiResSize = sizeof(g_HidDescriptorHiRes);

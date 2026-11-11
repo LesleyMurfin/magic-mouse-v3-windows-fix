@@ -30,6 +30,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paired
 - Installer switches `-DriverPath`, to install a driver binary from an explicit path, and
   `-FromDriverStore`, to reuse a copy already staged in the Windows driver store
+- Hi-res scroll for Driver 2, the KMDF driver (issue #48). One HID Wheel unit is `WHEEL_DELTA`
+  (120) to hidclass, which is the "scrolling jumps a whole line at a time" report. A second HID
+  report descriptor, `g_HidDescriptorHiRes`, adds the Generic Desktop **Resolution Multiplier**
+  (`0x48`, Logical 1..4) as a Feature on report `0xF1`, inside a `Collection (Logical)` that also
+  holds AC Pan and Wheel; Windows then divides 120 by the multiplier it sets, so each emitted unit
+  is 30. `GestureEngine.c` divides the detent by `ctx->HostMultiplier` — the multiplier Windows
+  actually requested in that `0xF1` SET_REPORT, captured before the payload repair overwrites the
+  byte, clamped to 1..4, **1 until the host arms it** (an `02 01` payload is an MT-enable write,
+  not multiplier 2) — nearest-rounded and floored at 1, and
+  carries the sub-detent remainder instead of discarding it. Units are also capped against the
+  ±127 an INT8 wheel field holds, with the debit recomputed, so a saturating report leaves the
+  surplus in the anchor. Net effect: hi-res is indistinguishable from classic until the host arms
+  the multiplier; once armed, gain per unit of surface travel is exact when `ScrollStep` is a
+  multiple of it and nearest-rounded otherwise, in that many times finer steps, with no discarded
+  sub-detent, super-detent or saturated travel — a fast flick, which the classic path collapsed
+  into a single 120 notch, now scrolls the distance the finger actually moved, so flicks feel
+  slightly faster. `ScrollStep` is still the sensitivity tunable
+- `Parameters!HiResScroll` (REG_DWORD, **default 0**) selects that descriptor, and
+  `scripts/mm-scroll-tune.ps1 -HiResScroll 1` writes it, restarts the device, re-sends the F1
+  multitouch enable and reads back the new `Diag!HiResScroll` and `Diag!F1PayloadForced`. Off by
+  default because this has only been proven against the Linux host-model gates: no Windows build,
+  sign or hardware run has happened for it. The INF deliberately does not `AddReg` the value —
+  `ctx->HiResScroll` already defaults to FALSE when it is absent, so writing it would revert the
+  user's setting on every `pnputil /add-driver`. Both descriptors are exactly 135 bytes (`0x87`),
+  so the SDP overlay stays same-size and the `0x50 SdpWalkStream` bugcheck class stays out of
+  scope
+- Outbound repair of host-written `SET_REPORT(Feature, 0xF1)`. Report `0xF1` is also Apple's
+  multitouch enable, so the payload Windows builds for the Resolution Multiplier would drop the
+  mouse back to compact 9-byte mode and kill surface scroll. With `HiResScroll` set, `Driver.c`
+  rewrites such a request in place to `02 01` on the control channel and counts it in
+  `Diag!F1PayloadForced`. The multiplier shares `0xF1` rather than taking its own report ID
+  because a report the mouse does not have would be HANDSHAKE-rejected, the SET would fail, and
+  the multiplier would silently stay 1
 
 ### Changed
 

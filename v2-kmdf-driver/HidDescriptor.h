@@ -10,3 +10,10 @@
 // Do not inherit X/Y Report Count 2 onto Wheel.
 extern const UCHAR g_HidDescriptor[];
 extern const ULONG g_HidDescriptorSize;
+
+// Same 135 bytes, same report 0x12 wire layout, plus HID Resolution
+// Multiplier (Generic Desktop 0x48) on report 0xF1 inside a Logical
+// collection with AC Pan and Wheel (issue #48). Selected instead of
+// g_HidDescriptor when Parameters!HiResScroll is non-zero.
+extern const UCHAR g_HidDescriptorHiRes[];
+extern const ULONG g_HidDescriptorHiResSize;

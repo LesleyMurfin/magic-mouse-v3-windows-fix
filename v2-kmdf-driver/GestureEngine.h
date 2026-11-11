@@ -56,6 +56,21 @@
 #define MM_SCROLL_STEP_MIN 1
 #define MM_SCROLL_STEP_MAX 224
 
+// Hi-res scroll (issue #48). Declared as the HID Resolution Multiplier
+// Logical Maximum in g_HidDescriptorHiRes, and used here to divide the
+// detent by the same factor. Windows divides WHEEL_DELTA (120) by the
+// multiplier it set, so 4 means each emitted unit is 30 instead of 120.
+//
+// Dividing the detent by exactly the same number is what keeps the gesture
+// gain identical: ScrollStep 16 with multiplier 4 emits 4 units per 16 touch
+// units, 4 * 30 = 120 — the same scroll distance per drag as today, in
+// quarter-line steps instead of one jump. Changing one of the two without
+// the other changes sensitivity, which is what ScrollStep is for.
+//
+// Must stay in [1, MM_SCROLL_STEP_MIN..] and divide cleanly into the useful
+// ScrollStep range; 4 is the value in the descriptor's Logical Maximum.
+#define MM_HIRES_MULTIPLIER 4
+
 // TranslateMouse2ToHid
 //
 // Accepts RID 0x12 (MOUSE2) or RID 0x27. Always produces an 8-byte RID 0x12

@@ -26,6 +26,19 @@ AccumulateSurfaceScroll + TranslateMouse2ToHid, ported from the shipped C:
   * Compact 8-byte 0x12 is shorter than MM2_HEADER_LEN, so it never reaches
     the touch loop: output bytes 6/7 stay 0 and native in[6]/in[7] are not
     copied through.
+  * Hi-res scroll (issue #48, ctx.HiResScroll / Parameters!HiResScroll): the
+    detent is divided by ctx.HostMultiplier — the multiplier the host
+    actually armed via SET_REPORT(Feature, 0xF1), 1 until it does, clamped
+    to 1..MM_HIRES_MULTIPLIER — nearest-rounded and floored at 1, and
+    DetentUnits returns the whole quotient instead of a single +1/-1,
+    consuming exactly units * step so the remainder stays in the anchor.
+    Units are then capped against the +/-127 the INT8 wheel fields carry,
+    with consumed recomputed, so a saturating report keeps the surplus. The
+    quotient TRUNCATES TOWARD ZERO, as C integer division does — Python's
+    `//` floors, which would emit one extra unit on every negative
+    sub-detent remainder. Off (the default) the arithmetic is algebraically
+    identical to the classic path: consumed == travel, so `anchor -=
+    consumed` lands on the old `anchor = y`.
   * TranslateMouse2ToHid front gate: a report is REJECTED (outLen 0, no
     output bytes, no anchor mutation) unless in/ctx are non-NULL, inLen >= 6,
     in[0] is 0x12 or 0x27, and the length is compact 8, 14 + 8*N, or a short
@@ -81,6 +94,12 @@ def c_define(name: str) -> int:
 MM_SCROLL_STEP = c_define("MM_SCROLL_STEP")
 MM_SCROLL_STEP_MIN = c_define("MM_SCROLL_STEP_MIN")
 MM_SCROLL_STEP_MAX = c_define("MM_SCROLL_STEP_MAX")
+# Hi-res multiplier: the descriptor's Resolution Multiplier Logical Maximum
+# and the detent divisor are the same number (GestureEngine.h says so).
+MM_HIRES_MULTIPLIER = c_define("MM_HIRES_MULTIPLIER")
+# WHEEL_DELTA. One emitted unit is this much scroll to hidclass in classic
+# mode, and WHEEL_DELTA // multiplier in hi-res mode.
+WHEEL_DELTA = 120
 
 
 def strip_c_comments(text: str) -> str:
@@ -144,13 +163,39 @@ class Ctx:
     notch emitted on either axis. Both are wrapping ULONGs in the C.
     """
 
-    def __init__(self, scroll_step: int = MM_SCROLL_STEP) -> None:
+    def __init__(
+        self,
+        scroll_step: int = MM_SCROLL_STEP,
+        hi_res: bool = False,
+        host_multiplier: int = 1,
+    ) -> None:
         self.TouchAnchorX = [0] * MM_TOUCH_SLOTS
         self.TouchAnchorY = [0] * MM_TOUCH_SLOTS
         self.TouchAnchorValid = [False] * MM_TOUCH_SLOTS
         self.ScrollStep = scroll_step
+        self.HiResScroll = hi_res
+        # DEVICE_CONTEXT.HostMultiplier: the Resolution Multiplier Windows
+        # actually requested on SET_REPORT(Feature, 0xF1), 1 until it does.
+        self.HostMultiplier = host_multiplier
         self.ScrollTravelUnits = 0
         self.ScrollNotchCount = 0
+
+
+def cap_units_to_report(total: int, units: int) -> int:
+    """Port of CapUnitsToReport: units that still fit in an INT8 field."""
+    if units > 0:
+        room = 127 - total
+        if room < 0:
+            room = 0
+        if units > room:
+            units = room
+    elif units < 0:
+        room = -127 - total
+        if room > 0:
+            room = 0
+        if units < room:
+            units = room
+    return units
 
 
 def effective_step(ctx: Ctx) -> int:
@@ -167,7 +212,47 @@ def effective_step(ctx: Ctx) -> int:
         step = MM_SCROLL_STEP
     if step > MM_SCROLL_STEP_MAX:
         step = MM_SCROLL_STEP_MAX
+    # Hi-res divides the detent by the multiplier the host ACTUALLY armed
+    # (1 until it does), nearest-rounded, floored at 1: the host scales every
+    # emitted unit by that same number, so dividing by the compile-time
+    # maximum while the host still delivers WHEEL_DELTA per unit would scroll
+    # MM_HIRES_MULTIPLIER times too fast.
+    if ctx.HiResScroll:
+        mult = ctx.HostMultiplier
+        if mult < 1:
+            mult = 1
+        if mult > MM_HIRES_MULTIPLIER:
+            mult = MM_HIRES_MULTIPLIER
+        step = (step + mult // 2) // mult
+        if step < 1:
+            step = 1
     return step
+
+
+def detent_units(travel: int, step: int, hi_res: bool) -> tuple[int, int]:
+    """Port of DetentUnits: (units emitted, travel those units consume).
+
+    Classic: one unit once |travel| crosses the detent, consuming the whole
+    travel so the overshoot is dropped and the anchor snaps to the current
+    position.
+
+    Hi-res: the quotient, consuming exactly units * step so the remainder
+    survives in the anchor. C integer division truncates toward zero and
+    Python's `//` floors, so -10 / 4 is -2 in the driver and -3 in a naive
+    port; the sign-preserving form below is the C.
+    """
+    # The hi-res branch divides by `step`; a zero detent would be a
+    # divide-by-zero bugcheck at DISPATCH_LEVEL, so it is rejected here too.
+    if step < 1:
+        return 0, 0
+    if hi_res:
+        units = abs(travel) // step
+        if travel < 0:
+            units = -units
+        return units, units * step
+    if travel >= step or travel <= -step:
+        return (1 if travel > 0 else -1), travel
+    return 0, 0
 
 
 def accumulate_surface_scroll(inp: bytes, ctx: Ctx) -> tuple[int, int]:
@@ -189,6 +274,8 @@ def accumulate_surface_scroll(inp: bytes, ctx: Ctx) -> tuple[int, int]:
         if st in (TOUCH_STATE_START, TOUCH_STATE_DRAG):
             down += 1
 
+    # `BOOLEAN hiRes = ctx->HiResScroll;` then the clamp, then the divide.
+    hi_res = ctx.HiResScroll
     step = effective_step(ctx)
 
     for i in range(n_touches):
@@ -223,18 +310,40 @@ def accumulate_surface_scroll(inp: bytes, ctx: Ctx) -> tuple[int, int]:
         step_y = ctx.TouchAnchorY[tid] - y
         step_x = ctx.TouchAnchorX[tid] - x
         # Per-contact detent: emit on this contact's own travel, then move
-        # only this contact's anchor. No reference finger. The Diag counter
-        # pair advances on the same crossings (wrapping ULONG adds).
-        if step_y >= step or step_y <= -step:
-            out_wheel += 1 if step_y > 0 else -1
-            ctx.ScrollTravelUnits = (ctx.ScrollTravelUnits + abs(step_y)) & 0xFFFFFFFF
-            ctx.ScrollNotchCount = (ctx.ScrollNotchCount + 1) & 0xFFFFFFFF
-            ctx.TouchAnchorY[tid] = y
-        if step_x >= step or step_x <= -step:
-            out_hwheel += -1 if step_x > 0 else 1
-            ctx.ScrollTravelUnits = (ctx.ScrollTravelUnits + abs(step_x)) & 0xFFFFFFFF
-            ctx.ScrollNotchCount = (ctx.ScrollNotchCount + 1) & 0xFFFFFFFF
-            ctx.TouchAnchorX[tid] = x
+        # only this contact's anchor by the travel those units consumed. No
+        # reference finger. The Diag counter pair advances on the same
+        # crossings (wrapping ULONG adds).
+        units_y, consumed_y = detent_units(step_y, step, hi_res)
+        if hi_res and units_y != 0:
+            # out[7] is an INT8: cap against what this report can still carry
+            # and recompute the debit, so the surplus stays in the anchor
+            # instead of being eaten by clamp_i8.
+            units_y = cap_units_to_report(out_wheel, units_y)
+            consumed_y = units_y * step
+        if units_y != 0:
+            out_wheel += units_y
+            ctx.ScrollTravelUnits = (
+                ctx.ScrollTravelUnits + abs(consumed_y)
+            ) & 0xFFFFFFFF
+            ctx.ScrollNotchCount = (
+                ctx.ScrollNotchCount + abs(units_y)
+            ) & 0xFFFFFFFF
+            ctx.TouchAnchorY[tid] -= consumed_y
+        units_x, consumed_x = detent_units(step_x, step, hi_res)
+        if hi_res and units_x != 0:
+            # AC Pan carries -units_x, so cap the emitted sign and map back.
+            units_x = -cap_units_to_report(out_hwheel, -units_x)
+            consumed_x = units_x * step
+        if units_x != 0:
+            # AC Pan is inverted against surface travel.
+            out_hwheel += -units_x
+            ctx.ScrollTravelUnits = (
+                ctx.ScrollTravelUnits + abs(consumed_x)
+            ) & 0xFFFFFFFF
+            ctx.ScrollNotchCount = (
+                ctx.ScrollNotchCount + abs(units_x)
+            ) & 0xFFFFFFFF
+            ctx.TouchAnchorX[tid] -= consumed_x
     return out_wheel, out_hwheel
 
 

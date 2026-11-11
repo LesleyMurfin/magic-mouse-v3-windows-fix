@@ -30,6 +30,22 @@ def _code(text: str) -> str:
     return re.sub(r"//.*?$", "", text, flags=re.M)
 
 
+def _function_body(code: str, name: str) -> str:
+    """Return one production C function body, including nested blocks."""
+    match = re.search(r"\b" + re.escape(name) + r"\s*\([^;{}]*\)\s*\{", code, re.S)
+    if not match:
+        return ""
+    depth = 1
+    pos = match.end()
+    while depth and pos < len(code):
+        if code[pos] == "{":
+            depth += 1
+        elif code[pos] == "}":
+            depth -= 1
+        pos += 1
+    return code[match.end() : pos - 1] if depth == 0 else ""
+
+
 def _has_ordered_hex(code: str, seq: tuple[int, ...], window: int = 400) -> bool:
     """True if 0xNN literals appear in order inside a bounded window."""
     pats = [rf"0x0*{b:X}\b" for b in seq]
@@ -80,8 +96,14 @@ def main() -> int:
     drv = DRV_C.read_text(encoding="utf-8")
     code = _code(drv)
 
-    has_f10201 = _has_ordered_hex(code, FEATURE_MT)
-    has_wire = _has_ordered_hex(code, WIRE_MT)
+    # Scoped to MmSendMtEnable's own body. Issue #48 added a second place
+    # that cares about SET_REPORT(Feature, 0xF1) — the hi-res payload repair
+    # in EvtIoInternalDeviceControl — and that one must never be what greens
+    # this gate: the enable packet the device needs is still spelled out
+    # literally here, independent of HiResScroll.
+    sender = _function_body(code, "MmSendMtEnable")
+    has_f10201 = _has_ordered_hex(sender, FEATURE_MT)
+    has_wire = _has_ordered_hex(sender, WIRE_MT)
     has_send = "MmSendMtEnable" in code
     has_mt = "MtEnable" in code
     has_pkt = "MtPkt" in code

@@ -203,39 +203,61 @@ if grep -q '0x85, 0x47' "$ROOT/HidDescriptor.c"; then
 else
   ok "descriptor has no Feature 0x47"
 fi
-# X/Y must appear before Wheel in the blob (extra, not replacement).
+# X/Y must appear before Wheel in the blob (extra, not replacement), in BOTH
+# overlay sources: SdpRewrite_Process picks g_HidDescriptorHiRes when
+# Parameters!HiResScroll is set, so an ordering regression there is just as
+# fatal as one in the classic blob.
 HID_C="$ROOT/HidDescriptor.c" python3 - <<'PY' || { echo "FAIL HID usage order X/Y then Wheel"; fail=1; }
 from pathlib import Path
 import os
 p = Path(os.environ["HID_C"])
 text = p.read_text()
-# pull hex bytes from the C array
+# pull hex bytes from one named C array
 import re
-body = text.split("g_HidDescriptor[] = {",1)[1].split("};",1)[0]
-nums = [int(x,16) for x in re.findall(r"0x([0-9A-Fa-f]{2})", body)]
-# find Report ID 0x12 then usages 0x30, 0x31, 0x38 in that collection
-idx12 = None
-for i in range(len(nums)-1):
-    if nums[i]==0x85 and nums[i+1]==0x12:
-        idx12 = i
-        break
-if idx12 is None:
-    raise SystemExit(1)
-def find_usage(start, usage):
-    for i in range(start, len(nums)-1):
-        if nums[i]==0x09 and nums[i+1]==usage:
-            return i
-        if nums[i]==0x85 and nums[i+1]==0x90:
-            return None
-    return None
-x = find_usage(idx12, 0x30)
-y = find_usage(idx12, 0x31)
-w = find_usage(idx12, 0x38)
-if x is None or y is None or w is None:
-    raise SystemExit(1)
-if not (x < y < w):
-    raise SystemExit(1)
-print("OK  HID 0x12 keeps X/Y then adds Wheel (order)")
+def blob(name):
+    # Anchored on the whole declaration. `g_HidDescriptorHiRes[] = {` also
+    # begins with `g_HidDescriptor`, so splitting on a bare name prefix is
+    # ambiguous now that there are two arrays.
+    m = re.search(
+        r"const\s+UCHAR\s+" + name + r"\s*\[\s*\]\s*=\s*\{(.*?)\n\s*\};",
+        text,
+        re.S,
+    )
+    if m is None:
+        raise SystemExit(1)
+    # Strip // comments: they quote byte values ("Report ID (0x12)") that
+    # would otherwise be counted as descriptor bytes.
+    body = re.sub(r"//.*?$", "", m.group(1), flags=re.M)
+    return [int(x,16) for x in re.findall(r"0x([0-9A-Fa-f]{2})\b", body)]
+def check(name):
+    nums = blob(name)
+    if len(nums) != 0x87:
+        raise SystemExit(1)
+    # find Report ID 0x12 then usages 0x30, 0x31, 0x38 in that collection
+    idx12 = None
+    for i in range(len(nums)-1):
+        if nums[i]==0x85 and nums[i+1]==0x12:
+            idx12 = i
+            break
+    if idx12 is None:
+        raise SystemExit(1)
+    def find_usage(start, usage):
+        for i in range(start, len(nums)-1):
+            if nums[i]==0x09 and nums[i+1]==usage:
+                return i
+            if nums[i]==0x85 and nums[i+1]==0x90:
+                return None
+        return None
+    x = find_usage(idx12, 0x30)
+    y = find_usage(idx12, 0x31)
+    w = find_usage(idx12, 0x38)
+    if x is None or y is None or w is None:
+        raise SystemExit(1)
+    if not (x < y < w):
+        raise SystemExit(1)
+check("g_HidDescriptor")
+check("g_HidDescriptorHiRes")
+print("OK  HID 0x12 keeps X/Y then adds Wheel (order), classic and hi-res")
 PY
 if grep -q 'out\[0\] = 0x02' "$ROOT/GestureEngine.c"; then
   bad "GestureEngine must not convert to RID 0x02"
