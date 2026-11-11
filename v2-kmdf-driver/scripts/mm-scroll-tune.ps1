@@ -33,6 +33,9 @@
 # switch to leave the value alone. Diag!HiResScroll echoes what the driver
 # loaded; Diag!F1PayloadForced only rises once Windows has actually issued the
 # multiplier SET_REPORT.
+# Exit 7 means verification is incomplete (missing echoes or hi-res not armed);
+# a pending reboot still takes precedence as exit 3010. Re-run after the device
+# has initialized; writing the settings alone is not verified success.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidateRange(1, 224)][int]$ScrollStep,
@@ -122,15 +125,25 @@ if ($f1Exit -ne 0) {
 # confirms the restart really re-read the tunable instead of assuming it did.
 Start-Sleep -Seconds 2
 Write-Output '=== driver-reported state ==='
+$verificationIncomplete = $false
 $diag = Get-ItemProperty -LiteralPath $DiagKey -ErrorAction SilentlyContinue
 if ($null -eq $diag) {
     Write-Output 'no Diag key yet - driver has not run its diag timer'
+    $verificationIncomplete = $true
 } else {
     Write-Output ('driver_ScrollStep=' + $diag.ScrollStep)
     Write-Output ('driver_HiResScroll=' + $diag.HiResScroll)
     Write-Output ('F1PayloadForced='   + $diag.F1PayloadForced + '  (>0 means Windows set the Resolution Multiplier and the filter repaired the payload)')
     Write-Output ('LastAclReceived='   + $diag.LastAclReceived + '  (>=14 means multitouch, 9 means compact)')
     Write-Output ('LastOutHdr='        + $diag.LastOutHdr)
+    if ($null -eq $diag.ScrollStep) {
+        Write-Output 'driver ScrollStep echo missing - cannot verify the loaded value'
+        $verificationIncomplete = $true
+    }
+    if ($setHiRes -and $null -eq $diag.HiResScroll) {
+        Write-Output 'driver HiResScroll echo missing - cannot verify the loaded value'
+        $verificationIncomplete = $true
+    }
     if ($null -ne $diag.ScrollStep -and [int]$diag.ScrollStep -ne $ScrollStep) {
         $diagMsg = 'driver still reports ScrollStep=' + $diag.ScrollStep + ' - restart did not pick up the new value'
         if ($rebootRequired) {
@@ -149,14 +162,19 @@ if ($null -eq $diag) {
         }
         Fail 3 $hiResMsg
     }
-    if ($setHiRes -and $HiResScroll -eq 1 -and [int]$diag.F1PayloadForced -eq 0) {
-        Write-Output 'F1PayloadForced is still 0 - Windows has not issued SET_REPORT(Feature, 0xF1) yet, so the driver keeps HostMultiplier=1: the detent stays the classic ScrollStep and scrolling stays quantised to WHEEL_DELTA'
+    if ($setHiRes -and $HiResScroll -eq 1 -and
+        ($null -eq $diag.F1PayloadForced -or [int]$diag.F1PayloadForced -eq 0)) {
+        $verificationIncomplete = $true
+        Write-Output 'F1PayloadForced is missing or still 0 - hi-res arming is not verified. Until Windows issues SET_REPORT(Feature, 0xF1), HostMultiplier stays 1 and scrolling stays quantised to WHEEL_DELTA'
     }
 }
 
-Write-Output '===== scroll tune done ====='
 if ($rebootRequired) {
     Write-Output 'restart reported 3010 - reboot required to finish'
     exit 3010
 }
+if ($verificationIncomplete) {
+    Fail 7 'settings written but verification incomplete - re-run this script after the device has initialized'
+}
+Write-Output '===== scroll tune done ====='
 exit 0

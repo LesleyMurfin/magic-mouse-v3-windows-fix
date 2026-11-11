@@ -82,6 +82,14 @@ jobs:
           exit 1
         }
 
+    - name: Test scroll tune verification (mocked host operations)
+      shell: powershell
+      run: ./v2-kmdf-driver/tests/Test-ScrollTune.ps1
+
+    - name: Test scroll tune verification (PowerShell 7)
+      shell: pwsh
+      run: ./v2-kmdf-driver/tests/Test-ScrollTune.ps1
+
     - name: Install PSScriptAnalyzer
       shell: pwsh
       run: |
